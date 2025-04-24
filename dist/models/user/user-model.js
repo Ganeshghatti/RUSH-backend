@@ -1,0 +1,74 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.User = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
+const { Schema } = mongoose_1.default;
+const userSchema = new Schema({
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    role: [{ type: String, enum: ["doctor", "patient"] }],
+    profilePic: { type: String },
+    prefix: { type: String, enum: ["Mr", "Ms", "Dr"] },
+    firstName: { type: String },
+    lastName: { type: String },
+    countryCode: { type: String, required: true },
+    phone: { type: String, required: true },
+    phoneVerified: { type: Boolean, default: false },
+    gender: { type: String, enum: ["Male", "Female", "Other"] },
+    dob: { type: Date },
+    address: {
+        line1: { type: String },
+        line2: { type: String },
+        landmark: { type: String },
+        locality: { type: String },
+        city: { type: String },
+        pincode: { type: String },
+        country: { type: String },
+    },
+    personalIdProof: {
+        type: {
+            type: String,
+            enum: ["Aadhar", "Passport", "DrivingLicense", "Other"],
+        },
+        idNumber: { type: String },
+        image: { type: String },
+        isVerified: { type: Boolean, default: false },
+        other: {
+            idNumber: { type: String },
+            idName: { type: String },
+            image: { type: String },
+        },
+    },
+    addressProof: {
+        type: {
+            type: String,
+            enum: ["Passport", "RationCard", "DrivingLicense", "Other"],
+        },
+        idNumber: { type: String },
+        image: { type: String },
+        isVerified: { type: Boolean, default: false },
+        other: {
+            idNumber: { type: String },
+            idName: { type: String },
+            image: { type: String },
+        },
+    },
+    bankDetails: {
+        accountName: { type: String },
+        accountNumber: { type: String, unique: true, sparse: true },
+        ifscCode: { type: String },
+        bankName: { type: String },
+        bankAddress: { type: String },
+        upiId: { type: String },
+        upiQrImage: { type: String },
+        upiProvider: { type: String },
+        isVerified: { type: Boolean, default: false },
+    },
+    createdAt: { type: Date, default: Date.now },
+}, { discriminatorKey: "role" });
+const User = mongoose_1.default.model("User", userSchema);
+exports.User = User;
+exports.default = User; // Default export

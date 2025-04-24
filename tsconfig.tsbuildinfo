@@ -1,1 +1,1 @@
-{"root":["./src/index.ts"],"version":"5.8.3"}
+{"root":["./api/index.ts","./api/config/aws.ts","./api/config/db.ts","./api/controller/users/auth.ts","./api/models/clinic-model.ts","./api/models/otp-model.ts","./api/models/user/doctor-model.ts","./api/models/user/family-model.ts","./api/models/user/patient-model.ts","./api/models/user/user-model.ts","./api/routes/users/auth.ts","./api/utils/aws_s3/delete-media.ts","./api/utils/aws_s3/upload-media.ts","./api/utils/aws_sns/sms.ts"],"version":"5.8.3"}
