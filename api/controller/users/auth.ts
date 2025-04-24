@@ -13,10 +13,10 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     const { phone, email, password, countryCode = "+91" } = req.body;
 
     // Validate input
-    if (!phone) {
+    if (!phone || !email || !password) {
       res.status(400).json({
         success: false,
-        message: "Phone number is required",
+        message: "Phone number, email, and password are required",
       });
       return;
     }
