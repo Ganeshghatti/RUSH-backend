@@ -24,7 +24,7 @@ app.use(cors());
 // Global rate limiting - applies to all routes
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 200, // Limit each IP to 100 requests per window
+  limit: 200, // Limit each IP to 200 requests per window
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: "Too many requests from this IP, please try again after 15 minutes",
@@ -35,7 +35,7 @@ app.use(globalLimiter);
 
 // Routes
 app.get("/", (req: Request, res: Response) => {
-  res.send("Welcome to RUSH Backend");
+  res.status(200).json({ message: "Welcome to RUSH Backend" });
 });
 
 // Auth routes
@@ -43,8 +43,8 @@ app.use("/auth", authRoutes);
 
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(err.stack);
-  res.status(500).send("Something broke!");
+  console.error(err);
+  res.status(500).json({ error: "Internal Server Error" });
 });
 
 app.listen(PORT, () => {
