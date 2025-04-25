@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { sendOtp, verifyOtp } from "../../controller/users/auth";
+import { sendOtp, verifyOtp, login } from "../../controller/users/auth";
 import rateLimit from "express-rate-limit";
 
 const router = Router();
@@ -22,5 +22,6 @@ const otpLimiter = rateLimit({
 // Apply OTP rate limiter to the send-otp route only
 router.route("/send-otp").post(otpLimiter, sendOtp);
 router.route("/verify-otp").post(verifyOtp);
+router.route("/login").post(login);
 
 export default router;

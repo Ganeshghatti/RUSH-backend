@@ -6,7 +6,7 @@ const userSchema = new Schema(
   {
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: [{ type: String, enum: ["doctor", "patient"] }],
+    role: [{ type: String, enum: ["doctor", "patient", "admin"] }],
     profilePic: { type: String },
     prefix: { type: String, enum: ["Mr", "Ms", "Dr"] },
     firstName: { type: String },
