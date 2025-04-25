@@ -24,4 +24,5 @@ const otpLimiter = (0, express_rate_limit_1.default)({
 // Apply OTP rate limiter to the send-otp route only
 router.route("/send-otp").post(otpLimiter, auth_1.sendOtp);
 router.route("/verify-otp").post(auth_1.verifyOtp);
+router.route("/login").post(auth_1.login);
 exports.default = router;
