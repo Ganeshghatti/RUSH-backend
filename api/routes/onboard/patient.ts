@@ -4,6 +4,6 @@ import { patientOnboard } from "../../controller/patient/patient";
 
 const router = Router();
 
-router.route("/onboard/:userId").post(verifyToken, patientOnboard);
+router.route("/onboard/:userId").put(verifyToken, patientOnboard);
 
 export default router;

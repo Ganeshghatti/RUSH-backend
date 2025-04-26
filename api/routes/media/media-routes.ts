@@ -54,12 +54,16 @@ router.post('/upload',verifyToken, upload.single('image'), async (req: AuthReque
     // const userId = req.user.id; // From auth middleware
     const key = `uploads/${fileName}`;
 
+    // console.log("this is the file buffer", req.file.buffer);
+
     // Upload to S3
     const fileUrl = await UploadImgToS3({
       key,
       fileBuffer: req.file.buffer,
       fileName: originalName,
     });
+
+    // console.log("this is the file url", fileUrl);
 
     res.status(200).json({
       success: true,
