@@ -35,14 +35,10 @@ const doctorSchema = new Schema({
   ],
   taxProof: {
     type: { type: String, enum: ["PAN", "Other"] },
-    panNumber: { type: String },
+    idNumber: { type: String }, // pan no.
     image: { type: String },
+    idName: { type: String }, // for other only
     isVerified: { type: Boolean, default: false },
-    other: {
-      idNumber: { type: String },
-      idName: { type: String },
-      image: { type: String },
-    },
   },
   awards: [
     {

@@ -33,11 +33,7 @@ const userSchema = new Schema(
       idNumber: { type: String },
       image: { type: String },
       isVerified: { type: Boolean, default: false },
-      other: {
-        idNumber: { type: String },
-        idName: { type: String },
-        image: { type: String },
-      },
+      idName: { type: String }, // for other only
     },
     addressProof: {
       type: {
@@ -47,11 +43,7 @@ const userSchema = new Schema(
       idNumber: { type: String },
       image: { type: String },
       isVerified: { type: Boolean, default: false },
-      other: {
-        idNumber: { type: String },
-        idName: { type: String },
-        image: { type: String },
-      },
+      idName: { type: String }, // for other only
     },
     bankDetails: {
       accountName: { type: String },

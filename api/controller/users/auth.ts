@@ -5,6 +5,7 @@ import sendSMS from "../../utils/aws_sns/sms";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import validator from "validator";
+import mongoose from "mongoose";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -21,7 +22,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!validator.isMobilePhone(phone, 'any')) {
+    if (!validator.isMobilePhone(phone, "any")) {
       res.status(400).json({
         success: false,
         message: "Invalid phone number format",
@@ -40,16 +41,19 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 
     // If password is provided, validate its strength
     if (password) {
-      if (!validator.isStrongPassword(password, {
-        minLength: 8,
-        minLowercase: 1,
-        minUppercase: 1,
-        minNumbers: 1,
-        minSymbols: 0
-      })) {
+      if (
+        !validator.isStrongPassword(password, {
+          minLength: 8,
+          minLowercase: 1,
+          minUppercase: 1,
+          minNumbers: 1,
+          minSymbols: 0,
+        })
+      ) {
         res.status(400).json({
           success: false,
-          message: "Password must be at least 8 characters and include uppercase, lowercase, and numbers",
+          message:
+            "Password must be at least 8 characters and include uppercase, lowercase, and numbers",
         });
         return;
       }
@@ -100,7 +104,9 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     );
 
     // Format the phone number with country code if not already included
-    const formattedPhone = phone.startsWith('+') ? phone : `${countryCode}${phone}`;
+    const formattedPhone = phone.startsWith("+")
+      ? phone
+      : `${countryCode}${phone}`;
 
     // Send OTP via SMS
     const message = `Your RUSH verification code is ${newOTP}. Valid for 5 minutes.`;
@@ -122,7 +128,15 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { firstName, lastName, phone, otp, password, email, countryCode = "+91" } = req.body;
+    const {
+      firstName,
+      lastName,
+      phone,
+      otp,
+      password,
+      email,
+      countryCode = "+91",
+    } = req.body;
 
     // Validate required fields
     if (!phone || !otp) {
@@ -134,7 +148,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Validate phone number
-    if (!validator.isMobilePhone(phone, 'any')) {
+    if (!validator.isMobilePhone(phone, "any")) {
       res.status(400).json({
         success: false,
         message: "Invalid phone number format",
@@ -146,7 +160,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     if (!firstName || !lastName || !email || !password) {
       res.status(400).json({
         success: false,
-        message: "First name, last name, email, and password are required for registration",
+        message:
+          "First name, last name, email, and password are required for registration",
       });
       return;
     }
@@ -240,7 +255,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         firstName: newUser.firstName,
         lastName: newUser.lastName,
         phone: newUser.phone,
-      }
+      },
     });
   } catch (error) {
     console.error("OTP verification error:", error);
@@ -314,3 +329,46 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     });
   }
 };
+
+export const findUserById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { userId } = req.params;
+
+    // Validate userId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+      return;
+    }
+
+    let user = await User.findById(userId).select("-password");
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "User retrieved successfully",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Error in finding user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve user",
+      error: (error as Error).message,
+    });
+  }
+};
+
+// forgot password

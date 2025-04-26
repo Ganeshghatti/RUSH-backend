@@ -4,6 +4,11 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import connectDB from "./config/db";
 import authRoutes from "./routes/users/auth";
+import mediaRoutes from "./routes/media/media-routes";
+import subscriptionRoutes from "./routes/subscription/subscription"
+import patientRoutes from "./routes/onboard/patient"
+import doctorRoutes from "./routes/onboard/doctor";
+import cookieParser from "cookie-parser";
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +22,7 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(cookieParser());
 
 // CORS setup
 app.use(cors());
@@ -40,6 +46,12 @@ app.get("/", (req: Request, res: Response) => {
 
 // Auth routes
 app.use("/auth", authRoutes);
+
+// Media routes
+app.use("/media", mediaRoutes);
+app.use("/subscription", subscriptionRoutes);
+app.use("/patient", patientRoutes);
+app.use("/doctor", doctorRoutes);
 
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
