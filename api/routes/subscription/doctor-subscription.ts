@@ -1,4 +1,4 @@
-import { createSubscription, updateSubscription } from '../../controller/subscription/subscription';
+import { createSubscription, updateSubscription, getSubscriptions } from '../../controller/subscription/subscription';
 import { verifyToken, checkRole } from '../../middleware/auth-middleware';
 import { subscribeDoctor } from '../../controller/doctor/doctor';
 import { Router } from "express";
@@ -10,6 +10,9 @@ router.route("/subscription").post(verifyToken, checkRole("admin"), createSubscr
 
 // admin only update subscription
 router.route("/subscription/:id").put(verifyToken, checkRole("admin"), updateSubscription);
+
+// admin only get all subscriptions
+router.route("/subscription").get(verifyToken, checkRole("admin"), getSubscriptions);
 
 // doctor only subscribe to subscription
 router.route("/subscription/purchase/:doctorId").post(verifyToken, checkRole("doctor"), subscribeDoctor);

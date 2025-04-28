@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 import DoctorSubscription from "../../models/subscription-model";
 
-
-export const createSubscription = async (req: Request, res: Response): Promise<void> => {
+export const createSubscription = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { price, name, description, features, isActive, duration } = req.body;
 
@@ -10,7 +12,8 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
     if (!price || !name || !description || !duration) {
       res.status(400).json({
         success: false,
-        message: "Missing required subscription fields: price, name, description, and duration are required",
+        message:
+          "Missing required subscription fields: price, name, description, and duration are required",
       });
       return;
     }
@@ -19,7 +22,7 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
       price,
       name,
       description,
-      features: features || [], 
+      features: features || [],
       isActive: isActive,
       duration,
     });
@@ -38,7 +41,10 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
   }
 };
 
-export const updateSubscription = async (req: Request, res: Response): Promise<void> => {
+export const updateSubscription = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const { isActive } = req.body;
@@ -75,6 +81,35 @@ export const updateSubscription = async (req: Request, res: Response): Promise<v
     res.status(500).json({
       success: false,
       message: "Failed to update subscription",
+    });
+  }
+};
+
+export const getSubscriptions = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const subscriptions = await DoctorSubscription.find({});
+
+    if (!subscriptions || subscriptions.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: "No subscriptions found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Subscriptions fetched successfully",
+      data: subscriptions,
+    });
+  } catch (error) {
+    console.error("Error fetching subscriptions:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch subscriptions",
     });
   }
 };
