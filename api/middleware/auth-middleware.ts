@@ -63,9 +63,9 @@ export const verifyToken = async (
 
     // Set user info in request object
     req.user = {
-      id: user._id,
-      email: user.email,
-      role: user.role,
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role,
     };
 
     next();
@@ -78,8 +78,8 @@ export const verifyToken = async (
   }
 };
 
-// just pass roles[] to checkRole
-export const checkRole = (roles: string[]) => {
+// just pass roles checkRole
+export const checkRole = (role: string) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.user) {
@@ -90,10 +90,8 @@ export const checkRole = (roles: string[]) => {
         return;
       }
 
-      // Check if user has at least one of the required roles using the role from token
-      const hasRequiredRole = req.user.role.some((role: string) =>
-        roles.includes(role)
-      );
+      // check role
+      const hasRequiredRole = req.user.role == role;
 
       if (!hasRequiredRole) {
         res.status(403).json({

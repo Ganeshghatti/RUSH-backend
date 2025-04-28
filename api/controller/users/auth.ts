@@ -61,6 +61,15 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 
     // Check if user with this phone already exists
     const existingUserByPhone = await User.findOne({ phone });
+
+    if(existingUserByPhone?.phoneVerified === true) {
+      res.status(400).json({
+        success: false,
+        message: "User already verified",
+      });
+      return;
+    }
+
     if (existingUserByPhone) {
       res.status(400).json({
         success: false,
@@ -80,6 +89,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
         return;
       }
     }
+
 
     // Check if an OTP already exists for the phone number
     const existingOTP = await OTP.findOne({ phone });
@@ -269,7 +279,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const { email, password, currentRole } = req.body;
 
     if (!email || !password) {
       res.status(400).json({
@@ -279,12 +289,22 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+
     const user = await User.findOne({ email });
 
     if (!user) {
       res.status(404).json({
         success: false,
         message: "User not found",
+      });
+      return;
+    }
+
+    // user.role is an array, so we need to check if the currentRole is in the user's roles
+    if (!user.role.includes(currentRole)) {
+      res.status(403).json({
+        success: false,
+        message: "You do not have permission to access this role",
       });
       return;
     }
@@ -304,7 +324,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role },
+      { id: user._id, email: user.email, role: currentRole },
       JWT_SECRET,
       { expiresIn: "24h" }
     );
@@ -330,15 +350,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const findUserById = async (
+export const findCurrentUser = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const { userId } = req.params;
+    const { id } = req.user;
 
     // Validate userId
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       res.status(400).json({
         success: false,
         message: "Invalid user ID format",
@@ -346,7 +366,7 @@ export const findUserById = async (
       return;
     }
 
-    let user = await User.findById(userId).select("-password");
+    let user = await User.findById(id).select("-password");
 
     if (!user) {
       res.status(404).json({

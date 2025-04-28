@@ -1,40 +1,32 @@
 import mongoose, { Schema } from "mongoose";
 
-const SubscriptionSchema = new Schema(
+const DoctorSubscriptionSchema = new Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "User ID is required"],
-    },
     price: {
       type: Number,
       required: [true, "Subscription price is required"],
     },
-    type: {
+    name: {
       type: String,
-      required: [true, "Subscription type is required"],
-      enum: ["basic", "premium", "pro"],
+      required: [true, "Subscription name is required"],
     },
-    interval: {
+    description: {
       type: String,
-      required: [true, "Subscription interval is required"],
-      enum: ["monthly", "annually"],
+      required: [true, "Subscription description is required"],
     },
-    startDate: {
-      type: Date,
-      default: Date.now,
-    },
-    endDate: {
-      type: Date,
-      required: [true, "Subscription end date is required"],
-    },
+    features: [
+      {
+        type: String,
+      },
+    ],
     isActive: {
       type: Boolean,
       default: true,
     },
-    paymentId: {
+    duration: {
       type: String,
+      required: [true, "Subscription duration is required"],
+      enum: ["1 month", "3 months", "1 year", "2 years", "lifetime"],
     },
   },
   {
@@ -42,8 +34,6 @@ const SubscriptionSchema = new Schema(
   }
 );
 
-SubscriptionSchema.index({ userId: 1, isActive: 1 });
+const DoctorSubscription = mongoose.model("DoctorSubscription", DoctorSubscriptionSchema);
 
-const Subscription = mongoose.model("Subscription", SubscriptionSchema);
-
-export default Subscription;
+export default DoctorSubscription;

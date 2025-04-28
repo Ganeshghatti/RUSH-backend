@@ -14,16 +14,18 @@ const doctorSchema = new Schema({
       degreeImage: { type: String },
     },
   ],
-  registration: [
-    {
-      regNumber: { type: String, required: true, unique: true },
-      council: { type: String, required: true },
-      isVerified: { type: Boolean, default: false },
-      licenseImage: { type: String },
-      specialization: { type: String, required: true },
-      signatureImage: { type: String },
-    },
-  ],
+  registration: {
+    details: [
+      {
+        regNumber: { type: String, required: true, unique: true },
+        council: { type: String, required: true },
+        isVerified: { type: Boolean, default: false },
+        licenseImage: { type: String },
+        specialization: { type: String, required: true },
+      },
+    ],
+    signatureImage: { type: String },
+  },
   experience: [
     {
       experienceName: { type: String, required: true }, // e.g., "Cardiology Consultant"
@@ -46,14 +48,14 @@ const doctorSchema = new Schema({
       year: { type: Number, required: true },
     },
   ],
-  isSubscribed: { type: Boolean, default: false }, // Indicates current subscription status
   subscriptions: [
     {
-      planName: { type: String, required: true }, // e.g., "Premium", "Basic"
-      startDate: { type: Date, required: true },
+      planName: { type: String, required: true }, 
+      startDate: { type: Date, required: true, default: Date.now },
       endDate: { type: Date },
       isActive: { type: Boolean, default: false },
-      paymentId: { type: String }, // Optional, for tracking payment
+      paymentId: { type: String }, 
+      SubscriptionId: { type: Schema.Types.ObjectId, ref: "DoctorSubscription", required: true },
     },
   ],
   bankDetails: {

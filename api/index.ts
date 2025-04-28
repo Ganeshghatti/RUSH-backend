@@ -5,10 +5,11 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import authRoutes from "./routes/users/auth";
 import mediaRoutes from "./routes/media/media-routes";
-import subscriptionRoutes from "./routes/subscription/subscription"
 import patientRoutes from "./routes/onboard/patient"
 import doctorRoutes from "./routes/onboard/doctor";
+import doctorSubscriptionRoutes from "./routes/subscription/doctor-subscription";
 import cookieParser from "cookie-parser";
+
 
 // Load environment variables
 dotenv.config();
@@ -49,9 +50,10 @@ app.use("/auth", authRoutes);
 
 // Media routes
 app.use("/media", mediaRoutes);
-app.use("/subscription", subscriptionRoutes);
 app.use("/patient", patientRoutes);
+
 app.use("/doctor", doctorRoutes);
+app.use("/doctor", doctorSubscriptionRoutes)
 
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
