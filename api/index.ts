@@ -27,7 +27,7 @@ app.use(cookieParser());
 
 
 const corsOptions = {
-  origin: ['http://localhost:5173/','http://localhost:3000', 'https://app.rushdr.com/'], 
+  origin: ['http://localhost:5173','http://localhost:3000', 'https://app.rushdr.com', 'http://localhost:5173/', 'http://localhost:3000/', 'https://app.rushdr.com/'], 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
