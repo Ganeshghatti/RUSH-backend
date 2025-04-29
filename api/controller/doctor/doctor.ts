@@ -22,9 +22,6 @@ export const doctorOnboard = async (req: Request, res: Response): Promise<void> 
       registration,
       experience,
       taxProof,
-      awards,
-      isSubscribed,
-      subscriptions,
     } = req.body;
 
     // Validate userId
@@ -71,7 +68,6 @@ export const doctorOnboard = async (req: Request, res: Response): Promise<void> 
       registration: registration,
       experience: experience,
       taxProof,
-      awards: awards,
     };
 
     // Update doctor using discriminator model
@@ -116,9 +112,9 @@ export const subscribeDoctor = async (
 
     const { doctorId } = req.params;
 
-    const { subscriptionId, paymentId } = req.body;
+    const { subscriptionId } = req.body;
 
-    if (!doctorId || !subscriptionId || !paymentId) {
+    if (!doctorId || !subscriptionId) {
       res.status(400).json({
         success: false,
         message: "Missing required fields",
@@ -184,11 +180,8 @@ export const subscribeDoctor = async (
 
     // Create new subscription entry
     const newSubscription = {
-      planName: subscription.name,
       startDate: new Date(),
       endDate,
-      isActive: true,
-      paymentId,
       SubscriptionId: subscription._id,
     };
 
@@ -201,10 +194,7 @@ export const subscribeDoctor = async (
     res.status(200).json({
       success: true,
       message: "Doctor subscribed successfully",
-      data: {
-        doctorId: doctor._id,
-        subscription: newSubscription,
-      },
+      data: newSubscription,
     });
   } catch (error) {
     console.error("Error in subscribing doctor:", error);

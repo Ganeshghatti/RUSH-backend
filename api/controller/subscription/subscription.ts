@@ -113,3 +113,32 @@ export const getSubscriptions = async (
     });
   }
 };
+
+export const getActiveSubscriptions = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const activeSubscriptions = await DoctorSubscription.find({ isActive: true });
+
+    if (!activeSubscriptions || activeSubscriptions.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: "No active subscriptions found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Active subscriptions fetched successfully",
+      data: activeSubscriptions,
+    });
+  } catch (error) {
+    console.error("Error fetching active subscriptions:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch active subscriptions",
+    });
+  }
+}; 

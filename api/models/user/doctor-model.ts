@@ -7,25 +7,22 @@ const doctorSchema = new Schema({
   qualifications: [
     {
       degree: { type: String, required: true },
-      isVerified: { type: Boolean, default: false },
       college: { type: String, required: true },
       year: { type: Number, required: true },
-      isPostGraduate: { type: Boolean, default: false },
+      degreePost: { type: String, enum: ["UG", "PG", "PHD"], required: true },
       degreeImage: { type: String },
     },
   ],
-  registration: {
-    details: [
-      {
-        regNumber: { type: String, required: true, unique: true },
-        council: { type: String, required: true },
-        isVerified: { type: Boolean, default: false },
-        licenseImage: { type: String },
-        specialization: { type: String, required: true },
-      },
-    ],
-    signatureImage: { type: String },
-  },
+  registration: [
+    {
+      regNumber: { type: String, required: true, unique: true },
+      council: { type: String, required: true },
+      isVerified: { type: Boolean, default: false },
+      licenseImage: { type: String },
+      specialization: { type: String, required: true },
+    },
+  ],
+  signatureImage: { type: String },
   experience: [
     {
       experienceName: { type: String, required: true }, // e.g., "Cardiology Consultant"
@@ -50,12 +47,19 @@ const doctorSchema = new Schema({
   ],
   subscriptions: [
     {
-      planName: { type: String, required: true }, 
       startDate: { type: Date, required: true, default: Date.now },
       endDate: { type: Date },
-      isActive: { type: Boolean, default: false },
-      paymentId: { type: String }, 
-      SubscriptionId: { type: Schema.Types.ObjectId, ref: "DoctorSubscription", required: true },
+      paymentDetails: {
+        paymentId: { type: String },
+        amount: { type: Number },
+        status: { type: String, enum: ["success", "failed"] },
+        paymentMethod: { type: String, enum: ["upi", "card"] },
+      },
+      SubscriptionId: {
+        type: Schema.Types.ObjectId,
+        ref: "DoctorSubscription",
+        required: true,
+      },
     },
   ],
   bankDetails: {
