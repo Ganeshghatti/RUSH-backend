@@ -26,21 +26,7 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 
 
-const corsOptions = {
-  origin: ['http://localhost:5173','http://localhost:3000', 'https://app.rushdr.com', 'http://localhost:5173/', 'http://localhost:3000/', 'https://app.rushdr.com/'], 
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  credentials: true, 
-  preflightContinue: false,
-};
-
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // handle preflight requests
-
-// CORS setup
-// app.use(cors());
+app.use(cors());
 
 // Global rate limiting - applies to all routes
 const globalLimiter = rateLimit({
