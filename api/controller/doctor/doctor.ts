@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import User from "../../models/user/user-model";
 import Doctor from "../../models/user/doctor-model";
 import DoctorSubscription from "../../models/subscription-model";
+import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
+import path from "path";
 
 export const doctorOnboard = async (req: Request, res: Response): Promise<void> => {
   try {
