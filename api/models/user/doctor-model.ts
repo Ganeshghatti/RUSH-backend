@@ -62,16 +62,6 @@ const doctorSchema = new Schema({
       },
     },
   ],
-  bankDetails: {
-    accountName: { type: String, required: true },
-    accountNumber: { type: String, required: true, unique: true },
-    ifscCode: { type: String, required: true },
-    bankName: { type: String, required: true },
-    bankAddress: { type: String, required: true },
-    upiId: { type: String },
-    upiQrImage: { type: String },
-    upiProvider: { type: String },
-  },
 });
 
 const Doctor = User.discriminator("doctor", doctorSchema);
