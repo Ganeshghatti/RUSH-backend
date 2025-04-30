@@ -23,11 +23,11 @@ const PORT = process.env.PORT || 5000;
 app.use(
   cors({
     origin: [
-      "https://app.rushdr.com",     // production frontend
-      "http://localhost:5173",      // local Vite
-      "http://localhost:3000"       // local React (CRA)
+      "https://app.rushdr.com",   
+      "http://localhost:5173",   
+      "http://localhost:3000"  
     ],
-    credentials: true, // allow cookies/auth headers
+    credentials: true,
   })
 );
 

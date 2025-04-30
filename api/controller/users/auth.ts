@@ -146,6 +146,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       password,
       email,
       countryCode = "+91",
+      role
     } = req.body;
 
     // Validate required fields
@@ -222,7 +223,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     const newUser = new User({
       email,
       password: hashedPassword,
-      role: "patient",
+      role: role || ["patient"], 
       phone,
       phoneVerified: true,
       firstName,
