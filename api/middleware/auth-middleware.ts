@@ -61,11 +61,13 @@ export const verifyToken = async (
       return;
     }
 
+    console.log("Decoded token:", decoded);
+
     // Set user info in request object
     req.user = {
       id: decoded.id,
       email: decoded.email,
-      role: decoded.role,
+      role: decoded.role[0],
     };
 
     next();

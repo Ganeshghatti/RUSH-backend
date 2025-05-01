@@ -146,6 +146,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       password,
       email,
       countryCode = "+91",
+      role
     } = req.body;
 
     // Validate required fields
@@ -222,7 +223,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     const newUser = new User({
       email,
       password: hashedPassword,
-      role: "patient",
+      role: role || ["patient"], 
       phone,
       phoneVerified: true,
       firstName,
@@ -250,7 +251,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     // Set cookie with token
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true, // Required for HTTPS
+      secure: false, // Required for HTTPS
       sameSite: "none", // Required for cross-domain cookies
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
       path: "/", // Cookie is available for all paths
@@ -331,7 +332,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true, // Required for HTTPS
+      secure: false, // Required for HTTPS
       sameSite: "none", // Required for cross-domain cookies
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
       path: "/", // Cookie is available for all paths
