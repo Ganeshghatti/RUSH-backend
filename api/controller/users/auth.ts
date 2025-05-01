@@ -242,7 +242,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       {
         id: newUser?._id,
         email: newUser?.email,
-        role: newUser?.role,
+        role: newUser?.role[0],
       },
       process.env.JWT_SECRET || "",
       { expiresIn: "24h" }

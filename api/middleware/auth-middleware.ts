@@ -67,7 +67,7 @@ export const verifyToken = async (
     req.user = {
       id: decoded.id,
       email: decoded.email,
-      role: decoded.role[0],
+      role: decoded.role,
     };
 
     next();
@@ -94,6 +94,10 @@ export const checkRole = (role: string) => {
 
       // check role
       const hasRequiredRole = req.user.role == role;
+
+      console.log(" user role:", req.user.role);
+      console.log("required role:", role);
+      console.log("hasRequiredRole:", hasRequiredRole);
 
       if (!hasRequiredRole) {
         res.status(403).json({

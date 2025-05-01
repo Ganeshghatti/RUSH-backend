@@ -14,6 +14,10 @@ const DoctorSubscriptionSchema = new Schema(
       type: String,
       required: [true, "Subscription description is required"],
     },
+    qrCodeImage: {
+      type: String,
+      required: [true, "QR code image is required for subscription"],
+    },
     features: [
       {
         type: String,
