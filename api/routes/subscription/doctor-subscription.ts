@@ -7,12 +7,13 @@ import {
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { subscribeDoctor } from "../../controller/doctor/doctor";
 import { Router } from "express";
+import { upload } from "../media/media-routes";
 
 const router = Router();
 
 router
   .route("/subscription")
-  .post(verifyToken, checkRole("admin"), createSubscription);
+  .post(verifyToken, checkRole("admin"), upload.single("qrCodeImage"), createSubscription);
 
 router
   .route("/subscription/:id")

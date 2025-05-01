@@ -1,14 +1,39 @@
 import { Request, Response } from "express";
 import DoctorSubscription from "../../models/subscription-model";
+import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
+
+// Extend Request interface to include Multer file
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
 
 export const createSubscription = async (
-  req: Request,
+  req: MulterRequest,
   res: Response
 ): Promise<void> => {
   try {
-    const { price, name, description, features, isActive, duration } = req.body;
 
-    // Validate required fields
+    if (!req.body.data || !req.file) {
+      res.status(400).json({
+        success: false,
+        message: "Missing required fields: JSON data and QR code image are required",
+      });
+      return;
+    }
+
+    let subscriptionData;
+    try {
+      subscriptionData = JSON.parse(req.body.data);
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid JSON data format",
+      });
+      return;
+    }
+
+    const { price, name, description, features, isActive, duration } = subscriptionData;
+
     if (!price || !name || !description || !duration) {
       res.status(400).json({
         success: false,
@@ -18,12 +43,22 @@ export const createSubscription = async (
       return;
     }
 
+    // Handle QR code image upload to S3
+    const qrCodeKey = `subscriptions/qr-codes/${Date.now()}-${req.file.originalname}`;
+    
+    const qrCodeImageUrl = await UploadImgToS3({
+      key: qrCodeKey,
+      fileBuffer: req.file.buffer,
+      fileName: req.file.originalname,
+    });
+
     const subscription = await DoctorSubscription.create({
       price,
       name,
       description,
+      qrCodeImage: qrCodeImageUrl,
       features: features || [],
-      isActive: isActive,
+      isActive: isActive !== undefined ? isActive : true,
       duration,
     });
 

@@ -12,8 +12,6 @@ interface AuthRequest extends Request {
   files?: { [fieldname: string]: Express.Multer.File[] } | Express.Multer.File[];
 }
 
-const router = express.Router();
-
 const storage = multer.memoryStorage();
 
 // File filter to only allow image files
@@ -27,7 +25,7 @@ const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.
 };
 
 // Set up multer with configuration
-const upload = multer({
+export const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
@@ -36,6 +34,9 @@ const upload = multer({
 });
 
 // Route for uploading a single image
+
+
+const router = express.Router();
 
 router.post('/upload',verifyToken, upload.single('image'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {

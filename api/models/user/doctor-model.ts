@@ -50,10 +50,8 @@ const doctorSchema = new Schema({
       startDate: { type: Date, required: true, default: Date.now },
       endDate: { type: Date },
       paymentDetails: {
-        paymentId: { type: String },
-        amount: { type: Number },
-        status: { type: String, enum: ["success", "failed"] },
-        paymentMethod: { type: String, enum: ["upi", "card"] },
+        upiId: { type: String },
+        paymentImage: { type: String }
       },
       SubscriptionId: {
         type: Schema.Types.ObjectId,
