@@ -16,7 +16,6 @@ router
   .post(
     verifyToken,
     checkRole("admin"),
-    upload.single("qrCodeImage"),
     createSubscription
   );
 
@@ -32,7 +31,6 @@ router
   .route("/subscription/purchase/:doctorId")
   .post(
     verifyToken,
-    checkRole("doctor"),
     upload.single("paymentImage"),
     subscribeDoctor
   );

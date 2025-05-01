@@ -60,6 +60,14 @@ const doctorSchema = new Schema({
       },
     },
   ],
+  status: {
+    type: String,
+    enum: ["approved", "rejected", "pending"],
+    default: "pending"
+  },
+  message: {
+    type: String
+  }
 });
 
 const Doctor = User.discriminator("doctor", doctorSchema);

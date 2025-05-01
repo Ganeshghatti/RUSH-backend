@@ -1,39 +1,16 @@
 import { Request, Response } from "express";
 import DoctorSubscription from "../../models/subscription-model";
 import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
-
-// Extend Request interface to include Multer file
-interface MulterRequest extends Request {
-  file?: Express.Multer.File;
-}
+import QRCode from "qrcode";
 
 export const createSubscription = async (
-  req: MulterRequest,
+  req: Request,
   res: Response
 ): Promise<void> => {
   try {
+    const { price, name, description, features, isActive, duration } = req.body;
 
-    if (!req.body.data || !req.file) {
-      res.status(400).json({
-        success: false,
-        message: "Missing required fields: JSON data and QR code image are required",
-      });
-      return;
-    }
-
-    let subscriptionData;
-    try {
-      subscriptionData = JSON.parse(req.body.data);
-    } catch (error) {
-      res.status(400).json({
-        success: false,
-        message: "Invalid JSON data format",
-      });
-      return;
-    }
-
-    const { price, name, description, features, isActive, duration } = subscriptionData;
-
+    // Validate required fields
     if (!price || !name || !description || !duration) {
       res.status(400).json({
         success: false,
@@ -43,23 +20,32 @@ export const createSubscription = async (
       return;
     }
 
-    // Handle QR code image upload to S3
-    const qrCodeKey = `subscriptions/qr-codes/${Date.now()}-${req.file.originalname}`;
+    const upiLink = `upi://pay?pa=yespay.bizsbiz81637@yesbankltd&pn=RUSHDR&am=${parseFloat(price).toFixed(2)}&cu=INR`;
+
+    const qrCodeDataUrl = await QRCode.toDataURL(upiLink);
+
+    // Convert Data URL to Buffer
+    const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, "");
+    const qrBuffer = Buffer.from(base64Data, "base64");
+
+    // Upload QR code to S3
+    const timestamp = Date.now();
+    const s3Key = `qr-codes/subscription-${timestamp}.png`;
     
-    const qrCodeImageUrl = await UploadImgToS3({
-      key: qrCodeKey,
-      fileBuffer: req.file.buffer,
-      fileName: req.file.originalname,
+    const signedUrl = await UploadImgToS3({
+      key: s3Key,
+      fileBuffer: qrBuffer,
+      fileName: `subscription-${timestamp}.png`,
     });
 
     const subscription = await DoctorSubscription.create({
-      price,
+      price: parseFloat(price).toFixed(2),
       name,
       description,
-      qrCodeImage: qrCodeImageUrl,
       features: features || [],
-      isActive: isActive !== undefined ? isActive : true,
+      isActive: isActive,
       duration,
+      qrCodeImage: signedUrl,
     });
 
     res.status(201).json({
@@ -154,7 +140,9 @@ export const getActiveSubscriptions = async (
   res: Response
 ): Promise<void> => {
   try {
-    const activeSubscriptions = await DoctorSubscription.find({ isActive: true });
+    const activeSubscriptions = await DoctorSubscription.find({
+      isActive: true,
+    });
 
     if (!activeSubscriptions || activeSubscriptions.length === 0) {
       res.status(404).json({
@@ -176,4 +164,4 @@ export const getActiveSubscriptions = async (
       message: "Failed to fetch active subscriptions",
     });
   }
-}; 
+};

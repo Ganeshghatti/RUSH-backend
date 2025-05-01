@@ -9,7 +9,7 @@ import mongoose from "mongoose";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const isProduction = process.env.NODE_ENV === "production";
+// const isProduction = process.env.NODE_ENV === "production";
 
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -64,7 +64,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     // Check if user with this phone already exists
     const existingUserByPhone = await User.findOne({ phone });
 
-    if(existingUserByPhone?.phoneVerified === true) {
+    if (existingUserByPhone?.phoneVerified === true) {
       res.status(400).json({
         success: false,
         message: "User already verified",
@@ -91,7 +91,6 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
         return;
       }
     }
-
 
     // Check if an OTP already exists for the phone number
     const existingOTP = await OTP.findOne({ phone });
@@ -148,7 +147,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       password,
       email,
       countryCode = "+91",
-      role
+      role,
     } = req.body;
 
     // Validate required fields
@@ -225,7 +224,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     const newUser = new User({
       email,
       password: hashedPassword,
-      role: role || ["patient"], 
+      role: role || ["patient"],
       phone,
       phoneVerified: true,
       firstName,
@@ -252,8 +251,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction ? true : false,
-      sameSite: isProduction ? "none" : "lax",
+      secure: false, // true for production, false for development
+      sameSite: "lax", // "none" for production, "lax" for development
       maxAge: 24 * 60 * 60 * 1000,
       path: "/",
     });
@@ -290,7 +289,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
-
 
     const user = await User.findOne({ email });
 
@@ -333,12 +331,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction ? true : false,
-      sameSite: isProduction ? "none" : "lax",
+      secure: false,
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000,
       path: "/",
     });
-    
+
     res.status(200).json({
       success: true,
       message: "Login successful",

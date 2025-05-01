@@ -705,7 +705,7 @@ export const subscribeDoctor = async (
     }
 
     // Find doctor
-    const doctor: any = await Doctor.findById(doctorId);
+    const doctor: any = await User.findById(doctorId);
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -713,6 +713,8 @@ export const subscribeDoctor = async (
       });
       return;
     }
+
+    console.log("doctor", doctor);
 
     // Find subscription
     const subscription = await DoctorSubscription.findById(subscriptionId);
@@ -782,6 +784,8 @@ export const subscribeDoctor = async (
       },
       SubscriptionId: subscription._id,
     };
+
+    console.log("newSubscription", newSubscription);
 
     // Add subscription to doctor's subscriptions array
     doctor.subscriptions.push(newSubscription);
