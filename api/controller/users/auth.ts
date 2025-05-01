@@ -9,6 +9,8 @@ import mongoose from "mongoose";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+const isProduction = process.env.NODE_ENV === "production";
+
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
     const { phone, email, password, countryCode = "+91" } = req.body;
@@ -248,13 +250,12 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       { expiresIn: "24h" }
     );
 
-    // Set cookie with token
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false, // Required for HTTPS
-      sameSite: "none", // Required for cross-domain cookies
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-      path: "/", // Cookie is available for all paths
+      secure: isProduction ? true : false,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+      path: "/",
     });
 
     res.status(200).json({
@@ -332,12 +333,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false, // Required for HTTPS
-      sameSite: "none", // Required for cross-domain cookies
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-      path: "/", // Cookie is available for all paths
+      secure: isProduction ? true : false,
+      sameSite: isProduction ? "none" : "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+      path: "/",
     });
-
+    
     res.status(200).json({
       success: true,
       message: "Login successful",

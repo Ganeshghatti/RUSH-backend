@@ -663,19 +663,43 @@ export const doctorOnboardV2 = async (
   }
 };
 
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
+
 export const subscribeDoctor = async (
-  req: Request,
+  req: MulterRequest,
   res: Response
 ): Promise<void> => {
   try {
-    const { doctorId } = req.params;
-
-    const { subscriptionId } = req.body;
-
-    if (!doctorId || !subscriptionId) {
+    // Check for required form data
+    if (!req.body.data || !req.file) {
       res.status(400).json({
         success: false,
-        message: "Missing required fields",
+        message: "Missing required fields: JSON data and payment image are required",
+      });
+      return;
+    }
+
+    // Parse JSON data from form
+    let formData;
+    try {
+      formData = JSON.parse(req.body.data);
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid JSON data format",
+      });
+      return;
+    }
+
+    const { subscriptionId, paymentDetails } = formData;
+    const { doctorId } = req.params;
+
+    if (!doctorId || !subscriptionId || !paymentDetails?.upiId) {
+      res.status(400).json({
+        success: false,
+        message: "Missing required fields: doctorId, subscriptionId, or paymentDetails.upiId",
       });
       return;
     }
@@ -714,16 +738,20 @@ export const subscribeDoctor = async (
 
     switch (subscription.duration) {
       case "1 month":
-        endDate = new Date(startDate.setMonth(startDate.getMonth() + 1));
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 1);
         break;
       case "3 months":
-        endDate = new Date(startDate.setMonth(startDate.getMonth() + 3));
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 3);
         break;
       case "1 year":
-        endDate = new Date(startDate.setFullYear(startDate.getFullYear() + 1));
+        endDate = new Date(startDate);
+        endDate.setFullYear(startDate.getFullYear() + 1);
         break;
       case "2 years":
-        endDate = new Date(startDate.setFullYear(startDate.getFullYear() + 2));
+        endDate = new Date(startDate);
+        endDate.setFullYear(startDate.getFullYear() + 2);
         break;
       case "lifetime":
         endDate = undefined; // No end date for lifetime
@@ -736,15 +764,27 @@ export const subscribeDoctor = async (
         return;
     }
 
+    // Handle payment image upload to S3
+    const paymentImageKey = `doctors/subscriptions/payments/${Date.now()}-${req.file.originalname}`;
+    const paymentImageUrl = await UploadImgToS3({
+      key: paymentImageKey,
+      fileBuffer: req.file.buffer,
+      fileName: req.file.originalname,
+    });
+
     // Create new subscription entry
     const newSubscription = {
       startDate: new Date(),
       endDate,
+      paymentDetails: {
+        upiId: paymentDetails.upiId,
+        paymentImage: paymentImageUrl,
+      },
       SubscriptionId: subscription._id,
     };
 
     // Add subscription to doctor's subscriptions array
-    await doctor.subscriptions.push(newSubscription);
+    doctor.subscriptions.push(newSubscription);
 
     // Save the updated doctor document
     await doctor.save();
