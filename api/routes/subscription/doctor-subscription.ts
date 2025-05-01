@@ -13,7 +13,12 @@ const router = Router();
 
 router
   .route("/subscription")
-  .post(verifyToken, checkRole("admin"), upload.single("qrCodeImage"), createSubscription);
+  .post(
+    verifyToken,
+    checkRole("admin"),
+    upload.single("qrCodeImage"),
+    createSubscription
+  );
 
 router
   .route("/subscription/:id")
@@ -25,7 +30,12 @@ router
 
 router
   .route("/subscription/purchase/:doctorId")
-  .post(verifyToken, checkRole("doctor"), subscribeDoctor);
+  .post(
+    verifyToken,
+    checkRole("doctor"),
+    upload.single("paymentImage"),
+    subscribeDoctor
+  );
 
 router.route("/subscription/active").get(verifyToken, getActiveSubscriptions);
 
