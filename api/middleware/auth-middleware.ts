@@ -40,7 +40,7 @@ export const verifyToken = async (
     const decoded = jwt.verify(token, JWT_SECRET) as {
       id: string;
       email: string;
-      role: string[];
+      role: string;
     };
 
     if (!decoded) {

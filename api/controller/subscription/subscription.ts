@@ -20,7 +20,9 @@ export const createSubscription = async (
       return;
     }
 
-    const upiLink = `upi://pay?pa=yespay.bizsbiz81637@yesbankltd&pn=RUSHDR&am=${parseFloat(price).toFixed(2)}&cu=INR`;
+    const upiLink = `upi://pay?pa=yespay.bizsbiz81637@yesbankltd&pn=RUSHDR&am=${parseFloat(
+      price
+    ).toFixed(2)}&cu=INR`;
 
     const qrCodeDataUrl = await QRCode.toDataURL(upiLink);
 
@@ -31,7 +33,7 @@ export const createSubscription = async (
     // Upload QR code to S3
     const timestamp = Date.now();
     const s3Key = `qr-codes/subscription-${timestamp}.png`;
-    
+
     const signedUrl = await UploadImgToS3({
       key: s3Key,
       fileBuffer: qrBuffer,

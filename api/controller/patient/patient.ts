@@ -30,7 +30,7 @@ export const patientOnboard = async (req: Request, res: Response): Promise<void>
     }
 
     // Check if user exists and has patient role
-    const user = await User.findOne({ _id: userId, role: "patient" });
+    const user = await User.findOne({ _id: userId });
     if (!user) {
       res.status(404).json({
         success: false,
@@ -64,14 +64,14 @@ export const patientOnboard = async (req: Request, res: Response): Promise<void>
     };
 
     // Update patient using discriminator model
-    const updatedPatient = await Patient.findByIdAndUpdate(
-      userId,
+    const updatedPatient = await Patient.findOneAndUpdate(
+      { userId },
       { $set: updateData },
       {
         new: true,
         runValidators: true,
       }
-    ).select("-password"); // Exclude password from response
+    ); 
 
     if (!updatedPatient) {
       res.status(500).json({

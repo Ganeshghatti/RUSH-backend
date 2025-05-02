@@ -39,7 +39,7 @@ export const doctorOnboard = async (
     }
 
     // Check if user exists and has doctor role
-    const user = await User.findOne({ _id: userId, role: "doctor" });
+    const user = await User.findOne({ _id: userId });
     if (!user) {
       res.status(404).json({
         success: false,
@@ -443,7 +443,7 @@ export const doctorOnboardV2 = async (
     }
 
     // Check if user exists and has doctor role
-    const user = await User.findOne({ _id: userId, role: { $in: ["doctor"] } });
+    const user = await User.findOne({ _id: userId, roles: { $in: ["doctor"] } });
     if (!user) {
       res.status(404).json({
         success: false,
@@ -630,14 +630,14 @@ export const doctorOnboardV2 = async (
     console.log(" main data to update", updateData);
 
     // Update doctor using discriminator model
-    const updatedDoctor = await User.findByIdAndUpdate(
-      userId,
+    const updatedDoctor = await Doctor.findOneAndUpdate(
+      { userId }, 
       { $set: updateData },
       {
         new: true,
         runValidators: true,
       }
-    ).select("-password");
+    );
 
     if (!updatedDoctor) {
       console.log("Failed to update doctor information:", updatedDoctor);
@@ -705,11 +705,12 @@ export const subscribeDoctor = async (
     }
 
     // Find doctor
-    const doctor: any = await User.findById(doctorId);
+    const doctor: any = await Doctor.findOne({ userId: doctorId });
+
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "User not found",
       });
       return;
     }
