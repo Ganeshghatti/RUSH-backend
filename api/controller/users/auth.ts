@@ -302,7 +302,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, currentRole } = req.body;
+    const { email, password, role } = req.body;
 
     if (!email || !password) {
       res.status(400).json({
@@ -322,8 +322,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // user.role is an array, so we need to check if the currentRole is in the user's roles
-    if (!user.roles.includes(currentRole)) {
+    if (!user.roles.includes(role)) {
       res.status(403).json({
         success: false,
         message: "You do not have permission to access this role",
@@ -346,7 +345,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: currentRole },
+      { id: user._id, email: user.email, role: role },
       JWT_SECRET,
       { expiresIn: "24h" }
     );
