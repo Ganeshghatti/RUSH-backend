@@ -60,6 +60,7 @@ const userSchema = new Schema(
       upiProvider: { type: String },
       isVerified: { type: Boolean, default: false },
     },
+    isDocumentVerified: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
   }
 );
