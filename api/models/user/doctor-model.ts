@@ -65,7 +65,8 @@ const doctorSchema = new Schema({
     default: "pending",
   },
   message: [{
-    type: String,
+    message: { type: String },
+    date: { type: Date, default: Date.now },
   }],
 });
 

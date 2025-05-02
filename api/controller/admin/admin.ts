@@ -48,7 +48,10 @@ export const updateDoctorStatus = async (
 
     const updatedDoctor = await Doctor.findByIdAndUpdate(
       doctorId,
-      { status, message },
+      {
+        $set: { status },
+        $push: { message: { message, date: new Date() } }
+      },
       { new: true }
     );
 
