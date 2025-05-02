@@ -639,8 +639,9 @@ export const doctorOnboardV2 = async (
       }
     );
 
+    console.log("Failed to update doctor information:", updatedDoctor);
+
     if (!updatedDoctor) {
-      console.log("Failed to update doctor information:", updatedDoctor);
       res.status(500).json({
         success: false,
         message: "Failed to update doctor information",
