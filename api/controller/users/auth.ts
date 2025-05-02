@@ -270,12 +270,20 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       { expiresIn: "24h" }
     );
 
+    // res.cookie("token", token, {
+    //   httpOnly: true,
+    //   secure: false, // true for production, false for development
+    //   sameSite: "lax", // "none" for production, "lax" for development
+    //   maxAge: 24 * 60 * 60 * 1000,
+    //   path: "/",
+    // });
+
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false, // true for production, false for development
-      sameSite: "lax", // "none" for production, "lax" for development
-      maxAge: 24 * 60 * 60 * 1000,
-      path: "/",
+      secure: true, // Ensure secure for HTTPS
+      sameSite: "none", // Required for cross-site cookies
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      path: "/", // Root path
     });
 
     res.status(200).json({
@@ -350,12 +358,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       { expiresIn: "24h" }
     );
 
+    // res.cookie("token", token, {
+    //   httpOnly: true,
+    //   secure: false,
+    //   sameSite: "lax",
+    //   maxAge: 24 * 60 * 60 * 1000,
+    //   path: "/",
+    // });
+
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000,
-      path: "/",
+      secure: true, // Ensure secure for HTTPS
+      sameSite: "none", // Required for cross-site cookies
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      path: "/", // Root path
     });
 
     res.status(200).json({
