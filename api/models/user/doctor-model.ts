@@ -14,7 +14,7 @@ const doctorSchema = new Schema({
   ],
   registration: [
     {
-      regNumber: { type: String, required: true, unique: true },
+      regNumber: { type: String, required: true },
       council: { type: String, required: true },
       isVerified: { type: Boolean, default: false },
       licenseImage: { type: String },
