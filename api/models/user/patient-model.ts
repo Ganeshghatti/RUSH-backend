@@ -1,9 +1,8 @@
 import mongoose from "mongoose";
-import User from "./user-model";
-
 const { Schema } = mongoose;
 
 const patientSchema = new Schema({
+  userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   mapLocation: { type: String },
   insurance: {
     policyNumber: { type: String },
@@ -26,6 +25,6 @@ const patientSchema = new Schema({
   ],
 });
 
-const Patient = User.discriminator("patient", patientSchema);
+const Patient = mongoose.model("Patient", patientSchema);
 
 export default Patient;

@@ -9,7 +9,7 @@ import patientRoutes from "./routes/onboard/patient"
 import doctorRoutes from "./routes/onboard/doctor";
 import doctorSubscriptionRoutes from "./routes/subscription/doctor-subscription";
 import cookieParser from "cookie-parser";
-
+import adminRoutes from "./routes/admin/admin-route";
 
 // Load environment variables
 dotenv.config();
@@ -63,6 +63,8 @@ app.use("/patient", patientRoutes);
 app.use("/doctor", doctorRoutes);
 app.use("/doctor", doctorSubscriptionRoutes)
 
+app.use(adminRoutes);
+
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err);
@@ -71,5 +73,4 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
 });

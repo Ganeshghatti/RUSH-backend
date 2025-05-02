@@ -1,9 +1,8 @@
 import mongoose from "mongoose";
-import User from "./user-model";
-
 const { Schema } = mongoose;
 
 const doctorSchema = new Schema({
+  userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   qualifications: [
     {
       degree: { type: String, required: true },
@@ -51,7 +50,7 @@ const doctorSchema = new Schema({
       endDate: { type: Date },
       paymentDetails: {
         upiId: { type: String },
-        paymentImage: { type: String }
+        paymentImage: { type: String },
       },
       SubscriptionId: {
         type: Schema.Types.ObjectId,
@@ -60,8 +59,16 @@ const doctorSchema = new Schema({
       },
     },
   ],
+  status: {
+    type: String,
+    enum: ["approved", "rejected", "pending"],
+    default: "pending",
+  },
+  message: [{
+    type: String,
+  }],
 });
 
-const Doctor = User.discriminator("doctor", doctorSchema);
+const Doctor = mongoose.model("Doctor", doctorSchema);;
 
 export default Doctor;

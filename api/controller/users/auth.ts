@@ -6,10 +6,12 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import validator from "validator";
 import mongoose from "mongoose";
+import Doctor from "../../models/user/doctor-model";
+import Patient from "../../models/user/patient-model";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const isProduction = process.env.NODE_ENV === "production";
+// const isProduction = process.env.NODE_ENV === "production";
 
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -64,7 +66,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     // Check if user with this phone already exists
     const existingUserByPhone = await User.findOne({ phone });
 
-    if(existingUserByPhone?.phoneVerified === true) {
+    if (existingUserByPhone?.phoneVerified === true) {
       res.status(400).json({
         success: false,
         message: "User already verified",
@@ -91,7 +93,6 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
         return;
       }
     }
-
 
     // Check if an OTP already exists for the phone number
     const existingOTP = await OTP.findOne({ phone });
@@ -148,7 +149,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       password,
       email,
       countryCode = "+91",
-      role
+      role,
     } = req.body;
 
     // Validate required fields
@@ -175,6 +176,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         success: false,
         message:
           "First name, last name, email, and password are required for registration",
+      });
+      return;
+    }
+
+    if (!["doctor", "patient"].includes(role)) {
+      res.status(400).json({
+        success: false,
+        message: "Role must be either 'doctor' or 'patient'",
       });
       return;
     }
@@ -225,7 +234,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     const newUser = new User({
       email,
       password: hashedPassword,
-      role: role || ["patient"], 
+      roles: [role],
       phone,
       phoneVerified: true,
       firstName,
@@ -236,6 +245,17 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     // Save user
     await newUser.save();
 
+    // Create role-specific data
+    if (role === "doctor") {
+      const doctorProfile = await Doctor.create({ userId: newUser._id });
+      newUser.roleRefs = { doctor: doctorProfile._id };
+    } else if (role === "patient") {
+      const patientProfile = await Patient.create({ userId: newUser._id });
+      newUser.roleRefs = { patient: patientProfile._id };
+    }
+
+    await newUser.save();
+
     // Delete the OTP after successful verification
     await OTP.deleteOne({ _id: otpRecord._id });
 
@@ -244,7 +264,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       {
         id: newUser?._id,
         email: newUser?.email,
-        role: newUser?.role[0],
+        role: role,
       },
       process.env.JWT_SECRET || "",
       { expiresIn: "24h" }
@@ -252,8 +272,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction ? true : false,
-      sameSite: isProduction ? "none" : "lax",
+      secure: false, // true for production, false for development
+      sameSite: "lax", // "none" for production, "lax" for development
       maxAge: 24 * 60 * 60 * 1000,
       path: "/",
     });
@@ -267,6 +287,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         firstName: newUser.firstName,
         lastName: newUser.lastName,
         phone: newUser.phone,
+        role: newUser.roles,
       },
     });
   } catch (error) {
@@ -291,7 +312,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-
     const user = await User.findOne({ email });
 
     if (!user) {
@@ -303,7 +323,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     // user.role is an array, so we need to check if the currentRole is in the user's roles
-    if (!user.role.includes(currentRole)) {
+    if (!user.roles.includes(currentRole)) {
       res.status(403).json({
         success: false,
         message: "You do not have permission to access this role",
@@ -333,12 +353,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction ? true : false,
-      sameSite: isProduction ? "none" : "lax",
+      secure: false,
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000,
       path: "/",
     });
-    
+
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -359,7 +379,6 @@ export const findCurrentUser = async (
   try {
     const { id } = req.user;
 
-    // Validate userId
     if (!mongoose.Types.ObjectId.isValid(id)) {
       res.status(400).json({
         success: false,
@@ -378,6 +397,15 @@ export const findCurrentUser = async (
       return;
     }
 
+    // Conditionally populate roles
+    const populatePaths = [];
+    if (user.roleRefs?.doctor) populatePaths.push("roleRefs.doctor");
+    if (user.roleRefs?.patient) populatePaths.push("roleRefs.patient");
+
+    if (populatePaths.length > 0) {
+      user = await user.populate(populatePaths);
+    }
+
     res.status(200).json({
       success: true,
       message: "User retrieved successfully",
@@ -392,5 +420,4 @@ export const findCurrentUser = async (
     });
   }
 };
-
 // forgot password

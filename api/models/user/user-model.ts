@@ -1,12 +1,16 @@
 import mongoose from "mongoose";
-
 const { Schema } = mongoose;
 
 const userSchema = new Schema(
   {
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: [{ type: String, enum: ["doctor", "patient", "admin"] }],
+    roles: [{ type: String, enum: ["doctor", "patient", "admin"] }],
+    roleRefs: {
+      doctor: { type: Schema.Types.ObjectId, ref: "Doctor" },
+      patient: { type: Schema.Types.ObjectId, ref: "Patient" },
+      // in future: pharmacist, therapist, etc.
+    },
     profilePic: { type: String },
     prefix: { type: String, enum: ["Mr", "Ms", "Dr"] },
     firstName: { type: String },
@@ -57,8 +61,7 @@ const userSchema = new Schema(
       isVerified: { type: Boolean, default: false },
     },
     createdAt: { type: Date, default: Date.now },
-  },
-  { discriminatorKey: "role" }
+  }
 );
 
 const User = mongoose.model("User", userSchema);
