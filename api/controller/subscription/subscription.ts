@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import DoctorSubscription from "../../models/subscription-model";
 import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
 import QRCode from "qrcode";
+import Doctor from "../../models/user/doctor-model";
+import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
 
 export const createSubscription = async (
   req: Request,
@@ -164,6 +166,69 @@ export const getActiveSubscriptions = async (
     res.status(500).json({
       success: false,
       message: "Failed to fetch active subscriptions",
+    });
+  }
+};
+
+export const deleteSubscription = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const subscription = await DoctorSubscription.findById(id);
+    if (!subscription) {
+      res.status(404).json({
+        success: false,
+        message: "Subscription not found",
+      });
+      return;
+    }
+
+    const doctorsUsingSubscription = await Doctor.find({
+      "subscriptions.SubscriptionId": id
+    });
+
+    if (doctorsUsingSubscription.length > 0) {
+      res.status(400).json({
+        success: false,
+        message: "Cannot delete this subscription as it is currently used by one or more doctors",
+        doctorCount: doctorsUsingSubscription.length,
+      });
+      return;
+    }
+
+    // Extract QR code image URL to delete from S3
+    const qrCodeUrl = subscription.qrCodeImage;
+    
+    // Delete the subscription from database
+    await DoctorSubscription.findByIdAndDelete(id);
+    
+    // Extract the key from the URL for S3 deletion
+    // Assuming the URL format contains the key after the domain
+    if (qrCodeUrl) {
+      try {
+        const urlParts = qrCodeUrl.split('/');
+        const key = urlParts.slice(3).join('/');
+        
+        if (key) {
+          await DeleteMediaFromS3({ key });
+        }
+      } catch (error) {
+        console.error("Error deleting QR code image from S3:", error);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Subscription deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting subscription:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete subscription",
     });
   }
 };
