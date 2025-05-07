@@ -4,7 +4,9 @@ import User from "../../models/user/user-model";
 import Doctor from "../../models/user/doctor-model";
 import DoctorSubscription from "../../models/subscription-model";
 import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
+import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import path from "path";
+import { generateSignedUrlsForUser } from "../../utils/signed-url";
 
 export const doctorOnboardV2 = async (
   req: Request,
@@ -39,8 +41,7 @@ export const doctorOnboardV2 = async (
       bankDetails,
       qualifications,
       registration,
-      experience,
-      taxProof,
+      experience
     } = parsedData;
 
     console.log("Parsed data:", parsedData);
@@ -65,9 +66,7 @@ export const doctorOnboardV2 = async (
         ? JSON.parse(addressProof)
         : addressProof;
     const parsedBankDetails =
-      typeof bankDetails === "string" ? JSON.parse(bankDetails) : bankDetails;
-    const parsedTaxProof =
-      typeof taxProof === "string" ? JSON.parse(taxProof) : taxProof;
+      typeof bankDetails === "string" ? JSON.parse(bankDetails) : bankDetails
 
     // Validate userId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -79,7 +78,10 @@ export const doctorOnboardV2 = async (
     }
 
     // Check if user exists and has doctor role
-    const user = await User.findOne({ _id: userId, roles: { $in: ["doctor"] } });
+    const user = await User.findOne({
+      _id: userId,
+      roles: { $in: ["doctor"] },
+    });
     if (!user) {
       res.status(404).json({
         success: false,
@@ -187,15 +189,6 @@ export const doctorOnboardV2 = async (
         })
       : undefined;
 
-    const taxImage = files["taxImage"]?.[0];
-    const taxImageUrl = taxImage
-      ? await UploadImgToS3({
-          key: generateS3Key(taxImage).key,
-          fileBuffer: taxImage.buffer,
-          fileName: generateS3Key(taxImage).fileName,
-        })
-      : undefined;
-
     const upiQrImage = files["upiqrImage"]?.[0];
     const upiQrImageUrl = upiQrImage
       ? await UploadImgToS3({
@@ -256,10 +249,6 @@ export const doctorOnboardV2 = async (
       qualifications: parsedQualifications,
       registration: parsedRegistration,
       experience: parsedExperience,
-      taxProof: {
-        ...parsedTaxProof,
-        image: taxImageUrl,
-      },
       signatureImage: signatureImageUrl,
     };
 
@@ -267,15 +256,13 @@ export const doctorOnboardV2 = async (
 
     // Update doctor using discriminator model
     const updatedDoctor = await Doctor.findOneAndUpdate(
-      { userId }, 
+      { userId },
       { $set: updateData },
       {
         new: true,
         runValidators: true,
       }
     );
-
-    console.log("Failed to update doctor information:", updatedDoctor);
 
     if (!updatedDoctor) {
       res.status(500).json({
@@ -313,7 +300,8 @@ export const subscribeDoctor = async (
     if (!req.body.data || !req.file) {
       res.status(400).json({
         success: false,
-        message: "Missing required fields: JSON data and payment image are required",
+        message:
+          "Missing required fields: JSON data and payment image are required",
       });
       return;
     }
@@ -336,7 +324,8 @@ export const subscribeDoctor = async (
     if (!doctorId || !subscriptionId || !paymentDetails?.upiId) {
       res.status(400).json({
         success: false,
-        message: "Missing required fields: doctorId, subscriptionId, or paymentDetails.upiId",
+        message:
+          "Missing required fields: doctorId, subscriptionId, or paymentDetails.upiId",
       });
       return;
     }
@@ -405,7 +394,9 @@ export const subscribeDoctor = async (
     }
 
     // Handle payment image upload to S3
-    const paymentImageKey = `doctors/subscriptions/payments/${Date.now()}-${req.file.originalname}`;
+    const paymentImageKey = `doctors/subscriptions/payments/${Date.now()}-${
+      req.file.originalname
+    }`;
     const paymentImageUrl = await UploadImgToS3({
       key: paymentImageKey,
       fileBuffer: req.file.buffer,
@@ -451,32 +442,54 @@ export const getDoctorById = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { doctorId } = req.params;
+    const { userId } = req.params;
 
-    // Validate doctorId
-    if (!doctorId) {
+    // Validate userId
+    if (!userId) {
       res.status(400).json({
         success: false,
-        message: "doctorId is required",
+        message: "userId is required",
       });
       return;
     }
 
-    // Find doctor by userId
-    const doctor = await Doctor.findById(doctorId);
+    // Find user and populate doctor data
+    const user = await User.findById(userId)
+      .populate('roleRefs.doctor');
 
-    if (!doctor) {
+
+    if (!user) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "User not found",
       });
       return;
     }
+
+    if (!user.roles.includes("doctor")) {
+      res.status(403).json({
+        success: false,
+        message: "User is not a doctor",
+      });
+      return;
+    }
+
+
+    if (!user?.roleRefs?.doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor data not found",
+      });
+      return;
+    }
+
+    // Generate signed URLs for both user and doctor data
+    const userWithUrls = await generateSignedUrlsForUser(user);
 
     res.status(200).json({
       success: true,
       message: "Doctor fetched successfully",
-      data: doctor,
+      data: userWithUrls,
     });
   } catch (error) {
     console.error("Error fetching doctor:", error);

@@ -57,6 +57,13 @@ const userSchema = new Schema(
       upiQrImage: { type: String },
       upiProvider: { type: String },
     },
+    taxProof: {
+      type: { type: String, enum: ["PAN", "Other"] },
+      idNumber: { type: String }, 
+      image: { type: String },
+      idName: { type: String }, 
+      isVerified: { type: Boolean, default: false },
+    },
     isDocumentVerified: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
   }

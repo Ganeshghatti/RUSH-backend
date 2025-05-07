@@ -14,14 +14,14 @@ interface UploadImgToS3Params {
   fileName: string;
 }
 
-const GetSignedUrl = async (key: string) => {
+export const GetSignedUrl = async (key: string) => {
   const command = new GetObjectCommand({
     Bucket: "the-squirrel-automation-bot",
     Key: key
   });
 
   try {
-    const url = await getSignedUrl(s3, command, { expiresIn: 60 });
+    const url = await getSignedUrl(s3, command, { expiresIn: 7200 }); // 2 hrs
     return url;
   } catch (error) {
     console.error("Error generating presigned URL:", error);
@@ -47,13 +47,14 @@ const UploadImgToS3 = async ({ key, fileBuffer, fileName }: UploadImgToS3Params)
 
   try {
     const response = await s3.send(command);
-    // const url = `https://${process.env.AWS_STORAGE_BUCKET_NAME}.s3.${process.env.AWS_S3_REGION_NAME}.amazonaws.com/${key}`;
+    console.log("S3 upload response:", response);
+    const url = `https://${process.env.AWS_STORAGE_BUCKET_NAME}.s3.${process.env.AWS_S3_REGION_NAME}.amazonaws.com/${key}`;
     // console.log("File uploaded successfully:", response);
-    // console.log("File URL:", url);
-    // console.log("File key:", key);
-    const signedUrl = await GetSignedUrl(key);
+    // console.log("Custom key url:", url);
+    // console.log("key from fun.:", key);
+    // const signedUrl = await GetSignedUrl(key);
     // console.log("Signed URL:", signedUrl);
-    return signedUrl;
+    return key;
   } catch (err: any) {
     console.error("Detailed S3 error:", {
       name: err.name,

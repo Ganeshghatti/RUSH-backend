@@ -8,6 +8,7 @@ import validator from "validator";
 import mongoose from "mongoose";
 import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
+import { generateSignedUrlsForUser } from "../../utils/signed-url";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -270,14 +271,6 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       { expiresIn: "24h" }
     );
 
-    // res.cookie("token", token, {
-    //   httpOnly: true,
-    //   secure: false, // true for production, false for development
-    //   sameSite: "lax", // "none" for production, "lax" for development
-    //   maxAge: 24 * 60 * 60 * 1000,
-    //   path: "/",
-    // });
-
     res.cookie("token", token, {
       httpOnly: true,
       secure: true, // Ensure secure for HTTPS
@@ -358,14 +351,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       { expiresIn: "24h" }
     );
 
-    // res.cookie("token", token, {
-    //   httpOnly: true,
-    //   secure: false,
-    //   sameSite: "lax",
-    //   maxAge: 24 * 60 * 60 * 1000,
-    //   path: "/",
-    // });
-
     res.cookie("token", token, {
       httpOnly: true,
       secure: true, // Ensure secure for HTTPS
@@ -421,10 +406,12 @@ export const findCurrentUser = async (
       user = await user.populate(populatePaths);
     }
 
+    const userWithUrls = await generateSignedUrlsForUser(user);
+
     res.status(200).json({
       success: true,
       message: "User retrieved successfully",
-      data: user,
+      data: userWithUrls,
     });
   } catch (error) {
     console.error("Error in finding user:", error);
@@ -435,4 +422,3 @@ export const findCurrentUser = async (
     });
   }
 };
-// forgot password

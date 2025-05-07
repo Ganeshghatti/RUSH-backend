@@ -31,13 +31,6 @@ const doctorSchema = new Schema({
       isCurrent: { type: Boolean, default: false },
     },
   ],
-  taxProof: {
-    type: { type: String, enum: ["PAN", "Other"] },
-    idNumber: { type: String }, // pan no.
-    image: { type: String },
-    idName: { type: String }, // for other only
-    isVerified: { type: Boolean, default: false },
-  },
   awards: [
     {
       name: { type: String, required: true },
