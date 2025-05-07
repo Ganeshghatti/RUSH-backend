@@ -1,4 +1,4 @@
-import { doctorOnboard, doctorOnboardV2 } from './../../controller/doctor/doctor';
+import { doctorOnboardV2, getDoctorById } from './../../controller/doctor/doctor';
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { Router } from "express";
 import multer from "multer";
@@ -33,7 +33,7 @@ const uploadFields = upload.fields([
   { name: "addressProofImage", maxCount: 1 },
 ]);
 
-// router.route("/onboard/doctor/:userId").put(verifyToken, checkRole("doctor"), doctorOnboard);
 router.route("/onboard/doctor/:userId").post(verifyToken, uploadFields, doctorOnboardV2);
+router.route("/id/:userId").get(verifyToken, getDoctorById);
 
 export default router;

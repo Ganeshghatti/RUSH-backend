@@ -3,6 +3,7 @@ import {
   updateSubscription,
   getSubscriptions,
   getActiveSubscriptions,
+  deleteSubscription,
 } from "../../controller/subscription/subscription";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { subscribeDoctor } from "../../controller/doctor/doctor";
@@ -22,6 +23,10 @@ router
 router
   .route("/subscription/:id")
   .put(verifyToken, checkRole("admin"), updateSubscription);
+
+router
+  .route("/subscription/:id")
+  .delete(verifyToken, checkRole("admin"), deleteSubscription);
 
 router
   .route("/subscription")

@@ -1,3 +1,4 @@
+import { sendResetPasswordLink, resetPassword } from './../../controller/users/reset-password';
 import { verifyToken } from './../../middleware/auth-middleware';
 import { Router } from "express";
 import { sendOtp, verifyOtp, login, findCurrentUser } from "../../controller/users/auth";
@@ -25,5 +26,7 @@ router.route("/send-otp").post(otpLimiter, sendOtp);
 router.route("/verify-otp").post(verifyOtp);
 router.route("/login").post(login);
 router.route("/user").get(verifyToken,findCurrentUser);
+router.route("/forgot-password").post(otpLimiter, sendResetPasswordLink);
+router.route("/reset-password/:token").post(resetPassword);
 
 export default router;

@@ -36,7 +36,6 @@ const userSchema = new Schema(
       },
       idNumber: { type: String },
       image: { type: String },
-      isVerified: { type: Boolean, default: false },
       idName: { type: String }, // for other only
     },
     addressProof: {
@@ -46,7 +45,6 @@ const userSchema = new Schema(
       },
       idNumber: { type: String },
       image: { type: String },
-      isVerified: { type: Boolean, default: false },
       idName: { type: String }, // for other only
     },
     bankDetails: {
@@ -58,6 +56,12 @@ const userSchema = new Schema(
       upiId: { type: String },
       upiQrImage: { type: String },
       upiProvider: { type: String },
+    },
+    taxProof: {
+      type: { type: String, enum: ["PAN", "Other"] },
+      idNumber: { type: String }, 
+      image: { type: String },
+      idName: { type: String }, 
       isVerified: { type: Boolean, default: false },
     },
     isDocumentVerified: { type: Boolean, default: false },
