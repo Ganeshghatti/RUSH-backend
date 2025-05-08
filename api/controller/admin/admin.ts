@@ -1,15 +1,18 @@
 import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
 import User from "../../models/user/user-model";
+import { generateSignedUrlsForUser } from "../../utils/signed-url";
 
 export const getAllDoctors = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const doctors = await Doctor.find({});
+    // Find all users who are doctors and populate their doctor data
+    const users = await User.find({ roles: "doctor" })
+      .populate('roleRefs.doctor');
 
-    if (!doctors || doctors.length === 0) {
+    if (!users || users.length === 0) {
       res.status(404).json({
         success: false,
         message: "No doctor accounts found",
@@ -17,10 +20,15 @@ export const getAllDoctors = async (
       return;
     }
 
+    // Generate signed URLs for all users
+    const usersWithSignedUrls = await Promise.all(
+      users.map(user => generateSignedUrlsForUser(user))
+    );
+
     res.status(200).json({
       success: true,
       message: "Doctor accounts fetched successfully",
-      data: doctors,
+      data: usersWithSignedUrls,
     });
   } catch (error) {
     console.error("Error fetching doctor accounts:", error);
