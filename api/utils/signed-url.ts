@@ -76,6 +76,16 @@ export const generateSignedUrlsForUser = async (user: any) => {
 
   const promises: Promise<void>[] = [];
 
+  // Profile picture
+  if (clone.profilePic) {
+    promises.push(
+      safeGetSignedUrl(clone.profilePic).then(url => {
+        clone.profilePic = url;
+      })
+    );
+  }
+
+  // Tax proof image
   if (clone.taxProof?.image) {
     promises.push(
       safeGetSignedUrl(clone.taxProof.image).then(url => {
@@ -84,6 +94,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
     );
   }
 
+  // Personal ID proof image
   if (clone.personalIdProof?.image) {
     promises.push(
       safeGetSignedUrl(clone.personalIdProof.image).then(url => {
@@ -92,6 +103,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
     );
   }
 
+  // Address proof image
   if (clone.addressProof?.image) {
     promises.push(
       safeGetSignedUrl(clone.addressProof.image).then(url => {
@@ -100,6 +112,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
     );
   }
 
+  // Bank details UPI QR image
   if (clone.bankDetails?.upiQrImage) {
     promises.push(
       safeGetSignedUrl(clone.bankDetails.upiQrImage).then(url => {
@@ -119,4 +132,37 @@ export const generateSignedUrlsForUser = async (user: any) => {
 
   await Promise.all(promises);
   return clone;
+};
+
+export const generateSignedUrlsForSubscription = async (subscription: any) => {
+  const clone = JSON.parse(JSON.stringify(subscription));
+
+  const safeGetSignedUrl = async (key?: string) => {
+    if (!key || typeof key !== "string" || key.trim() === "") return key;
+    try {
+      return await GetSignedUrl(key);
+    } catch (error) {
+      console.warn("Could not generate signed URL for key:", key, error);
+      return key;
+    }
+  };
+
+  // Generate signed URL for QR code image
+  if (clone.qrCodeImage) {
+    clone.qrCodeImage = await safeGetSignedUrl(clone.qrCodeImage);
+  }
+
+  return clone;
+};
+
+export const generateSignedUrlsForSubscriptions = async (subscriptions: any[]) => {
+  if (!Array.isArray(subscriptions)) {
+    return subscriptions;
+  }
+  
+  const signedSubscriptions = await Promise.all(
+    subscriptions.map(subscription => generateSignedUrlsForSubscription(subscription))
+  );
+
+  return signedSubscriptions;
 };

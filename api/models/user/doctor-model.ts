@@ -21,6 +21,7 @@ const doctorSchema = new Schema({
       specialization: { type: String, required: true },
     },
   ],
+  specialization: { type: String },
   signatureImage: { type: String },
   experience: [
     {
@@ -33,8 +34,8 @@ const doctorSchema = new Schema({
   ],
   awards: [
     {
-      name: { type: String, required: true },
-      year: { type: Number, required: true },
+      name: { type: String },
+      year: { type: Number },
     },
   ],
   subscriptions: [

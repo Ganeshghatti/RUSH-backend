@@ -4,6 +4,7 @@ import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
 import QRCode from "qrcode";
 import Doctor from "../../models/user/doctor-model";
 import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
+import { generateSignedUrlsForSubscriptions, generateSignedUrlsForSubscription } from "../../utils/signed-url";
 
 export const createSubscription = async (
   req: Request,
@@ -125,10 +126,12 @@ export const getSubscriptions = async (
       return;
     }
 
+    const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(subscriptions);
+
     res.status(200).json({
       success: true,
       message: "Subscriptions fetched successfully",
-      data: subscriptions,
+      data: subscriptionsWithSignedUrls,
     });
   } catch (error) {
     console.error("Error fetching subscriptions:", error);
@@ -156,10 +159,13 @@ export const getActiveSubscriptions = async (
       return;
     }
 
+    // Generate signed URLs for all active subscriptions
+    const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(activeSubscriptions);
+
     res.status(200).json({
       success: true,
       message: "Active subscriptions fetched successfully",
-      data: activeSubscriptions,
+      data: subscriptionsWithSignedUrls,
     });
   } catch (error) {
     console.error("Error fetching active subscriptions:", error);
@@ -206,7 +212,6 @@ export const deleteSubscription = async (
     await DoctorSubscription.findByIdAndDelete(id);
     
     // Extract the key from the URL for S3 deletion
-    // Assuming the URL format contains the key after the domain
     if (qrCodeUrl) {
       try {
         const urlParts = qrCodeUrl.split('/');
