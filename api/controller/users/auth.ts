@@ -46,19 +46,11 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 
     // If password is provided, validate its strength
     if (password) {
-      if (
-        !validator.isStrongPassword(password, {
-          minLength: 8,
-          minLowercase: 1,
-          minUppercase: 1,
-          minNumbers: 1,
-          minSymbols: 0,
-        })
-      ) {
+      if (password.length < 6) {
         res.status(400).json({
           success: false,
           message:
-            "Password must be at least 8 characters and include uppercase, lowercase, and numbers",
+            "Password must be at least 6 characters",
         });
         return;
       }
@@ -177,6 +169,15 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         success: false,
         message:
           "First name, last name, email, and password are required for registration",
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 6 characters",
       });
       return;
     }

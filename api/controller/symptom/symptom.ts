@@ -30,3 +30,25 @@ export const searchSymptoms = async (
     });
   }
 };
+
+export const getAllUniqueSpecialist = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    // Get all unique symptoms using distinct
+    const uniqueSymptoms = await SymptomRecord.distinct('specialist');
+
+    res.status(200).json({
+      success: true,
+      message: "Unique specialist fetched successfully",
+      data: uniqueSymptoms,
+    });
+  } catch (error) {
+    console.error("Error fetching unique specialist:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch unique specialist",
+    });
+  }
+};
