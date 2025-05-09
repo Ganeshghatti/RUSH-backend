@@ -21,7 +21,7 @@ const doctorSchema = new Schema({
       specialization: { type: String, required: true },
     },
   ],
-  specialization: { type: String },
+  specialization: [{ type: String }],
   signatureImage: { type: String },
   experience: [
     {
@@ -64,6 +64,6 @@ const doctorSchema = new Schema({
   }],
 });
 
-const Doctor = mongoose.model("Doctor", doctorSchema);;
+const Doctor = mongoose.model("Doctor", doctorSchema);
 
 export default Doctor;

@@ -25,15 +25,18 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
 
     const existingToken = await ResetPassword.findOne({ email });
     if (existingToken) {
-      res.status(400).json({ success: false, message: "An email reset link has already been sent to this email address. Please wait 10 minutes." });
+      res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "An email reset link has already been sent to this email address. Please wait 10 minutes.",
+        });
       return;
     }
 
     // Generate secure token
     const token = crypto.randomBytes(32).toString("hex");
-
-    // Store token in DB
-    await ResetPassword.create({ email, token });
 
     const resetLink = `${process.env.DOMAIN_NAME}/reset-password/${token}`;
 
@@ -47,6 +50,9 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
     };
 
     await transporter.sendMail(mailOptions);
+
+    // Store token in DB
+    await ResetPassword.create({ email, token });
 
     res.status(200).json({
       success: true,
@@ -67,12 +73,10 @@ export const resetPassword = async (req: Request, res: Response) => {
     const { newPassword } = req.body;
 
     if (!newPassword || newPassword.length < 6) {
-      res
-        .status(400)
-        .json({
-          success: false,
-          message: "New password must be at least 6 characters long",
-        });
+      res.status(400).json({
+        success: false,
+        message: "New password must be at least 6 characters long",
+      });
       return;
     }
 

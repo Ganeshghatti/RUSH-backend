@@ -16,7 +16,7 @@ interface UploadImgToS3Params {
 
 export const GetSignedUrl = async (key: string) => {
   const command = new GetObjectCommand({
-    Bucket: "the-squirrel-automation-bot",
+    Bucket: process.env.AWS_STORAGE_BUCKET_NAME,
     Key: key
   });
 
