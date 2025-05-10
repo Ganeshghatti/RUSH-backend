@@ -42,7 +42,8 @@ export const doctorOnboardV2 = async (
       qualifications,
       registration,
       experience,
-      specialization
+      specialization,
+      taxProof
     } = parsedData;
 
     console.log("Parsed data:", parsedData);
@@ -68,6 +69,9 @@ export const doctorOnboardV2 = async (
         : addressProof;
     const parsedBankDetails =
       typeof bankDetails === "string" ? JSON.parse(bankDetails) : bankDetails
+
+    const parsedTaxProof =
+      typeof taxProof === "string" ? JSON.parse(taxProof) : taxProof;
 
     // Validate userId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -243,6 +247,18 @@ export const doctorOnboardV2 = async (
       singleImageKeys.push("addressProofImage");
     }
 
+    if (files["taxImage"]?.[0]) {
+      const { key, fileName } = generateS3Key(files["taxImage"][0]);
+      singleImageUploads.push(
+        UploadImgToS3({
+          key,
+          fileBuffer: files["taxImage"][0].buffer,
+          fileName,
+        })
+      );
+      singleImageKeys.push("taxImage");
+    }
+
     // Upload all single images in parallel
     const singleImageUrls = await Promise.all(singleImageUploads);
 
@@ -261,6 +277,9 @@ export const doctorOnboardV2 = async (
       : undefined;
     const addressProofImageUrl = singleImageKeys.indexOf("addressProofImage") !== -1 
       ? singleImageUrls[singleImageKeys.indexOf("addressProofImage")] 
+      : undefined;
+    const taxProofImageUrl = singleImageKeys.indexOf("taxImage") !== -1 
+      ? singleImageUrls[singleImageKeys.indexOf("taxImage")] 
       : undefined;
 
     // Prepare update data for doctor
@@ -288,7 +307,7 @@ export const doctorOnboardV2 = async (
       registration: parsedRegistration,
       experience: parsedExperience,
       signatureImage: signatureImageUrl,
-      specialization
+      specialization,
     };
 
     // Prepare update data for user
@@ -311,7 +330,11 @@ export const doctorOnboardV2 = async (
       bankDetails: {
         ...parsedBankDetails,
         upiQrImage: upiQrImageUrl,
-      }
+      },
+      taxProof: parsedTaxProof ? {
+        ...parsedTaxProof,
+        image: taxProofImageUrl,
+      } : undefined
     };
 
     console.log(" main data to update", doctorUpdateData);

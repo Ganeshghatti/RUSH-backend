@@ -230,7 +230,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
     // Hash the password
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password.toLowerCase(), salt);
 
     // Create a new user
     const newUser = new User({
@@ -332,7 +332,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password.toLowerCase(), user.password);
 
     if (!isMatch) {
       res.status(401).json({
