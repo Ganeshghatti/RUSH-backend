@@ -55,8 +55,8 @@ const doctorSchema = new Schema({
   ],
   status: {
     type: String,
-    enum: ["approved", "rejected", "pending"],
-    default: "pending",
+    enum: ["not-submited", "approved", "rejected", "pending"],
+    default: "not-submited",
   },
   message: [{
     message: { type: String },

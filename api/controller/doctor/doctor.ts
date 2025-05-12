@@ -308,6 +308,7 @@ export const doctorOnboardV2 = async (
       experience: parsedExperience,
       signatureImage: signatureImageUrl,
       specialization,
+      status: "pending",
     };
 
     // Prepare update data for user
