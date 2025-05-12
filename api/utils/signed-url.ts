@@ -23,7 +23,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
   );
 
   // Qualifications
-  if (Array.isArray(clone.qualifications)) {
+  if (Array?.isArray(clone?.qualifications)) {
     for (const qual of clone.qualifications) {
       promises.push(
         safeGetSignedUrl(qual.degreeImage).then(url => {
@@ -34,7 +34,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
   }
 
   // Registrations
-  if (Array.isArray(clone.registration)) {
+  if (Array?.isArray(clone?.registration)) {
     for (const reg of clone.registration) {
       promises.push(
         safeGetSignedUrl(reg.licenseImage).then(url => {
@@ -45,7 +45,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
   }
 
   // Subscriptions
-  if (Array.isArray(clone.subscriptions)) {
+  if (Array?.isArray(clone?.subscriptions)) {
     for (const sub of clone.subscriptions) {
       if (sub.paymentDetails?.paymentImage) {
         promises.push(
@@ -55,6 +55,14 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
         );
       }
     }
+  }
+
+  if (clone?.userId?.profilePic) {
+    promises.push(
+      safeGetSignedUrl(clone.userId.profilePic).then(url => {
+        clone.userId.profilePic = url;
+      })
+    );
   }
 
   await Promise.all(promises);
@@ -77,7 +85,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   const promises: Promise<void>[] = [];
 
   // Profile picture
-  if (clone.profilePic) {
+  if (clone?.profilePic) {
     promises.push(
       safeGetSignedUrl(clone.profilePic).then(url => {
         clone.profilePic = url;
@@ -86,7 +94,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   }
 
   // Tax proof image
-  if (clone.taxProof?.image) {
+  if (clone?.taxProof?.image) {
     promises.push(
       safeGetSignedUrl(clone.taxProof.image).then(url => {
         clone.taxProof.image = url;
@@ -95,7 +103,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   }
 
   // Personal ID proof image
-  if (clone.personalIdProof?.image) {
+  if (clone?.personalIdProof?.image) {
     promises.push(
       safeGetSignedUrl(clone.personalIdProof.image).then(url => {
         clone.personalIdProof.image = url;
@@ -104,7 +112,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   }
 
   // Address proof image
-  if (clone.addressProof?.image) {
+  if (clone?.addressProof?.image) {
     promises.push(
       safeGetSignedUrl(clone.addressProof.image).then(url => {
         clone.addressProof.image = url;
@@ -113,7 +121,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   }
 
   // Bank details UPI QR image
-  if (clone.bankDetails?.upiQrImage) {
+  if (clone?.bankDetails?.upiQrImage) {
     promises.push(
       safeGetSignedUrl(clone.bankDetails.upiQrImage).then(url => {
         clone.bankDetails.upiQrImage = url;
