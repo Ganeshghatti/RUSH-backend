@@ -1,86 +1,95 @@
 import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
-import { Types } from "mongoose";
+import { Types, Document } from "mongoose";
+import User from "../../models/user/user-model";
 
-interface IUser {
+interface DoctorDocument {
   _id: Types.ObjectId;
-  name: string;
-  email: string;
-  phone: string;
-  profileImage?: string;
-}
-
-interface IDoctor {
-  _id: Types.ObjectId;
-  userId?: IUser;
-  qualifications: Array<{
-    degree: string;
-    college: string;
-    year: number;
-    degreePost: string;
-    degreeImage?: string;
-  }>;
-  registration: Array<{
-    regNumber: string;
-    council: string;
-    isVerified: boolean;
-    licenseImage?: string;
-    specialization: string;
-  }>;
+  userId: {
+    _id: Types.ObjectId;
+    name: string;
+    email: string;
+    phone: string;
+    profileImage?: string;
+  };
   specialization: string[];
-  signatureImage?: string;
-  experience: Array<{
-    experienceName: string;
-    institution: string;
-    fromYear: number;
-    toYear?: number;
-    isCurrent: boolean;
-  }>;
+  toObject(): any;
 }
 
 export const searchDoctor = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { specialist, limit = 10 } = req.query;
+    const { query, limit = 10 } = req.query;
     
-    if (!specialist) {
+    if (!query) {
       res.status(400).json({
         success: false,
-        message: "Specialist parameter is required"
+        message: "Search query is required"
       });
       return;
     }
 
     // Create case-insensitive regex pattern for partial matching
-    const specialistRegex = new RegExp(String(specialist), 'i');
+    const queryRegex = new RegExp(String(query), 'i');
     
-    const query = {
-      specialization: { $regex: specialistRegex }
-    };
+    // Search in both collections simultaneously
+    const [doctorUsers, doctorsBySpecialization] = await Promise.all([
+      // Search users who are doctors by name
+      User.find({
+        roles: "doctor",
+        firstName: { $regex: queryRegex }
+      }).select('_id firstName lastName email phone profileImage'),
 
-    const doctors = await Doctor.find(query)
+      // Search doctors by specialization
+      Doctor.find({
+        specialization: { $regex: queryRegex }
+      })
+      .populate('userId')
       .limit(Number(limit))
-      .populate<{ userId: IUser }>({
-        path: 'userId',
-        select: 'name email phone profileImage'
-      });
+    ]);
+
+    // Get IDs of doctors found by name search
+    const doctorUserIds = doctorUsers.map(user => user._id);
+
+    // If we found doctors by name, get their doctor records
+    const doctorsByName = doctorUserIds.length > 0 ? 
+      await Doctor.find({
+        userId: { $in: doctorUserIds }
+      })
+      .populate('userId')
+      .limit(Number(limit)) : 
+      [];
+
+    // Combine results, removing duplicates
+    const combinedDoctors = [...doctorsBySpecialization];
+    doctorsByName.forEach(doctor => {
+      const isDuplicate = combinedDoctors.some(
+        existingDoctor => existingDoctor._id.toString() === doctor._id.toString()
+      );
+      if (!isDuplicate) {
+        combinedDoctors.push(doctor);
+      }
+    });
+
+    // Limit the final results
+    const limitedDoctors = combinedDoctors.slice(0, Number(limit));
 
     // Generate signed URLs for each doctor
     const doctorsWithSignedUrls = await Promise.all(
-      doctors.map(async (doctor) => {
+      limitedDoctors.map(async (doctor) => {
         if (!doctor) return null;
         
-        const doctorObj = doctor.toObject() as IDoctor;
+        const doctorObj = doctor.toObject();
         const processedDoctor = await generateSignedUrlsForDoctor(doctorObj);
         
-        // Ensure we have the basic user info even if userId is populated
+        // Ensure we have the basic user info
         if (doctorObj?.userId) {
           return {
             ...processedDoctor,
-            name: doctorObj.userId.name,
-            email: doctorObj.userId.email,
-            phone: doctorObj.userId.phone,
-            profileImage: doctorObj.userId.profileImage
+            name: (doctorObj.userId as any).name,
+            email: (doctorObj.userId as any).email, 
+            phone: (doctorObj.userId as any).phone,
+            profileImage: (doctorObj.userId as any).profileImage
           };
         }
         
@@ -88,7 +97,6 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
       })
     );
 
-    // Filter out any null values and invalid entries
     const validDoctors = doctorsWithSignedUrls.filter((doctor): doctor is NonNullable<typeof doctor> => 
       doctor !== null && doctor._id !== undefined && (doctor.userId !== undefined || doctor.email !== undefined)
     );
@@ -100,11 +108,10 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
     });
 
   } catch (error: any) {
+    console.error("Error while searching doctors:", error);
     res.status(500).json({
       success: false,
-      message: "Error while searching doctors",
-      error: error.message
+      message: "Error while searching doctors"
     });
   }
 };
-
