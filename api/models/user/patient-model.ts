@@ -3,6 +3,7 @@ const { Schema } = mongoose;
 
 const patientSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  password: { type: String, required: true },
   mapLocation: { type: String },
   insurance: {
     policyNumber: { type: String },

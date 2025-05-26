@@ -12,17 +12,15 @@ import { generateSignedUrlsForUser } from "../../utils/signed-url";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// const isProduction = process.env.NODE_ENV === "production";
-
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phone, email, password, countryCode = "+91" } = req.body;
+    const { phone, email, countryCode = "+91", role } = req.body;
 
     // Validate input
-    if (!phone || !email || !password) {
+    if (!phone || !email || !role) {
       res.status(400).json({
         success: false,
-        message: "Phone number, email, and password are required",
+        message: "Phone number, email, and role are required",
       });
       return;
     }
@@ -35,8 +33,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // If email is provided, validate it
-    if (email && !validator.isEmail(email)) {
+    if (!validator.isEmail(email)) {
       res.status(400).json({
         success: false,
         message: "Invalid email format",
@@ -44,47 +41,22 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // If password is provided, validate its strength
-    if (password) {
-      if (password.length < 6) {
-        res.status(400).json({
-          success: false,
-          message:
-            "Password must be at least 6 characters",
-        });
-        return;
-      }
-    }
-
-    // Check if user with this phone already exists
-    const existingUserByPhone = await User.findOne({ phone });
-
-    if (existingUserByPhone?.phoneVerified === true) {
+    if (!["doctor", "patient"].includes(role)) {
       res.status(400).json({
         success: false,
-        message: "User already verified",
+        message: "Role must be either 'doctor' or 'patient'",
       });
       return;
     }
 
-    if (existingUserByPhone) {
+    // Check if user exists and already has the specified role
+    const existingUser = await User.findOne({ email });
+    if (existingUser && existingUser.roles.includes(role)) {
       res.status(400).json({
         success: false,
-        message: "User with this phone number already exists",
+        message: `You are already registered with the role: ${role}`,
       });
       return;
-    }
-
-    // Check if user with this email already exists (if email provided)
-    if (email) {
-      const existingUserByEmail = await User.findOne({ email });
-      if (existingUserByEmail) {
-        res.status(400).json({
-          success: false,
-          message: "User with this email already exists",
-        });
-        return;
-      }
     }
 
     // Check if an OTP already exists for the phone number
@@ -93,8 +65,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     if (existingOTP) {
       res.status(400).json({
         success: false,
-        message:
-          "An OTP has already been sent to this phone number. Please wait 5 minutes.",
+        message: "An OTP has already been sent to this phone number. Please wait 5 minutes.",
       });
       return;
     }
@@ -109,14 +80,11 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       { upsert: true, new: true }
     );
 
-    // Format the phone number with country code if not already included
-    const formattedPhone = phone.startsWith("+")
-      ? phone
-      : `${countryCode}${phone}`;
+    // Format the phone number with country code
+    const formattedPhone = phone.startsWith("+") ? phone : `${countryCode}${phone}`;
 
     // Send OTP via SMS
     const message = `Your RUSH verification code is ${newOTP}. Valid for 5 minutes.`;
-
     await sendSMS(formattedPhone, message);
 
     res.status(200).json({
@@ -146,15 +114,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     } = req.body;
 
     // Validate required fields
-    if (!phone || !otp) {
+    if (!phone || !otp || !firstName || !lastName || !email || !password || !role) {
       res.status(400).json({
         success: false,
-        message: "Phone number and OTP are required",
+        message: "All fields (phone, otp, firstName, lastName, email, password, role) are required",
       });
       return;
     }
 
-    // Validate phone number
     if (!validator.isMobilePhone(phone, "any")) {
       res.status(400).json({
         success: false,
@@ -163,12 +130,10 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // For registration, validate additional fields
-    if (!firstName || !lastName || !email || !password) {
+    if (!validator.isEmail(email)) {
       res.status(400).json({
         success: false,
-        message:
-          "First name, last name, email, and password are required for registration",
+        message: "Invalid email format",
       });
       return;
     }
@@ -176,8 +141,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     if (password.length < 6) {
       res.status(400).json({
         success: false,
-        message:
-          "Password must be at least 6 characters",
+        message: "Password must be at least 6 characters",
       });
       return;
     }
@@ -190,37 +154,10 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Validate email
-    if (!validator.isEmail(email)) {
-      res.status(400).json({
-        success: false,
-        message: "Invalid email format",
-      });
-      return;
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      res.status(400).json({
-        success: false,
-        message: "User with this email already exists",
-      });
-      return;
-    }
-
     // Verify the OTP
     const otpRecord = await OTP.findOne({ phone });
 
-    if (!otpRecord) {
-      res.status(404).json({
-        success: false,
-        message: "No OTP found for this phone number",
-      });
-      return;
-    }
-
-    if (otpRecord.otp !== otp) {
+    if (!otpRecord || otpRecord.otp !== otp) {
       res.status(400).json({
         success: false,
         message: "Invalid OTP",
@@ -228,68 +165,113 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Check if user exists
+    let user = await User.findOne({ email });
+
     // Hash the password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password.toLowerCase(), salt);
 
-    // Create a new user
-    const newUser = new User({
-      email,
-      password: hashedPassword,
-      roles: [role],
-      phone,
-      phoneVerified: true,
-      firstName,
-      lastName,
-      countryCode,
-    });
+    if (user) {
+      // Check if the phone number matches the existing user's phone
+      if (user.phone !== phone) {
+        res.status(400).json({
+          success: false,
+          message: "Phone number does not match the registered email",
+        });
+        return;
+      }
 
-    // Save user
-    await newUser.save();
+      // Check if the user already has the specified role (redundant but kept for safety)
+      if (user.roles.includes(role)) {
+        res.status(400).json({
+          success: false,
+          message: `You are already registered with the role: ${role}`,
+        });
+        return;
+      }
 
-    // Create role-specific data
-    if (role === "doctor") {
-      const doctorProfile = await Doctor.create({ userId: newUser._id });
-      newUser.roleRefs = { doctor: doctorProfile._id };
-    } else if (role === "patient") {
-      const patientProfile = await Patient.create({ userId: newUser._id });
-      newUser.roleRefs = { patient: patientProfile._id };
+      // Add the new role
+      user.roles.push(role);
+
+      // Update role-specific data
+      if (role === "doctor") {
+        const doctorProfile = await Doctor.create({ userId: user._id, password: hashedPassword });
+        if (!user.roleRefs) user.roleRefs = {};
+        user.roleRefs.doctor = doctorProfile._id;
+      } else if (role === "patient") {
+        const patientProfile = await Patient.create({ userId: user._id, password: hashedPassword });
+        if (!user.roleRefs) user.roleRefs = {};
+        user.roleRefs.patient = patientProfile._id;
+      }
+
+      await user.save();
+    } else {
+      // Create a new user with "patient" role by default
+      const roles = ["patient"];
+      if (role !== "patient") roles.push(role);
+
+      user = new User({
+        email,
+        roles,
+        phone,
+        phoneVerified: true,
+        firstName,
+        lastName,
+        countryCode,
+      });
+
+      // Create patient profile by default
+      const patientProfile = await Patient.create({ userId: user._id, password: hashedPassword });
+      if (!user.roleRefs) user.roleRefs = {};
+      user.roleRefs.patient = patientProfile._id;
+
+      // Create doctor profile if role is doctor
+      if (role === "doctor") {
+        const doctorProfile = await Doctor.create({ userId: user._id, password: hashedPassword });
+        if (!user.roleRefs) user.roleRefs = {};
+        user.roleRefs.doctor = doctorProfile._id;
+      }
+
+      await user.save();
     }
-
-    await newUser.save();
 
     // Delete the OTP after successful verification
     await OTP.deleteOne({ _id: otpRecord._id });
 
     // Generate JWT token
+    if (!JWT_SECRET) {
+      throw new Error("JWT_SECRET is not defined");
+    }
+
     const token = jwt.sign(
       {
-        id: newUser?._id,
-        email: newUser?.email,
+        id: user._id,
+        email: user.email,
         role: role,
       },
-      process.env.JWT_SECRET || "",
+      JWT_SECRET,
       { expiresIn: "24h" }
     );
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true, // Ensure secure for HTTPS
-      sameSite: "none", // Required for cross-site cookies
+      secure: true,
+      sameSite: "none",
       maxAge: 24 * 60 * 60 * 1000, // 1 day
-      path: "/", // Root path
+      path: "/",
     });
 
     res.status(200).json({
       success: true,
       message: "Registration successful",
       user: {
-        id: newUser._id,
-        email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-        phone: newUser.phone,
-        role: newUser.roles,
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        roles: user.roles,
       },
     });
   } catch (error) {
@@ -306,10 +288,26 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, role } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || !role) {
       res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: "Email, password, and role are required",
+      });
+      return;
+    }
+
+    if (!validator.isEmail(email)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid email format",
+      });
+      return;
+    }
+
+    if (!["doctor", "patient"].includes(role)) {
+      res.status(400).json({
+        success: false,
+        message: "Role must be either 'doctor' or 'patient'",
       });
       return;
     }
@@ -327,12 +325,30 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!user.roles.includes(role)) {
       res.status(403).json({
         success: false,
-        message: "You do not have permission to access this role",
+        message: `You are not registered with the role: ${role}. Please register first.`,
       });
       return;
     }
 
-    const isMatch = await bcrypt.compare(password.toLowerCase(), user.password);
+    // Fetch role-specific password
+    let rolePassword: string | undefined;
+    if (role === "doctor") {
+      const doctor = await Doctor.findOne({ userId: user._id });
+      rolePassword = doctor?.password;
+    } else if (role === "patient") {
+      const patient = await Patient.findOne({ userId: user._id });
+      rolePassword = patient?.password;
+    }
+
+    if (!rolePassword) {
+      res.status(500).json({
+        success: false,
+        message: `No ${role} profile found for this user`,
+      });
+      return;
+    }
+
+    const isMatch = await bcrypt.compare(password.toLowerCase(), rolePassword);
 
     if (!isMatch) {
       res.status(401).json({
@@ -343,7 +359,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (!JWT_SECRET) {
-      throw new Error("JWT_SECRET is not defined in the environment variables");
+      throw new Error("JWT_SECRET is not defined");
     }
 
     const token = jwt.sign(
@@ -354,10 +370,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true, // Ensure secure for HTTPS
-      sameSite: "none", // Required for cross-site cookies
+      secure: true,
+      sameSite: "none",
       maxAge: 24 * 60 * 60 * 1000, // 1 day
-      path: "/", // Root path
+      path: "/",
     });
 
     res.status(200).json({
