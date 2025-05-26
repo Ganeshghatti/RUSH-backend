@@ -4,7 +4,6 @@ const { Schema } = mongoose;
 const userSchema = new Schema(
   {
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
     roles: [{ type: String, enum: ["doctor", "patient", "admin"] }],
     roleRefs: {
       doctor: { type: Schema.Types.ObjectId, ref: "Doctor" },
@@ -54,6 +53,7 @@ const userSchema = new Schema(
       bankName: { type: String },
       bankAddress: { type: String },
       upiId: { type: String },
+      bhimupi: { type: String },
       upiQrImage: { type: String },
       upiProvider: { type: String },
     },

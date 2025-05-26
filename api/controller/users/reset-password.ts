@@ -95,7 +95,8 @@ export const resetPassword = async (req: Request, res: Response) => {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
+    // this will update based on role pass. 
+    // user.password = hashedPassword;
     await user.save();
 
     // Delete token after use

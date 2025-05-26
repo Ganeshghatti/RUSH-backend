@@ -3,12 +3,13 @@ const { Schema } = mongoose;
 
 const doctorSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  password: { type: String, required: true },
   qualifications: [
     {
       degree: { type: String, required: true },
       college: { type: String, required: true },
       year: { type: Number, required: true },
-      degreePost: { type: String, enum: ["UG", "PG", "PHD"], required: true },
+      degreePost: { type: String, enum: ["UG", "PG", "PHD", "graduate", "fellowship"], required: true },
       degreeImage: { type: String },
     },
   ],
@@ -25,8 +26,8 @@ const doctorSchema = new Schema({
   signatureImage: { type: String },
   experience: [
     {
-      experienceName: { type: String, required: true }, // e.g., "Cardiology Consultant"
-      institution: { type: String, required: true }, // e.g., "AIIMS"
+      experienceDescription: { type: String, required: true }, // e.g., "Cardiology Consultant"
+      hospitalName: { type: String, required: true }, // e.g., "AIIMS"
       fromYear: { type: Number, required: true },
       toYear: { type: Number },
       isCurrent: { type: Boolean, default: false },
