@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
+import Admin from "../../models/user/admin-model";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -41,10 +42,10 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!["doctor", "patient"].includes(role)) {
+    if (!["doctor", "patient", "admin"].includes(role)) {
       res.status(400).json({
         success: false,
-        message: "Role must be either 'doctor' or 'patient'",
+        message: "Role must be either 'doctor', 'patient' or 'admin'",
       });
       return;
     }
@@ -146,10 +147,10 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!["doctor", "patient"].includes(role)) {
+    if (!["doctor", "patient", "admin"].includes(role)) {
       res.status(400).json({
         success: false,
-        message: "Role must be either 'doctor' or 'patient'",
+        message: "Role must be either 'doctor', 'patient' or 'admin'",
       });
       return;
     }
@@ -194,7 +195,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       // Add the new role
       user.roles.push(role);
 
-      // Update role-specific data
+      // Create role-specific data
       if (role === "doctor") {
         const doctorProfile = await Doctor.create({ userId: user._id, password: hashedPassword });
         if (!user.roleRefs) user.roleRefs = {};
@@ -203,17 +204,18 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         const patientProfile = await Patient.create({ userId: user._id, password: hashedPassword });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.patient = patientProfile._id;
+      } else if (role === "admin") {
+        const adminProfile = await Admin.create({ userId: user._id, password: hashedPassword });
+        if (!user.roleRefs) user.roleRefs = {};
+        user.roleRefs.admin = adminProfile._id;
       }
 
       await user.save();
     } else {
-      // Create a new user with "patient" role by default
-      const roles = ["patient"];
-      if (role !== "patient") roles.push(role);
-
+      // Create a new user with the specified role only
       user = new User({
         email,
-        roles,
+        roles: [role], // Only assign the requested role
         phone,
         phoneVerified: true,
         firstName,
@@ -221,16 +223,19 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         countryCode,
       });
 
-      // Create patient profile by default
-      const patientProfile = await Patient.create({ userId: user._id, password: hashedPassword });
-      if (!user.roleRefs) user.roleRefs = {};
-      user.roleRefs.patient = patientProfile._id;
-
-      // Create doctor profile if role is doctor
+      // Create role-specific profile based on the requested role
       if (role === "doctor") {
         const doctorProfile = await Doctor.create({ userId: user._id, password: hashedPassword });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.doctor = doctorProfile._id;
+      } else if (role === "patient") {
+        const patientProfile = await Patient.create({ userId: user._id, password: hashedPassword });
+        if (!user.roleRefs) user.roleRefs = {};
+        user.roleRefs.patient = patientProfile._id;
+      } else if (role === "admin") {
+        const adminProfile = await Admin.create({ userId: user._id, password: hashedPassword });
+        if (!user.roleRefs) user.roleRefs = {};
+        user.roleRefs.admin = adminProfile._id;
       }
 
       await user.save();
@@ -304,10 +309,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!["doctor", "patient"].includes(role)) {
+    if (!["doctor", "patient", "admin"].includes(role)) {
       res.status(400).json({
         success: false,
-        message: "Role must be either 'doctor' or 'patient'",
+        message: "Role must be either 'doctor', 'patient' or 'admin'",
       });
       return;
     }
@@ -338,6 +343,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     } else if (role === "patient") {
       const patient = await Patient.findOne({ userId: user._id });
       rolePassword = patient?.password;
+    } else if (role === "admin") {
+      const admin = await Admin.findOne({ userId: user._id });
+      rolePassword = admin?.password;
     }
 
     if (!rolePassword) {

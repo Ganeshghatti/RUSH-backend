@@ -8,16 +8,17 @@ const userSchema = new Schema(
     roleRefs: {
       doctor: { type: Schema.Types.ObjectId, ref: "Doctor" },
       patient: { type: Schema.Types.ObjectId, ref: "Patient" },
+      admin: { type: Schema.Types.ObjectId, ref: "Admin" },
       // in future: pharmacist, therapist, etc.
     },
     profilePic: { type: String },
-    prefix: { type: String, enum: ["Mr", "Ms", "Dr"] },
+    prefix: { type: String, enum: ["Mr", "Ms", "Dr"], default: "Mr" },
     firstName: { type: String },
     lastName: { type: String },
     countryCode: { type: String, required: true },
     phone: { type: String, required: true },
     phoneVerified: { type: Boolean, default: false },
-    gender: { type: String, enum: ["Male", "Female", "Other"] },
+    gender: { type: String, enum: ["Male", "Female", "Other"], default: "Male" },
     dob: { type: Date },
     address: {
       line1: { type: String },
@@ -32,6 +33,7 @@ const userSchema = new Schema(
       type: {
         type: String,
         enum: ["Aadhar", "Passport", "DrivingLicense", "Other"],
+        default: "Aadhar",
       },
       idNumber: { type: String },
       image: { type: String },
@@ -41,6 +43,7 @@ const userSchema = new Schema(
       type: {
         type: String,
         enum: ["Passport", "RationCard", "DrivingLicense", "Other"],
+        default: "RationCard",
       },
       idNumber: { type: String },
       image: { type: String },
@@ -58,7 +61,7 @@ const userSchema = new Schema(
       upiProvider: { type: String },
     },
     taxProof: {
-      type: { type: String, enum: ["PAN", "Other"] },
+      type: { type: String, enum: ["PAN", "Other"], default: "PAN" },
       idNumber: { type: String }, 
       image: { type: String },
       idName: { type: String }, 
