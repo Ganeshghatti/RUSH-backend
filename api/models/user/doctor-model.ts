@@ -6,29 +6,29 @@ const doctorSchema = new Schema({
   password: { type: String, required: true },
   qualifications: [
     {
-      degree: { type: String, required: true },
-      college: { type: String, required: true },
-      year: { type: Number, required: true },
-      degreePost: { type: String, enum: ["UG", "PG", "PHD", "graduate", "fellowship"], required: true },
+      degree: { type: String },
+      college: { type: String },
+      year: { type: Number },
+      degreePost: { type: String, enum: ["UG", "PG", "PHD", "graduate", "fellowship"], default: "UG" },
       degreeImage: { type: String },
     },
   ],
   registration: [
     {
-      regNumber: { type: String, required: true },
-      council: { type: String, required: true },
+      regNumber: { type: String },
+      council: { type: String },
       isVerified: { type: Boolean, default: false },
       licenseImage: { type: String },
-      specialization: { type: String, required: true },
+      specialization: { type: String },
     },
   ],
   specialization: [{ type: String }],
   signatureImage: { type: String },
   experience: [
     {
-      experienceDescription: { type: String, required: true }, // e.g., "Cardiology Consultant"
-      hospitalName: { type: String, required: true }, // e.g., "AIIMS"
-      fromYear: { type: Number, required: true },
+      experienceDescription: { type: String }, // e.g., "Cardiology Consultant"
+      hospitalName: { type: String }, // e.g., "AIIMS"
+      fromYear: { type: Number },
       toYear: { type: Number },
       isCurrent: { type: Boolean, default: false },
     },
