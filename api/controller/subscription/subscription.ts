@@ -6,6 +6,7 @@ import Doctor from "../../models/user/doctor-model";
 import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
 import { generateSignedUrlsForSubscriptions, generateSignedUrlsForSubscription } from "../../utils/signed-url";
 
+
 export const createSubscription = async (
   req: Request,
   res: Response
@@ -13,8 +14,16 @@ export const createSubscription = async (
   try {
     const { price, name, description, features, isActive, duration } = req.body;
 
+    if (price < 0) {
+      res.status(400).json({
+        success: false,
+        message: "Price must be a non-negative number (0 or greater)",
+      });
+      return;
+    }
+
     // Validate required fields
-    if (!price || !name || !description || !duration) {
+    if (!name || !description || !duration) {
       res.status(400).json({
         success: false,
         message:
