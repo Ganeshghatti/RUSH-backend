@@ -59,6 +59,24 @@ const doctorSchema = new Schema({
     enum: ["not-submited", "approved", "rejected", "pending"],
     default: "not-submited",
   },
+  onlineAppointment: {
+    duration: [
+      {
+        minute: {
+          type: Number,
+          required: true
+        },
+        price: {
+          type: Number,
+          required: true
+        },
+      },
+    ],
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  isOnline: { type: Boolean, default: false },
   message: [{
     message: { type: String },
     date: { type: Date, default: Date.now },
