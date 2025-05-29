@@ -1,7 +1,7 @@
 import { sendResetPasswordLink, resetPassword } from './../../controller/users/reset-password';
 import { verifyToken } from './../../middleware/auth-middleware';
 import { Router } from "express";
-import { sendOtp, verifyOtp, login, findCurrentUser } from "../../controller/users/auth";
+import { sendOtp, verifyOtp, login, findCurrentUser, logout } from "../../controller/users/auth";
 import rateLimit from "express-rate-limit";
 
 const router = Router();
@@ -25,6 +25,7 @@ const otpLimiter = rateLimit({
 router.route("/send-otp").post(otpLimiter, sendOtp);
 router.route("/verify-otp").post(verifyOtp);
 router.route("/login").post(login);
+router.route("/logout").post(verifyToken, logout);
 router.route("/user").get(verifyToken,findCurrentUser);
 router.route("/forgot-password").post(otpLimiter, sendResetPasswordLink);
 router.route("/reset-password/:token").post(resetPassword);

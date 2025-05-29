@@ -1,109 +1,105 @@
 import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
-import { Types, Document } from "mongoose";
 import User from "../../models/user/user-model";
-
-interface DoctorDocument {
-  _id: Types.ObjectId;
-  userId: {
-    _id: Types.ObjectId;
-    name: string;
-    email: string;
-    phone: string;
-    profileImage?: string;
-  };
-  specialization: string[];
-  toObject(): any;
-}
 
 export const searchDoctor = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { query, limit = 10 } = req.query;
-    
-    if (!query) {
-      res.status(400).json({
-        success: false,
-        message: "Search query is required"
-      });
-      return;
+    const { query, limit = 10, gender, appointment } = req.query;
+
+    const parsedLimit = Number(limit);
+    const queryRegex = query ? new RegExp(String(query), 'i') : null;
+
+    // Step 1: Build filters
+    const userFilter: any = { roles: 'doctor' };
+    if (queryRegex) userFilter.firstName = { $regex: queryRegex };
+    if (gender) userFilter.gender = gender;
+
+    const matchedUsers = await User.find(userFilter)
+      .select('_id')
+      .lean();
+
+    const matchedUserIds = matchedUsers.map(user => user._id);
+
+    // Step 2: Doctor filter for matched userIds
+    const doctorFilter: any = {};
+    if (matchedUserIds.length > 0) {
+      doctorFilter.userId = { $in: matchedUserIds };
+    }
+    if (appointment === "online") {
+      doctorFilter["onlineAppointment.isActive"] = true;
     }
 
-    // Create case-insensitive regex pattern for partial matching
-    const queryRegex = new RegExp(String(query), 'i');
-    
-    // Search in both collections simultaneously
-    const [doctorUsers, doctorsBySpecialization] = await Promise.all([
-      // Search users who are doctors by name
-      User.find({
-        roles: "doctor",
-        firstName: { $regex: queryRegex }
-      }).select('_id firstName lastName email phone profileImage'),
+    const doctorsByName = matchedUserIds.length > 0
+      ? await Doctor.find(doctorFilter)
+          .populate({
+            path: 'userId',
+            match: gender ? { gender } : undefined, // Apply gender match at populate level
+            select: 'firstName lastName email phone profilePic gender'
+          })
+          .limit(parsedLimit)
+      : [];
 
-      // Search doctors by specialization
-      Doctor.find({
-        specialization: { $regex: queryRegex }
+    // Step 3: Doctor filter for specialization match
+    const specializationFilter: any = {};
+    if (queryRegex) {
+      specializationFilter.specialization = { $regex: queryRegex };
+    }
+    if (appointment === "online") {
+      specializationFilter["onlineAppointment.isActive"] = true;
+    }
+
+    const doctorsBySpecialization = await Doctor.find(specializationFilter)
+      .populate({
+        path: 'userId',
+        match: gender ? { gender } : undefined,
+        select: 'firstName lastName email phone profilePic gender'
       })
-      .populate('userId')
-      .limit(Number(limit))
-    ]);
+      .limit(parsedLimit);
 
-    // Get IDs of doctors found by name search
-    const doctorUserIds = doctorUsers.map(user => user._id);
-
-    // If we found doctors by name, get their doctor records
-    const doctorsByName = doctorUserIds.length > 0 ? 
-      await Doctor.find({
-        userId: { $in: doctorUserIds }
-      })
-      .populate('userId')
-      .limit(Number(limit)) : 
-      [];
-
-    // Combine results, removing duplicates
+    // Step 4: Combine and deduplicate
     const combinedDoctors = [...doctorsBySpecialization];
-    doctorsByName.forEach(doctor => {
-      const isDuplicate = combinedDoctors.some(
-        existingDoctor => existingDoctor._id.toString() === doctor._id.toString()
-      );
-      if (!isDuplicate) {
-        combinedDoctors.push(doctor);
+    doctorsByName.forEach(doc => {
+      if (!combinedDoctors.some(d => d._id.toString() === doc._id.toString())) {
+        combinedDoctors.push(doc);
       }
     });
 
-    // Limit the final results
-    const limitedDoctors = combinedDoctors.slice(0, Number(limit));
+    // Step 5: Fallback if empty
+    let finalDoctors = combinedDoctors;
+    if (finalDoctors.length === 0 && !query && !gender && !appointment) {
+      finalDoctors = await Doctor.find()
+        .populate({
+          path: 'userId',
+          select: 'firstName lastName email phone profilePic gender'
+        })
+        .limit(parsedLimit);
+    }
 
-    // Generate signed URLs for each doctor
+    // Step 6: Format output
     const doctorsWithSignedUrls = await Promise.all(
-      limitedDoctors.map(async (doctor) => {
-        if (!doctor) return null;
-        
-        const doctorObj = doctor.toObject();
-        const processedDoctor = await generateSignedUrlsForDoctor(doctorObj);
-        
-        // Ensure we have the basic user info
-        if (doctorObj?.userId) {
-          return {
-            ...processedDoctor,
-            name: (doctorObj.userId as any).name,
-            email: (doctorObj.userId as any).email, 
-            phone: (doctorObj.userId as any).phone,
-            profileImage: (doctorObj.userId as any).profileImage
-          };
-        }
-        
-        return processedDoctor;
-      })
-    );
+      finalDoctors
+        .filter(doctor => doctor.userId) // Remove doctors with null user (gender mismatch)
+        .slice(0, parsedLimit)
+        .map(async (doctor) => {
+          const doctorObj = doctor.toObject();
+          const processed = await generateSignedUrlsForDoctor(doctorObj);
 
-    const validDoctors = doctorsWithSignedUrls.filter((doctor): doctor is NonNullable<typeof doctor> => 
-      doctor !== null && doctor._id !== undefined && (doctor.userId !== undefined || doctor.email !== undefined)
+          const user = doctorObj.userId as any;
+          return {
+            ...processed,
+            name: `${user.firstName} ${user.lastName}`,
+            email: user.email,
+            phone: user.phone,
+            profilePic: user.profilePic,
+            gender: user.gender
+          };
+        })
     );
 
     res.status(200).json({
       success: true,
-      data: validDoctors,
+      data: doctorsWithSignedUrls,
       message: "Doctors fetched successfully"
     });
 
