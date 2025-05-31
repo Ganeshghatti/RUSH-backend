@@ -27,7 +27,8 @@ app.use(
     origin: [
       "https://app.rushdr.com",   
       "http://localhost:5173",   
-      "http://localhost:3000"  
+      "http://localhost:3000",
+      "https://admin.rushdr.com"
     ],
     credentials: true,
   })
