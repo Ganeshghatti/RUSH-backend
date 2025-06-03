@@ -21,13 +21,13 @@ const userSchema = new Schema(
     gender: { type: String, enum: ["Male", "Female", "Other"], default: "Male", required: true },
     dob: { type: Date, required: true },
     address: {
-      line1: { type: String, required: true },
+      line1: { type: String, },
       line2: { type: String },
       landmark: { type: String },
-      locality: { type: String, required: true },
+      locality: { type: String },
       city: { type: String },
-      pincode: { type: String, required: true },
-      country: { type: String, required: true },
+      pincode: { type: String },
+      country: { type: String },
     },
     personalIdProof: {
       type: {

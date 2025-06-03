@@ -9,7 +9,11 @@ const doctorSchema = new Schema({
       degree: { type: String },
       college: { type: String },
       year: { type: Number },
-      degreePost: { type: String, enum: ["UG", "PG", "PHD", "graduate", "fellowship"], default: "UG" },
+      degreePost: {
+        type: String,
+        enum: ["UG", "PG", "PHD", "graduate", "fellowship"],
+        default: "UG",
+      },
       degreeImage: { type: String },
     },
   ],
@@ -66,11 +70,11 @@ const doctorSchema = new Schema({
           type: Number,
           enum: [15, 30],
           default: 15,
-          required: true
+          required: true,
         },
         price: {
           type: Number,
-          required: true
+          required: true,
         },
       },
     ],
@@ -84,11 +88,11 @@ const doctorSchema = new Schema({
       {
         minute: {
           type: Number,
-          required: true
+          required: true,
         },
         price: {
           type: Number,
-          required: true
+          required: true,
         },
       },
     ],
@@ -99,11 +103,13 @@ const doctorSchema = new Schema({
   },
   clinicVisit: {
     isActive: { type: Boolean, default: false },
-  }, 
-  message: [{
-    message: { type: String },
-    date: { type: Date, default: Date.now },
-  }],
+  },
+  message: [
+    {
+      message: { type: String },
+      date: { type: Date, default: Date.now },
+    },
+  ],
 });
 
 const Doctor = mongoose.model("Doctor", doctorSchema);
