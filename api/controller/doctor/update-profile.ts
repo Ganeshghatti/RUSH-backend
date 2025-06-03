@@ -234,3 +234,94 @@ export const updateDoctorProfile = async (req: MulterRequest, res: Response): Pr
     });
   }
 };
+
+export const updateDoctorOnlineAppointment = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { doctorId } = req.params;
+    const { availability } = req.body;
+
+    // Validate doctorId
+    if (!doctorId) {
+      res.status(400).json({
+        success: false,
+        message: "Doctor ID is required",
+      });
+      return;
+    }
+
+    // Validate availability data
+    if (!availability || !Array.isArray(availability)) {
+      res.status(400).json({
+        success: false,
+        message: "Valid availability array is required",
+      });
+      return;
+    }
+
+    // Validate each availability entry
+    for (const slot of availability) {
+      if (!slot.day || !Array.isArray(slot.duration)) {
+        res.status(400).json({
+          success: false,
+          message: "Each availability slot must have a day and duration array",
+        });
+        return;
+      }
+
+      // Validate day value
+      const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+      if (!validDays.includes(slot.day.toLowerCase())) {
+        res.status(400).json({
+          success: false,
+          message: `Invalid day value. Must be one of: ${validDays.join(", ")}`,
+        });
+        return;
+      }
+
+      // Validate duration entries
+      for (const duration of slot.duration) {
+        if (!duration.start || !duration.end) {
+          res.status(400).json({
+            success: false,
+            message: "Each duration must have start and end times",
+          });
+          return;
+        }
+      }
+    }
+
+    // Update the doctor's online appointment availability
+    const updatedDoctor = await Doctor.findByIdAndUpdate(
+      doctorId,
+      {
+        $set: {
+          "onlineAppointment.availability": availability,
+        },
+      },
+      { new: true }
+    ).populate("userId");
+
+    if (!updatedDoctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
+
+    const doctorWithSignedUrls = await generateSignedUrlsForUser(updatedDoctor);
+
+    res.status(200).json({
+      success: true,
+      data: doctorWithSignedUrls,
+      message: "Online appointment availability updated successfully",
+    });
+  } catch (error: any) {
+    console.error("Error updating online appointment availability:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating online appointment availability",
+      error: error.message,
+    });
+  }
+};
