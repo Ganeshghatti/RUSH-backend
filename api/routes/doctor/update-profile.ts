@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
-import { updateDoctorProfile } from "../../controller/doctor/update-profile";
+import { updateDoctorProfile, updateDoctorOnlineAppointment } from "../../controller/doctor/update-profile";
 import multer from "multer";
 import path from "path";
 import { RequestHandler } from "express";
@@ -30,6 +30,14 @@ router.route("/doctor/profile/:doctorId")
     checkRole("doctor") as RequestHandler, 
     uploadFields as RequestHandler, 
     updateDoctorProfile as RequestHandler
+  );
+
+// Route for updating doctor's online appointment availability
+router.route("/doctor/online-appointment/:doctorId")
+  .put(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    updateDoctorOnlineAppointment as RequestHandler
   );
 
 export default router; 

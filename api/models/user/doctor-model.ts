@@ -78,6 +78,24 @@ const doctorSchema = new Schema({
         },
       },
     ],
+    availability: [
+      {
+        day: {
+          type: String,
+          enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+        },
+        duration: [
+          {
+            start: {
+              type: Date,
+            },
+            end: {
+              type: Date,
+            },
+          },
+        ],
+      },
+    ],
     isActive: { type: Boolean, default: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
