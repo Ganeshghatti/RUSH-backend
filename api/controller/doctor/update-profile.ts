@@ -238,7 +238,7 @@ export const updateDoctorProfile = async (req: MulterRequest, res: Response): Pr
 export const updateDoctorOnlineAppointment = async (req: Request, res: Response): Promise<void> => {
   try {
     const { doctorId } = req.params;
-    const { availability } = req.body;
+    const { availability, duration, isActive } = req.body;
 
     // Validate doctorId
     if (!doctorId) {
@@ -249,53 +249,118 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
       return;
     }
 
-    // Validate availability data
-    if (!availability || !Array.isArray(availability)) {
-      res.status(400).json({
-        success: false,
-        message: "Valid availability array is required",
-      });
-      return;
-    }
+    const updateFields: any = {};
 
-    // Validate each availability entry
-    for (const slot of availability) {
-      if (!slot.day || !Array.isArray(slot.duration)) {
+    // Handle availability update if provided
+    if (availability) {
+      // Validate availability data
+      if (!Array.isArray(availability)) {
         res.status(400).json({
           success: false,
-          message: "Each availability slot must have a day and duration array",
+          message: "Valid availability array is required",
         });
         return;
       }
 
-      // Validate day value
-      const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-      if (!validDays.includes(slot.day.toLowerCase())) {
-        res.status(400).json({
-          success: false,
-          message: `Invalid day value. Must be one of: ${validDays.join(", ")}`,
-        });
-        return;
-      }
-
-      // Validate duration entries
-      for (const duration of slot.duration) {
-        if (!duration.start || !duration.end) {
+      // Validate each availability entry
+      for (const slot of availability) {
+        if (!slot.day || !Array.isArray(slot.duration)) {
           res.status(400).json({
             success: false,
-            message: "Each duration must have start and end times",
+            message: "Each availability slot must have a day and duration array",
+          });
+          return;
+        }
+
+        // Validate day value
+        const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+        if (!validDays.includes(slot.day.toLowerCase())) {
+          res.status(400).json({
+            success: false,
+            message: `Invalid day value. Must be one of: ${validDays.join(", ")}`,
+          });
+          return;
+        }
+
+        // Validate duration entries
+        for (const duration of slot.duration) {
+          if (!duration.start || !duration.end) {
+            res.status(400).json({
+              success: false,
+              message: "Each duration must have start and end times",
+            });
+            return;
+          }
+        }
+      }
+
+      updateFields["onlineAppointment.availability"] = availability;
+    }
+
+    // Handle duration update if provided
+    if (duration) {
+      // Validate duration data
+      if (!Array.isArray(duration)) {
+        res.status(400).json({
+          success: false,
+          message: "Valid duration array is required",
+        });
+        return;
+      }
+
+      // Validate each duration entry
+      for (const slot of duration) {
+        if (!slot.minute || !slot.price) {
+          res.status(400).json({
+            success: false,
+            message: "Each duration slot must have minute and price",
+          });
+          return;
+        }
+
+        // Validate minute value
+        if (![15, 30].includes(slot.minute)) {
+          res.status(400).json({
+            success: false,
+            message: "Duration minute must be either 15 or 30",
+          });
+          return;
+        }
+
+        // Validate price value
+        if (typeof slot.price !== 'number' || slot.price <= 0) {
+          res.status(400).json({
+            success: false,
+            message: "Price must be a positive number",
           });
           return;
         }
       }
+
+      updateFields["onlineAppointment.duration"] = duration;
     }
 
-    // Update the doctor's online appointment availability
+    // Handle isActive update if provided
+    if (typeof isActive === 'boolean') {
+      updateFields["onlineAppointment.isActive"] = isActive;
+    }
+
+    // If neither availability, duration, nor isActive is provided
+    if (Object.keys(updateFields).length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "Either availability, duration, or isActive must be provided",
+      });
+      return;
+    }
+
+    // Update the doctor's online appointment settings
     const updatedDoctor = await Doctor.findByIdAndUpdate(
       doctorId,
       {
         $set: {
-          "onlineAppointment.availability": availability,
+          ...updateFields,
+          "onlineAppointment.updatedAt": new Date()
         },
       },
       { new: true }
@@ -314,13 +379,13 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
     res.status(200).json({
       success: true,
       data: doctorWithSignedUrls,
-      message: "Online appointment availability updated successfully",
+      message: "Online appointment settings updated successfully",
     });
   } catch (error: any) {
-    console.error("Error updating online appointment availability:", error);
+    console.error("Error updating online appointment settings:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating online appointment availability",
+      message: "Error updating online appointment settings",
       error: error.message,
     });
   }

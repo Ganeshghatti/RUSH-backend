@@ -64,20 +64,20 @@ const doctorSchema = new Schema({
     default: "not-submited",
   },
   onlineAppointment: {
-    // duration: [
-    //   {
-    //     minute: {
-    //       type: Number,
-    //       enum: [15, 30],
-    //       default: 15,
-    //       required: true,
-    //     },
-    //     price: {
-    //       type: Number,
-    //       required: true,
-    //     },
-    //   },
-    // ],
+    duration: [
+      {
+        minute: {
+          type: Number,
+          enum: [15, 30],
+          default: 15,
+          required: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+        },
+      },
+    ],
     availability: [
       {
         day: {
