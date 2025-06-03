@@ -10,8 +10,11 @@ import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import Admin from "../../models/user/admin-model";
+import * as dotenv from "dotenv";
 
-const JWT_SECRET = process.env.JWT_SECRET;
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET || "";
 
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -66,7 +69,8 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     if (existingOTP) {
       res.status(400).json({
         success: false,
-        message: "An OTP has already been sent to this phone number. Please wait 5 minutes.",
+        message:
+          "An OTP has already been sent to this phone number. Please wait 5 minutes.",
       });
       return;
     }
@@ -82,7 +86,9 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     );
 
     // Format the phone number with country code
-    const formattedPhone = phone.startsWith("+") ? phone : `${countryCode}${phone}`;
+    const formattedPhone = phone.startsWith("+")
+      ? phone
+      : `${countryCode}${phone}`;
 
     // Send OTP via SMS
     const message = `Your RUSH verification code is ${newOTP}. Valid for 5 minutes.`;
@@ -115,10 +121,19 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     } = req.body;
 
     // Validate required fields
-    if (!phone || !otp || !firstName || !lastName || !email || !password || !role) {
+    if (
+      !phone ||
+      !otp ||
+      !firstName ||
+      !lastName ||
+      !email ||
+      !password ||
+      !role
+    ) {
       res.status(400).json({
         success: false,
-        message: "All fields (phone, otp, firstName, lastName, email, password, role) are required",
+        message:
+          "All fields (phone, otp, firstName, lastName, email, password, role) are required",
       });
       return;
     }
@@ -197,15 +212,24 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
       // Create role-specific data
       if (role === "doctor") {
-        const doctorProfile = await Doctor.create({ userId: user._id, password: hashedPassword });
+        const doctorProfile = await Doctor.create({
+          userId: user._id,
+          password: hashedPassword,
+        });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.doctor = doctorProfile._id;
       } else if (role === "patient") {
-        const patientProfile = await Patient.create({ userId: user._id, password: hashedPassword });
+        const patientProfile = await Patient.create({
+          userId: user._id,
+          password: hashedPassword,
+        });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.patient = patientProfile._id;
       } else if (role === "admin") {
-        const adminProfile = await Admin.create({ userId: user._id, password: hashedPassword });
+        const adminProfile = await Admin.create({
+          userId: user._id,
+          password: hashedPassword,
+        });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.admin = adminProfile._id;
       }
@@ -225,15 +249,24 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
       // Create role-specific profile based on the requested role
       if (role === "doctor") {
-        const doctorProfile = await Doctor.create({ userId: user._id, password: hashedPassword });
+        const doctorProfile = await Doctor.create({
+          userId: user._id,
+          password: hashedPassword,
+        });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.doctor = doctorProfile._id;
       } else if (role === "patient") {
-        const patientProfile = await Patient.create({ userId: user._id, password: hashedPassword });
+        const patientProfile = await Patient.create({
+          userId: user._id,
+          password: hashedPassword,
+        });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.patient = patientProfile._id;
       } else if (role === "admin") {
-        const adminProfile = await Admin.create({ userId: user._id, password: hashedPassword });
+        const adminProfile = await Admin.create({
+          userId: user._id,
+          password: hashedPassword,
+        });
         if (!user.roleRefs) user.roleRefs = {};
         user.roleRefs.admin = adminProfile._id;
       }
@@ -323,7 +356,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    
     if (!email || !password || !role) {
       res.status(400).json({
         success: false,

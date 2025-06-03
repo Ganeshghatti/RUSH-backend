@@ -29,6 +29,17 @@ export const GetSignedUrl = async (key: string) => {
   }
 };
 
+export const getKeyFromSignedUrl = async (presignedUrl: string) => {
+  try {
+    const url = new URL(presignedUrl);
+    const pathname = url.pathname;
+    const key = pathname.startsWith('/') ? pathname.substring(1) : pathname;
+    return key;
+  } catch (error) {
+    console.error("Error parsing URL:", error);
+    return null;
+  }
+}
 
 const UploadImgToS3 = async ({ key, fileBuffer, fileName }: UploadImgToS3Params): Promise<string> => {
   console.log("Uploading to S3:", {

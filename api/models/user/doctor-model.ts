@@ -64,6 +64,8 @@ const doctorSchema = new Schema({
       {
         minute: {
           type: Number,
+          enum: [15, 30],
+          default: 15,
           required: true
         },
         price: {
@@ -76,7 +78,28 @@ const doctorSchema = new Schema({
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
-  isOnline: { type: Boolean, default: false },
+  emergencyCall: {
+    isActive: { type: Boolean, default: false },
+    duration: [
+      {
+        minute: {
+          type: Number,
+          required: true
+        },
+        price: {
+          type: Number,
+          required: true
+        },
+      },
+    ],
+    phoneNumber: { type: String },
+  },
+  homeVisit: {
+    isActive: { type: Boolean, default: false },
+  },
+  clinicVisit: {
+    isActive: { type: Boolean, default: false },
+  }, 
   message: [{
     message: { type: String },
     date: { type: Date, default: Date.now },
