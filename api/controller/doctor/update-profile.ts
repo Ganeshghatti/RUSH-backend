@@ -4,6 +4,7 @@ import User from "../../models/user/user-model";
 import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
 import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
+import { getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
 
 interface MulterRequest extends Request {
   files?: { [fieldname: string]: Express.Multer.File[] };
@@ -47,6 +48,23 @@ export const updateDoctorProfile = async (req: MulterRequest, res: Response): Pr
       return { key, fileName };
     };
 
+    // Helper function to extract S3 key from presigned URL or return the URL as is
+    const getS3KeyFromUrl = async (url: string): Promise<string> => {
+      try {
+        if (url.includes('X-Amz-Algorithm')) {
+          // This is a presigned URL, extract the key
+          const key = await getKeyFromSignedUrl(url);
+          return key || '';
+        } else {
+          // This might already be a key or a regular S3 URL
+          return url;
+        }
+      } catch (error) {
+        console.error('Error extracting key from URL:', error);
+        return url; // Return original URL if extraction fails
+      }
+    };
+
     // Define file field mappings
     const fileFieldConfig = [
       { fieldName: "profilePic", modelPath: "profilePic", isArray: false, target: "user" },
@@ -59,7 +77,7 @@ export const updateDoctorProfile = async (req: MulterRequest, res: Response): Pr
       { fieldName: "licenseImages", modelPath: "registration", isArray: true, target: "doctor", imageKey: "licenseImage" },
     ];
 
-    // Process file uploads
+    // Process file uploads and URL conversions
     const urlMap: { [key: string]: string | string[] } = {};
 
     for (const config of fileFieldConfig) {
@@ -69,39 +87,46 @@ export const updateDoctorProfile = async (req: MulterRequest, res: Response): Pr
       if (isArray) {
         // Handle array fields (e.g., degreeImages, licenseImages)
         const arrayData = target === "doctor" ? updateData.doctor?.[modelPath] || [] : updateData.user?.[modelPath] || [];
-        const urlsToAssign: string[] = new Array(arrayData.length).fill(null);
+        const keysToAssign: string[] = new Array(arrayData.length).fill(null);
 
-        // Preserve existing URLs
-        arrayData.forEach((item: any, index: number) => {
-          if (item?.[imageKey] ) {
-            urlsToAssign[index] = item[imageKey];
+        // Process existing URLs from data field (convert presigned URLs to keys)
+        for (let i = 0; i < arrayData.length; i++) {
+          const item = arrayData[i];
+          if (item?.[imageKey]) {
+            keysToAssign[i] = await getS3KeyFromUrl(item[imageKey]);
           }
-        });
+        }
 
-        // Upload new files for indices without URLs
+        // Upload new files for indices without keys (where form data files are provided)
         if (fileList) {
           let fileIndex = 0;
-          for (let i = 0; i < urlsToAssign.length && fileIndex < fileList.length; i++) {
-            if (!urlsToAssign[i]) {
+          for (let i = 0; i < keysToAssign.length && fileIndex < fileList.length; i++) {
+            if (!keysToAssign[i]) {
               const { key, fileName } = generateS3Key(fileList[fileIndex]);
-              urlsToAssign[i] = await UploadImgToS3({ key, fileBuffer: fileList[fileIndex].buffer, fileName });
+              const s3Url = await UploadImgToS3({ key, fileBuffer: fileList[fileIndex].buffer, fileName });
+              keysToAssign[i] = key; // Store the key, not the full URL
               fileIndex++;
             }
           }
         }
 
-        urlMap[fieldName] = urlsToAssign;
+        urlMap[fieldName] = keysToAssign;
       } else {
         // Handle single-file fields (e.g., profilePic)
-        const existingUrl =
-          target === "doctor"
-            ? updateData.doctor?.[modelPath]
-            : updateData.user?.[modelPath.split(".")[0]]?.[modelPath.split(".").slice(-1)[0]];
+        const existingUrl = target === "doctor" 
+          ? updateData.doctor?.[modelPath]
+          : modelPath.includes('.') 
+            ? updateData.user?.[modelPath.split(".")[0]]?.[modelPath.split(".").slice(-1)[0]]
+            : updateData.user?.[modelPath];
+
         if (existingUrl) {
-          urlMap[fieldName] = existingUrl;
+          // Convert presigned URL to key if it's a presigned URL
+          urlMap[fieldName] = await getS3KeyFromUrl(existingUrl);
         } else if (fileList?.[0]) {
+          // Upload new file and store the key
           const { key, fileName } = generateS3Key(fileList[0]);
-          urlMap[fieldName] = await UploadImgToS3({ key, fileBuffer: fileList[0].buffer, fileName });
+          await UploadImgToS3({ key, fileBuffer: fileList[0].buffer, fileName });
+          urlMap[fieldName] = key; // Store the key, not the full URL
         }
       }
     }
@@ -162,18 +187,18 @@ export const updateDoctorProfile = async (req: MulterRequest, res: Response): Pr
       const doctorUpdateData = updateData.doctor;
 
       if (doctorUpdateData.qualifications) {
-        const uploadedDegreeUrls = urlMap["degreeImages"] as string[] || [];
+        const uploadedDegreeKeys = urlMap["degreeImages"] as string[] || [];
         doctor.qualifications = doctorUpdateData.qualifications.map((qual: any, index: number) => ({
           ...qual,
-          degreeImage: uploadedDegreeUrls[index] || qual.degreeImage,
+          degreeImage: uploadedDegreeKeys[index] || qual.degreeImage,
         }));
       }
 
       if (doctorUpdateData.registration) {
-        const uploadedLicenseUrls = urlMap["licenseImages"] as string[] || [];
+        const uploadedLicenseKeys = urlMap["licenseImages"] as string[] || [];
         doctor.registration = doctorUpdateData.registration.map((reg: any, index: number) => ({
           ...reg,
-          licenseImage: uploadedLicenseUrls[index] || reg.licenseImage,
+          licenseImage: uploadedLicenseKeys[index] || reg.licenseImage,
         }));
       }
 
