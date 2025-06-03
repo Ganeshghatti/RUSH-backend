@@ -19,7 +19,7 @@ const userSchema = new Schema(
     phone: { type: String, required: true },
     phoneVerified: { type: Boolean, default: false },
     gender: { type: String, enum: ["Male", "Female", "Other"], default: "Male", required: true },
-    dob: { type: Date, required: true },
+    dob: { type: Date },
     address: {
       line1: { type: String, },
       line2: { type: String },
