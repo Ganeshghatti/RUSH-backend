@@ -12,6 +12,7 @@ import doctorProfileRoutes from "./routes/doctor/update-profile";
 import symptomRoutes from "./routes/symptom/symptom-route";
 import cookieParser from "cookie-parser";
 import adminRoutes from "./routes/admin/admin-route";
+import walletRoutes from "./routes/users/wallet";
 
 // Load environment variables
 dotenv.config();
@@ -66,6 +67,7 @@ app.use("/patient", patientRoutes);
 app.use("/doctor", doctorRoutes);
 app.use("/doctor", doctorSubscriptionRoutes);
 app.use("/api", doctorProfileRoutes);
+app.use("/user", walletRoutes);
 
 app.use(symptomRoutes);
 
