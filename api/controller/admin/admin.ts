@@ -8,9 +8,12 @@ export const getAllDoctors = async (
   res: Response
 ): Promise<void> => {
   try {
-    // Find all users who are doctors and populate their doctor data
+    // Find all users who are doctors and populate their doctor data (excluding password)
     const users = await User.find({ roles: "doctor" })
-      .populate('roleRefs.doctor');
+      .populate({
+        path: 'roleRefs.doctor',
+        select: '-password'
+      });
 
     if (!users || users.length === 0) {
       res.status(404).json({
@@ -61,7 +64,7 @@ export const updateDoctorStatus = async (
         $set: { status },
         $push: { message: { message, date: new Date() } }
       },
-      { new: true }
+      { new: true, select: '-password' }
     );
 
     if (!updatedDoctor) {

@@ -551,9 +551,11 @@ export const getDoctorById = async (
     }
 
     // Find user and populate doctor data
-    const user = await User.findOne({ _id: userId, roles: "doctor" })
-      .populate('roleRefs.doctor');
-
+    const user = await User.findOne({ _id: userId })
+      .populate({
+        path: 'roleRefs.doctor',
+        select: '-password'
+      });
 
     if (!user) {
       res.status(404).json({
@@ -570,7 +572,6 @@ export const getDoctorById = async (
       });
       return;
     }
-
 
     if (!user?.roleRefs?.doctor) {
       res.status(404).json({

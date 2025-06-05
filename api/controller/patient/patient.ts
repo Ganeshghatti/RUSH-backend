@@ -70,6 +70,7 @@ export const patientOnboard = async (req: Request, res: Response): Promise<void>
       {
         new: true,
         runValidators: true,
+        select: '-password'
       }
     ); 
 

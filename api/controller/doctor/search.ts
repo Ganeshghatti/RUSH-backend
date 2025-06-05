@@ -32,6 +32,7 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
 
     const doctorsByName = matchedUserIds.length > 0
       ? await Doctor.find(doctorFilter)
+          .select('-password')
           .populate({
             path: 'userId',
             match: gender ? { gender } : undefined, // Apply gender match at populate level
@@ -50,6 +51,7 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
     }
 
     const doctorsBySpecialization = await Doctor.find(specializationFilter)
+      .select('-password')
       .populate({
         path: 'userId',
         match: gender ? { gender } : undefined,
@@ -69,6 +71,7 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
     let finalDoctors = combinedDoctors;
     if (finalDoctors.length === 0 && !query && !gender && !appointment) {
       finalDoctors = await Doctor.find()
+        .select('-password')
         .populate({
           path: 'userId',
           select: 'firstName lastName email phone profilePic gender'
