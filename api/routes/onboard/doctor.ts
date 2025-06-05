@@ -23,6 +23,6 @@ const uploadFields = upload.fields([
 ]);
 
 router.route("/onboard/doctor/:userId").post(verifyToken, uploadFields, doctorOnboardV2);
-router.route("/id/:userId").get(verifyToken, getDoctorById);
+router.route("/user/:userId").get(verifyToken, getDoctorById);
 
 export default router;

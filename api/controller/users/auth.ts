@@ -487,8 +487,14 @@ export const findCurrentUser = async (
 
     // Conditionally populate roles
     const populatePaths = [];
-    if (user.roleRefs?.doctor) populatePaths.push("roleRefs.doctor");
-    if (user.roleRefs?.patient) populatePaths.push("roleRefs.patient");
+    if (user.roleRefs?.doctor) populatePaths.push({
+      path: "roleRefs.doctor",
+      select: "-password"
+    });
+    if (user.roleRefs?.patient) populatePaths.push({
+      path: "roleRefs.patient", 
+      select: "-password"
+    });
 
     if (populatePaths.length > 0) {
       user = await user.populate(populatePaths);

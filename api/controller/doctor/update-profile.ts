@@ -217,7 +217,7 @@ export const updateDoctorProfile = async (req: MulterRequest, res: Response): Pr
       await doctor.save();
     }
 
-    const updatedDoctor = await Doctor.findById(doctorId).populate("userId").lean();
+    const updatedDoctor = await Doctor.findById(doctorId).populate("userId").select('-password').lean();
     const doctorWithSignedUrls = await generateSignedUrlsForUser(updatedDoctor);
 
     res.status(200).json({
@@ -363,7 +363,7 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
           "onlineAppointment.updatedAt": new Date()
         },
       },
-      { new: true }
+      { new: true, select: '-password' }
     ).populate("userId");
 
     if (!updatedDoctor) {
