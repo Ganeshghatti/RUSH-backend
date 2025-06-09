@@ -62,6 +62,7 @@ app.use("/auth", authRoutes);
 
 // Media routes
 app.use("/media", mediaRoutes);
+app.use("/", mediaRoutes); // Mount media routes at root for /api/image/upload
 app.use("/patient", patientRoutes);
 
 app.use("/doctor", doctorRoutes);

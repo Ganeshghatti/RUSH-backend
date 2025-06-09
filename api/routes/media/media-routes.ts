@@ -24,7 +24,7 @@ export const upload = multer({
 
 const router = express.Router();
 
-router.post('/upload',verifyToken, upload.single('image'), async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/upload/v1',verifyToken, upload.single('image'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.file) {
       res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -71,53 +71,77 @@ router.post('/upload',verifyToken, upload.single('image'), async (req: AuthReque
   }
 });
 
-// Route for uploading multiple images (up to 5)
-// router.post('/upload-multiple', verifyToken, upload.array('images', 5), async (req: AuthRequest, res: Response): Promise<void> => {
-//   try {
-//     if (!req.files || req.files.length === 0) {
-//       res.status(400).json({ success: false, message: 'No files uploaded' });
-//       return;
-//     }
+// Route for uploading multiple images with optional key deletion
+router.post('/upload', verifyToken, upload.array('images'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const files = req.files as Express.Multer.File[];
 
-//     const uploadedFiles = [];
-//     const userId = req.user.id; // From auth middleware
-    
-//     // Upload each file to S3
-//     for (const file of req.files) {
-//       const timestamp = Date.now();
-//       const originalName = file.originalname;
-//       const extension = path.extname(originalName);
-//       const fileName = `${path.basename(originalName, extension)}_${timestamp}${extension}`;
-      
-//       const key = `uploads/${userId}/${fileName}`;
-      
-//       const fileUrl = await UploadImgToS3({
-//         key,
-//         fileBuffer: file.buffer,
-//         fileName: originalName,
-//       });
-      
-//       uploadedFiles.push({
-//         url: fileUrl,
-//         key,
-//         fileName
-//       });
-//     }
+    if (!files || files.length === 0) {
+      res.status(400).json({ success: false, message: 'No files uploaded' });
+      return;
+    }
 
-//     res.status(200).json({
-//       success: true,
-//       message: 'Images uploaded successfully',
-//       data: uploadedFiles
-//     });
-//   } catch (error: any) {
-//     console.error('Upload error:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Failed to upload images',
-//       error: error.message
-//     });
-//   }
-// });
+    // Get s3Keys from form data and parse if it's a string
+    let s3Keys: string[] = [];
+    if (req.body.s3Keys) {
+      s3Keys = typeof req.body.s3Keys === 'string' ? JSON.parse(req.body.s3Keys) : req.body.s3Keys;
+    }
+
+    // Upload all images using Promise.all
+    const uploadPromises = files.map((file) => {
+      const timestamp = Date.now();
+      const originalName = file.originalname;
+      const extension = path.extname(originalName);
+      const fileName = `${path.basename(originalName, extension)}_${timestamp}${extension}`;
+      const key = `${originalName}`;
+
+      return UploadImgToS3({
+        key,
+        fileBuffer: file.buffer,
+        fileName: originalName,
+      });
+    });
+
+    // Execute all uploads
+    const uploadedKeys = await Promise.all(uploadPromises);
+
+    // Delete old images if s3Keys are provided
+    if (s3Keys && s3Keys.length > 0) {
+      const deletePromises = s3Keys.map((key: string) => 
+        DeleteMediaFromS3({ key })
+      );
+      await Promise.all(deletePromises);
+    }
+
+    // Prepare response data using the same logic as upload
+    const uploadedFiles = files.map((file, index) => {
+      const timestamp = Date.now();
+      const originalName = file.originalname;
+      const extension = path.extname(originalName);
+      const fileName = `${path.basename(originalName, extension)}_${timestamp}${extension}`;
+      
+      return {
+        key: uploadedKeys[index],
+        fileName: originalName,
+        uploadedFileName: fileName
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Images uploaded successfully',
+      data: uploadedFiles,
+      deletedKeys: s3Keys
+    });
+  } catch (error: any) {
+    console.error('Upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload images',
+      error: error.message
+    });
+  }
+});
 
 // Route for deleting an image from S3
 router.delete('/delete', verifyToken, async (req: Request, res: Response) => {
