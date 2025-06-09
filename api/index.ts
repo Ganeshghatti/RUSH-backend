@@ -30,7 +30,8 @@ app.use(
       "http://localhost:5173",   
       "http://localhost:3000",
       "https://admin.rushdr.com",
-      "https://rushdr.com"
+      "https://rushdr.com",
+      "https://www.rushdr.com"
     ],
     credentials: true,
   })
