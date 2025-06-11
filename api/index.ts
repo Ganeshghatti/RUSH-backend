@@ -13,6 +13,7 @@ import symptomRoutes from "./routes/symptom/symptom-route";
 import cookieParser from "cookie-parser";
 import adminRoutes from "./routes/admin/admin-route";
 import walletRoutes from "./routes/users/wallet";
+import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -64,7 +65,6 @@ app.use("/auth", authRoutes);
 
 // Media routes
 app.use("/media", mediaRoutes);
-app.use("/", mediaRoutes); // Mount media routes at root for /api/image/upload
 app.use("/patient", patientRoutes);
 
 app.use("/doctor", doctorRoutes);
@@ -75,6 +75,8 @@ app.use("/user", walletRoutes);
 app.use(symptomRoutes);
 
 app.use(adminRoutes);
+
+app.use(onlineAppointmentRoutes);
 
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

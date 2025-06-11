@@ -75,7 +75,7 @@ export const verifyToken = async (
     console.error("Token verification error:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error during authentication",
+      message: "First login to continue",
     });
   }
 };
@@ -102,7 +102,7 @@ export const checkRole = (role: string) => {
       if (!hasRequiredRole) {
         res.status(403).json({
           success: false,
-          message: "Access denied: Insufficient privileges",
+          message: `Access denied: Only ${role} can access this route`,
         });
         return;
       }
