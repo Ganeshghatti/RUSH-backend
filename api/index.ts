@@ -13,6 +13,7 @@ import symptomRoutes from "./routes/symptom/symptom-route";
 import cookieParser from "cookie-parser";
 import adminRoutes from "./routes/admin/admin-route";
 import walletRoutes from "./routes/users/wallet";
+import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -75,6 +76,8 @@ app.use("/user", walletRoutes);
 app.use(symptomRoutes);
 
 app.use(adminRoutes);
+
+app.use(onlineAppointmentRoutes);
 
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
