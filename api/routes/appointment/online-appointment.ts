@@ -6,6 +6,8 @@ import {
   getPatientAppointments,
   updateAppointmentStatus,
 } from "../../controller/appointment/online-appointment";
+import { createTwilioRoom } from "../../controller/appointment/create-room";
+import { createRoomAccessToken } from "../../controller/appointment/create-access-token";
 import { RequestHandler } from "express";
 
 const router = Router();
@@ -41,5 +43,20 @@ router.route("/appointment/online/:appointmentId/status")
     checkRole("doctor") as RequestHandler,
     updateAppointmentStatus as RequestHandler
   );
+
+// Route to create a new twilio room
+router.route("/appointment/online/create-room")
+  .post(
+    verifyToken as RequestHandler,
+    // checkRole("doctor") as RequestHandler, // Only doctors can trigger room creation
+    createTwilioRoom as RequestHandler
+  );
+
+// Route to create access token for doctor and patient
+router.route("/appointment/online/access-token")
+  .post(
+    verifyToken as RequestHandler,
+    createRoomAccessToken as RequestHandler
+  )
 
 export default router; 
