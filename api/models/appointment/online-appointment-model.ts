@@ -42,6 +42,9 @@ const onlineAppointmentSchema = new Schema({
     enum: ["pending", "accepted", "rejected"],
     default: "pending",
   },
+  roomName: {
+    type: String,
+  }
 });
 
 const OnlineAppointment = mongoose.model(
