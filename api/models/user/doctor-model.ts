@@ -87,10 +87,10 @@ const doctorSchema = new Schema({
         duration: [
           {
             start: {
-              type: Date,
+              type: String,
             },
             end: {
-              type: Date,
+              type: String,
             },
           },
         ],
