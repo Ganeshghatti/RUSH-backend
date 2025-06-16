@@ -109,9 +109,8 @@ export const doctorUpdateSchema = z.object({
       .optional(),
     hospitalName: z.string()
       .optional(),
-    fromYear: z.number(),
-    toYear: z.number()
-      .optional(),
+    fromYear: z.number().nullable(),
+    toYear: z.number().nullable(),
     isCurrent: z.boolean().optional(),
   })).optional(),
   awards: z.array(z.object({
@@ -143,4 +142,4 @@ export const updateProfileSchema = z.object({
   doctor: doctorUpdateSchema.optional(),
 }).refine(data => data.user || data.doctor, {
   message: "Either user profile data or doctor profile data must be provided for update",
-}); 
+});
