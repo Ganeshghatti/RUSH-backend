@@ -5,6 +5,8 @@ import { UploadImgToS3 } from '../../utils/aws_s3/upload-media';
 import { DeleteMediaFromS3 } from '../../utils/aws_s3/delete-media';
 import { verifyToken } from '../../middleware/auth-middleware';
 import { Request, Response } from 'express';
+import { getKeyFromSignedUrl } from '../../utils/aws_s3/upload-media';
+
 
 interface AuthRequest extends Request {
   user?: any; // Made optional to align with Express.Request
@@ -75,20 +77,31 @@ router.post('/upload/v1',verifyToken, upload.single('image'), async (req: AuthRe
 router.post('/upload', verifyToken, upload.array('images'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const files = req.files as Express.Multer.File[];
-
-    if (!files || files.length === 0) {
-      res.status(400).json({ success: false, message: 'No files uploaded' });
-      return;
-    }
-
     // Get s3Keys from form data and parse if it's a string
     let s3Keys: string[] = [];
-    if (req.body.s3Keys) {
+    if (req?.body?.s3Keys) {
       s3Keys = typeof req.body.s3Keys === 'string' ? JSON.parse(req.body.s3Keys) : req.body.s3Keys;
     }
 
+    console.log("this is the s3 keys", s3Keys);
+    // generate the key from pre-signed url if user profiled s3 key with pesgned url thena convert to key
+    
+    const parsedS3Keys = await Promise.all(s3Keys?.map(async (key) => {
+      if(key.includes('https://')){
+        const parsedKey = await getKeyFromSignedUrl(key);
+        return parsedKey;
+      }
+      return key;
+    }));
+
+    console.log("this is the parsed s3 keys", parsedS3Keys);
+
+
+
+    
+
     // Upload all images using Promise.all
-    const uploadPromises = files.map((file) => {
+    const uploadPromises = files?.map((file) => {
       const timestamp = Date.now();
       const originalName = file.originalname;
       const extension = path.extname(originalName);
@@ -106,9 +119,9 @@ router.post('/upload', verifyToken, upload.array('images'), async (req: AuthRequ
     const uploadedKeys = await Promise.all(uploadPromises);
 
     // Delete old images if s3Keys are provided
-    if (s3Keys && s3Keys.length > 0) {
-      const deletePromises = s3Keys.map((key: string) => 
-        DeleteMediaFromS3({ key })
+    if (parsedS3Keys && parsedS3Keys.length > 0) {
+      const deletePromises = parsedS3Keys.map((key: string | null) => 
+        key ? DeleteMediaFromS3({ key }) : null
       );
       await Promise.all(deletePromises);
     }
