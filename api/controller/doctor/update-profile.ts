@@ -191,6 +191,34 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
     const updatePromises = [];
 
+    // Helper function to process image fields and convert URLs to keys
+    const processImageFields = async (data: any): Promise<any> => {
+      if (!data || typeof data !== 'object') return data;
+      
+      const processedData = { ...data };
+      
+      for (const [key, value] of Object.entries(processedData)) {
+        if (typeof value === 'string' && value.includes('https://')) {
+          // This is likely a presigned URL, convert to key
+          const extractedKey = await getKeyFromSignedUrl(value);
+          if (extractedKey) {
+            processedData[key] = extractedKey;
+          }
+        } else if (Array.isArray(value)) {
+          // Process arrays recursively
+          processedData[key] = await Promise.all(
+            value.map(async (item) => await processImageFields(item))
+          );
+        } else if (typeof value === 'object' && value !== null) {
+          // Process nested objects recursively
+          processedData[key] = await processImageFields(value);
+        }
+      }
+      
+      return processedData;
+    };
+
+
     // Update User model if user data is provided
     if (user && Object.keys(user).length > 0) {
       const userUpdateData: any = { ...user };
@@ -200,10 +228,14 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
         userUpdateData.dob = new Date(user.dob);
       }
 
+      // Process image fields in user data
+      const processedUserData = await processImageFields(userUpdateData);
+      console.log("key only urls", processedUserData)
+
       updatePromises.push(
         User.findByIdAndUpdate(
           userId,
-          { $set: userUpdateData },
+          { $set: processedUserData },
           { new: true, runValidators: true, select: '-password' }
         )
       );
@@ -211,10 +243,15 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
     // Update Doctor model if doctor data is provided
     if (doctor && Object.keys(doctor).length > 0) {
+      // Process image fields in doctor data
+      const processedDoctorData = await processImageFields(doctor);
+
+      console.log("key only urls", processedDoctorData)
+
       updatePromises.push(
         Doctor.findByIdAndUpdate(
           existingDoctor._id,
-          { $set: doctor },
+          { $set: processedDoctorData },
           { new: true, runValidators: true, select: '-password' }
         )
       );
