@@ -4,7 +4,10 @@ import Doctor from "../../models/user/doctor-model";
 import User from "../../models/user/user-model";
 
 // Book appointment by patient
-export const bookOnlineAppointment = async (req: Request, res: Response): Promise<void> => {
+export const bookOnlineAppointment = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { doctorId, slot } = req.body;
     const patientId = req.user.id;
@@ -54,13 +57,35 @@ export const bookOnlineAppointment = async (req: Request, res: Response): Promis
       return;
     }
 
+    const matchedDuration = doctor?.onlineAppointment?.duration.find(
+      (item: any) => item.minute === slot.duration
+    );
+
+    if (!matchedDuration) {
+      res.status(400).json({
+        success: false,
+        message: "Doctor does not offer this duration",
+      });
+      return;
+    }
+
+    const price = matchedDuration.price;
+
+    if (patient.wallet < price) {
+      res.status(400).json({
+        success: false,
+        message: "Insufficient wallet balance",
+      });
+      return;
+    }
+
     // Check if the slot is already booked
     const existingAppointment = await OnlineAppointment.findOne({
       doctorId,
       "slot.day": new Date(slot.day),
       "slot.time.start": new Date(slot.time.start),
       "slot.time.end": new Date(slot.time.end),
-      status: { $in: ["pending", "accepted"] }
+      status: { $in: ["pending", "accepted"] },
     });
 
     if (existingAppointment) {
@@ -90,7 +115,9 @@ export const bookOnlineAppointment = async (req: Request, res: Response): Promis
     await newAppointment.save();
 
     // Populate the response with detailed patient and doctor information
-    const populatedAppointment = await OnlineAppointment.findById(newAppointment._id)
+    const populatedAppointment = await OnlineAppointment.findById(
+      newAppointment._id
+    )
       .populate({
         path: "patientId",
         select: "firstName lastName countryCode gender email profilePic",
@@ -100,8 +127,8 @@ export const bookOnlineAppointment = async (req: Request, res: Response): Promis
         select: "qualifications specialization userId",
         populate: {
           path: "userId",
-          select: "firstName lastName countryCode gender email profilePic"
-        }
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       });
 
     res.status(201).json({
@@ -120,11 +147,14 @@ export const bookOnlineAppointment = async (req: Request, res: Response): Promis
 };
 
 // Get all appointments for doctor
-export const getDoctorAppointments = async (req: Request, res: Response): Promise<void> => {
+export const getDoctorAppointments = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const doctorId = req.user.id; // Assuming the logged-in user is a doctor
 
-    const doctor = await Doctor.findOne({userId: doctorId});
+    const doctor = await Doctor.findOne({ userId: doctorId });
 
     if (!doctor) {
       res.status(404).json({
@@ -145,8 +175,8 @@ export const getDoctorAppointments = async (req: Request, res: Response): Promis
         select: "qualifications specialization userId",
         populate: {
           path: "userId",
-          select: "firstName lastName countryCode gender email profilePic"
-        }
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
@@ -166,7 +196,10 @@ export const getDoctorAppointments = async (req: Request, res: Response): Promis
 };
 
 // Get all appointments for patient
-export const getPatientAppointments = async (req: Request, res: Response): Promise<void> => {
+export const getPatientAppointments = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const patientId = req.user.id; // Assuming the logged-in user is a patient
 
@@ -181,8 +214,8 @@ export const getPatientAppointments = async (req: Request, res: Response): Promi
         select: "qualifications specialization userId",
         populate: {
           path: "userId",
-          select: "firstName lastName countryCode gender email profilePic"
-        }
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
@@ -202,7 +235,10 @@ export const getPatientAppointments = async (req: Request, res: Response): Promi
 };
 
 // Update appointment status by doctor
-export const updateAppointmentStatus = async (req: Request, res: Response): Promise<void> => {
+export const updateAppointmentStatus = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { appointmentId } = req.params;
     const { status } = req.body;
@@ -217,7 +253,7 @@ export const updateAppointmentStatus = async (req: Request, res: Response): Prom
       return;
     }
 
-    const doctor = await Doctor.findOne({userId: doctorId});
+    const doctor = await Doctor.findOne({ userId: doctorId });
 
     if (!doctor) {
       res.status(404).json({
@@ -236,12 +272,52 @@ export const updateAppointmentStatus = async (req: Request, res: Response): Prom
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or you don't have permission to modify it",
+        message:
+          "Appointment not found or you don't have permission to modify it",
       });
       return;
     }
 
-    // Update the appointment status
+    // 💰 Only on 'accepted' status: handle wallet deduction
+    if (status === "accepted") {
+      const patient = await User.findById(appointment.patientId);
+      if (!patient) {
+        res.status(404).json({
+          success: false,
+          message: "Patient not found",
+        });
+        return;
+      }
+
+      // 🧠 Find matched price for the slot duration
+      const matched = doctor?.onlineAppointment?.duration.find(
+        (d: any) => d.minute === appointment?.slot?.duration
+      );
+
+      if (!matched) {
+        res.status(400).json({
+          success: false,
+          message: "Doctor does not support this appointment duration",
+        });
+        return;
+      }
+
+      const price = matched.price;
+
+      if (patient.wallet < price) {
+        res.status(400).json({
+          success: false,
+          message: "Patient has insufficient wallet balance",
+        });
+        return;
+      }
+
+      // 💳 Deduct amount and save patient
+      patient.wallet -= price;
+      await patient.save();
+    }
+
+    // ✅ Update status
     appointment.status = status;
     await appointment.save();
 
@@ -256,8 +332,8 @@ export const updateAppointmentStatus = async (req: Request, res: Response): Prom
         select: "qualifications specialization userId",
         populate: {
           path: "userId",
-          select: "firstName lastName countryCode gender email profilePic"
-        }
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       });
 
     res.status(200).json({

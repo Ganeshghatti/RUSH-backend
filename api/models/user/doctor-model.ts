@@ -31,9 +31,9 @@ const doctorSchema = new Schema({
   experience: [
     {
       experienceDescription: { type: String }, // e.g., "Cardiology Consultant"
-      hospitalName: { type: String }, // e.g., "AIIMS"
-      fromYear: { type: Number },
-      toYear: { type: Number },
+      hospitalName: { type: String },
+      fromYear: { type: Number, default: null },
+      toYear: { type: Number, default: null },
       isCurrent: { type: Boolean, default: false },
     },
   ],
