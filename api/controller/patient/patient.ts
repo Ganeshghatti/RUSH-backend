@@ -2,6 +2,9 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import User from "../../models/user/user-model";
 import Patient from "../../models/user/patient-model";
+import Doctor from "../../models/user/doctor-model";
+import OnlineAppointment from "../../models/appointment/online-appointment-model";
+import Booking from "../../models/user/booking-model";
 
 export const patientOnboard = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -96,3 +99,128 @@ export const patientOnboard = async (req: Request, res: Response): Promise<void>
     });
   }
 };
+
+export const getPatientDashboard = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user.id;
+
+    const patient = await Patient.findOne({ userId }).populate('userId', 'firstName lastName profilePic');
+    
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+      return;
+    }
+
+    const currentDate = new Date();
+    const onlineAppointmentCounts = await Promise.all([
+      // Upcoming online appointments (accepted and time is in future)
+      OnlineAppointment.countDocuments({
+        patientId: userId,
+        status: "accepted",
+        "slot.time.start": { $gte: currentDate }
+      }),
+      // Completed online appointments (accepted and time is in past)
+      OnlineAppointment.countDocuments({
+        patientId: userId,
+        status: "accepted",
+        "slot.time.start": { $lt: currentDate }
+      }),
+      // Cancelled online appointments (rejected)
+      OnlineAppointment.countDocuments({
+        patientId: userId,
+        status: "rejected"
+      }),
+      // All online appointments for the patient
+      OnlineAppointment.countDocuments({
+        patientId: userId
+      })
+    ]);
+
+    const appointmentCounts = {
+      upcoming: onlineAppointmentCounts[0],
+      completed: onlineAppointmentCounts[1],
+      cancelled: onlineAppointmentCounts[2],
+      all: onlineAppointmentCounts[3]
+    };
+
+    // Get recommended doctors based on patient's health conditions
+    let recommendedDoctors: any[] = [];
+    
+    if (patient.healthMetrics && patient.healthMetrics.length > 0) {
+      // Get latest health metrics
+      const latestHealthMetrics = patient.healthMetrics[patient.healthMetrics.length - 1];
+      
+      if (latestHealthMetrics.conditions && latestHealthMetrics.conditions.length > 0) {
+        // Find doctors whose specialization matches patient's conditions
+        const patientConditions = latestHealthMetrics.conditions.map(condition => 
+          new RegExp(condition, 'i') // Case insensitive matching
+        );
+        
+        recommendedDoctors = await Doctor.find({
+          status: "approved",
+          $or: [
+            { specialization: { $in: patientConditions } },
+            { "registration.specialization": { $in: patientConditions } }
+          ]
+        })
+        .populate('userId', 'firstName lastName profilePic')
+        .select('userId specialization experience onlineAppointment')
+        .limit(10);
+      }
+    }
+
+    // If no condition-based recommendations, get general recommended doctors
+    if (recommendedDoctors.length === 0) {
+      recommendedDoctors = await Doctor.find({
+        status: "approved",
+        "onlineAppointment.isActive": true
+      })
+      .populate('userId', 'firstName lastName profilePic')
+      .select('userId specialization experience onlineAppointment')
+      .sort({ createdAt: -1 })
+      .limit(10);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Patient dashboard data retrieved successfully",
+      data: {
+        appointmentCounts,
+        recommendedDoctors: recommendedDoctors
+      }
+    });
+
+  } catch (error) {
+    console.error("Error in getting patient dashboard:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get patient dashboard data",
+      error: (error as Error).message,
+    });
+  }
+}
+
+export const getAppointmentsDoctorForPatient = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user.id;
+
+    const doctors = await OnlineAppointment.find({ patientId: userId }).populate('doctorId', 'specialization experience userId onlineAppointment').populate('doctorId.userId', 'firstName lastName profilePic');
+
+    res.status(200).json({
+      success: true,
+      message: "Appoinments doctor for patient retrieved successfully",
+      data: doctors
+    });
+    
+  } catch (error) {
+    console.error("Error in getting appoinments doctor for patient:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get appoinments doctor for patient",
+      error: (error as Error).message,
+    });
+  }
+}
