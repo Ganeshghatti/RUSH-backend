@@ -122,6 +122,7 @@ const doctorSchema = new Schema({
   clinicVisit: {
     isActive: { type: Boolean, default: false },
   },
+  isActive: { type: Boolean, default: true },
   message: [
     {
       message: { type: String },
