@@ -9,6 +9,9 @@ import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 
+// Store timeout references for auto-disable functionality
+const doctorTimeouts = new Map<string, NodeJS.Timeout>();
+
 export const doctorOnboardV2 = async (
   req: Request,
   res: Response
@@ -773,6 +776,168 @@ export const getDoctorAppointmentStats = async (
     res.status(500).json({
       success: false,
       message: "Failed to get appointment statistics",
+      error: error.message,
+    });
+  }
+};
+
+export const getDoctorDashboard = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const doctorId = req.user.id; // Get doctor's user ID from auth middleware
+
+    // Find the doctor document using userId
+    const doctor = await Doctor.findOne({ userId: doctorId });
+
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
+
+    // Get all appointments for this doctor
+    const appointments = await OnlineAppointment.find({ 
+      doctorId: doctor._id 
+    })
+    .populate({
+      path: "patientId",
+      select: "firstName lastName profilePic",
+    })
+    .sort({ "slot.day": -1, "slot.time.start": -1 }); // Sort by most recent first
+
+    // Calculate appointment counts by status
+    const totalAppointments = appointments.length;
+    const pendingAppointments = appointments.filter(app => app.status === "pending").length;
+    const acceptedAppointments = appointments.filter(app => app.status === "accepted").length;
+    const rejectedAppointments = appointments.filter(app => app.status === "rejected").length;
+
+    // Get unique patient count
+    const uniquePatientIds = new Set();
+    appointments.forEach(appointment => {
+      if (appointment.patientId) {
+        uniquePatientIds.add(appointment.patientId._id.toString());
+      }
+    });
+    const totalPatients = uniquePatientIds.size;
+
+    // Prepare dashboard data
+    const dashboardData = {
+      appointmentStats: {
+        total: totalAppointments,
+        pending: pendingAppointments,
+        accepted: acceptedAppointments,
+        rejected: rejectedAppointments,
+      },
+      patientStats: {
+        totalPatients: totalPatients,
+      },
+      reviews: {
+        total: 0, // Set to 0 as requested
+        average: 0,
+      },
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Doctor dashboard data retrieved successfully",
+      data: dashboardData,
+    });
+  } catch (error: any) {
+    console.error("Error getting doctor dashboard:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get dashboard data",
+      error: error.message,
+    });
+  }
+};
+
+export const updateDoctorActiveStatus = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const doctorId = req.user.id; // Get doctor's user ID from auth middleware
+    const { isActive } = req.body;
+
+    // Validate input
+    if (typeof isActive !== "boolean") {
+      res.status(400).json({
+        success: false,
+        message: "isActive must be a boolean value (true or false)",
+      });
+      return;
+    }
+
+    // Find the doctor document using userId
+    const doctor = await Doctor.findOne({ userId: doctorId });
+
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
+
+    // Clear any existing timeout for this doctor
+    const existingTimeout = doctorTimeouts.get(doctorId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      doctorTimeouts.delete(doctorId);
+    }
+
+    // Update the doctor document
+    const updatedDoctor = await Doctor.findOneAndUpdate(
+      { userId: doctorId },
+      { $set: { isActive: isActive } },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!updatedDoctor) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to update doctor status",
+      });
+      return;
+    }
+
+    // If setting to active, schedule auto-disable after 1 hour
+    if (isActive === true) {
+      const timeoutId = setTimeout(async () => {
+        try {
+          await Doctor.findOneAndUpdate(
+            { userId: doctorId },
+            { $set: { isActive: false } },
+            { new: true }
+          );
+          console.log(`Doctor ${doctorId} automatically set to inactive after 1 hour`);
+          doctorTimeouts.delete(doctorId);
+        } catch (error) {
+          console.error(`Failed to auto-disable doctor ${doctorId}:`, error);
+        }
+             }, 60 * 60 * 1000); // 1 hour in milliseconds
+
+      // Store the timeout reference
+      doctorTimeouts.set(doctorId, timeoutId);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". Will automatically disable after 1 hour." : ""}`,
+      data: {
+        isActive: updatedDoctor.isActive,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error updating doctor active status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update doctor active status",
       error: error.message,
     });
   }

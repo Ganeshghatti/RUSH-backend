@@ -5,7 +5,7 @@ import {
   updateDoctorOnlineAppointment,
 } from "../../controller/doctor/update-profile";
 import { RequestHandler } from "express";
-import { getAllPatientsForDoctor, getDoctorAppointmentStats } from "../../controller/doctor/doctor";
+import { getAllPatientsForDoctor, getDoctorAppointmentStats, getDoctorDashboard, updateDoctorActiveStatus } from "../../controller/doctor/doctor";
 
 const router = Router();
 
@@ -42,6 +42,24 @@ router
     verifyToken as RequestHandler,
     checkRole("doctor") as RequestHandler,
     getDoctorAppointmentStats as RequestHandler
+  );
+
+// Route for getting doctor dashboard data
+router
+  .route("/doctor/dashboard")
+  .get(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    getDoctorDashboard as RequestHandler
+  );
+
+// Route for updating doctor active status
+router
+  .route("/doctor/active-status")
+  .put(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    updateDoctorActiveStatus as RequestHandler
   );
 
 export default router;
