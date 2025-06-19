@@ -28,6 +28,8 @@ router.route("/appointment/online/doctor")
     getDoctorAppointments as RequestHandler
   );
 
+
+
 // Route for patients to get all their appointments
 router.route("/appointment/online/patient")
   .get(

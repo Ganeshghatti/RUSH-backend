@@ -350,3 +350,4 @@ export const updateAppointmentStatus = async (
     });
   }
 };
+

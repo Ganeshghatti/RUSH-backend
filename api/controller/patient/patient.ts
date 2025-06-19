@@ -4,7 +4,6 @@ import User from "../../models/user/user-model";
 import Patient from "../../models/user/patient-model";
 import Doctor from "../../models/user/doctor-model";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
-import Booking from "../../models/user/booking-model";
 
 export const patientOnboard = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -175,7 +174,7 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
     // If no condition-based recommendations, get general recommended doctors
     if (recommendedDoctors.length === 0) {
       recommendedDoctors = await Doctor.find({
-        status: "approved",
+        // status: "approved",
         "onlineAppointment.isActive": true
       })
       .populate('userId', 'firstName lastName profilePic')

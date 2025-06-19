@@ -7,6 +7,7 @@ import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
+import OnlineAppointment from "../../models/appointment/online-appointment-model";
 
 export const doctorOnboardV2 = async (
   req: Request,
@@ -595,6 +596,184 @@ export const getDoctorById = async (
       success: false,
       message: "Failed to fetch doctor",
       error: (error as Error).message,
+    });
+  }
+};
+
+export const getAllPatientsForDoctor = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const doctorId = req.user.id; // Get doctor's user ID from auth middleware
+
+    // Find the doctor document using userId
+    const doctor = await Doctor.findOne({ userId: doctorId });
+
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
+
+    // Find all appointments for this doctor and get unique patients
+    const appointments = await OnlineAppointment.find({ 
+      doctorId: doctor._id 
+    })
+    .populate({
+      path: "patientId",
+      select: "firstName lastName countryCode phone gender email profilePic dob address",
+    })
+    .sort({ "slot.day": -1 }); // Sort by most recent appointments first
+
+    if (!appointments || appointments.length === 0) {
+      res.status(200).json({
+        success: true,
+        data: [],
+        message: "No patients found for this doctor",
+      });
+      return;
+    }
+
+    // Extract unique patients from appointments
+    const uniquePatients = new Map();
+    
+    appointments.forEach((appointment: any) => {
+      if (appointment.patientId && !uniquePatients.has(appointment.patientId._id.toString())) {
+        uniquePatients.set(appointment.patientId._id.toString(), {
+          ...appointment.patientId.toObject(),
+          lastAppointmentDate: appointment.slot.day,
+          totalAppointments: 1
+        });
+      } else if (appointment.patientId && uniquePatients.has(appointment.patientId._id.toString())) {
+        // Update appointment count for existing patient
+        const existingPatient = uniquePatients.get(appointment.patientId._id.toString());
+        existingPatient.totalAppointments += 1;
+        
+        // Update last appointment date if this one is more recent
+        if (new Date(appointment.slot.day) > new Date(existingPatient.lastAppointmentDate)) {
+          existingPatient.lastAppointmentDate = appointment.slot.day;
+        }
+      }
+    });
+
+    // Convert Map to Array and generate signed URLs if needed
+    const patientsArray = Array.from(uniquePatients.values());
+
+    // Generate signed URLs for profile pictures if they exist
+    const patientsWithSignedUrls = await Promise.all(
+      patientsArray.map(async (patient) => {
+        if (patient.profilePic) {
+          try {
+            const signedUrls = await generateSignedUrlsForUser(patient);
+            return signedUrls;
+          } catch (error) {
+            console.warn("Failed to generate signed URL for patient profile pic:", error);
+            return patient;
+          }
+        }
+        return patient;
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      data: patientsWithSignedUrls,
+      count: patientsWithSignedUrls.length,
+      message: "Patients retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Error getting patients for doctor:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get patients",
+      error: (error as Error).message,
+    });
+  }
+};
+
+export const getDoctorAppointmentStats = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const doctorId = req.user.id; // Get doctor's user ID from auth middleware
+
+    // Find the doctor document using userId
+    const doctor = await Doctor.findOne({ userId: doctorId });
+
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
+
+    // Get all appointments for this doctor with populated patient data
+    const appointments = await OnlineAppointment.find({ 
+      doctorId: doctor._id 
+    })
+    .populate({
+      path: "patientId",
+      select: "firstName lastName countryCode phone gender email profilePic dob address",
+    })
+    .sort({ "slot.day": -1, "slot.time.start": -1 }); // Sort by most recent first
+
+    // Calculate counts by status
+    const pendingCount = appointments.filter(app => app.status === "pending").length;
+    const acceptedCount = appointments.filter(app => app.status === "accepted").length;
+    const rejectedCount = appointments.filter(app => app.status === "rejected").length;
+    const totalCount = appointments.length;
+
+    // Generate signed URLs for patient profile pictures
+    const appointmentsWithSignedUrls = await Promise.all(
+      appointments.map(async (appointment: any) => {
+        let patientWithUrls = appointment.patientId;
+        
+        if (appointment.patientId && appointment.patientId.profilePic) {
+          try {
+            patientWithUrls = await generateSignedUrlsForUser(appointment.patientId);
+          } catch (error) {
+            console.warn("Failed to generate signed URL for patient profile pic:", error);
+          }
+        }
+
+        return {
+          _id: appointment._id,
+          patientInfo: patientWithUrls,
+          slot: appointment.slot,
+          history: appointment.history,
+          status: appointment.status,
+          roomName: appointment.roomName,
+        };
+      })
+    );
+
+    // Prepare the response data
+    const stats = {
+      counts: {
+        total: totalCount,
+        pending: pendingCount,
+        accepted: acceptedCount,
+        rejected: rejectedCount
+      },
+      appointments: appointmentsWithSignedUrls
+    };
+
+    res.status(200).json({
+      success: true,
+      data: stats,
+      message: "Doctor appointment statistics retrieved successfully",
+    });
+  } catch (error: any) {
+    console.error("Error getting doctor appointment stats:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get appointment statistics",
+      error: error.message,
     });
   }
 };
