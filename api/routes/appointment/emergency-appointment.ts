@@ -4,6 +4,7 @@ import {
   createEmergencyAppointment,
   getAllEmergencyAppointments,
   getPatientEmergencyAppointments,
+  acceptEmergencyAppointment,
 } from "../../controller/appointment/emergency-appointment";
 import { RequestHandler } from "express";
 
@@ -33,5 +34,12 @@ router.route("/appointment/emergency/patient")
     getPatientEmergencyAppointments as RequestHandler
   );
 
+// Route for doctors to accept emergency appointments
+router.route("/appointment/emergency/accept/:id")
+  .put(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    acceptEmergencyAppointment as RequestHandler
+  );
 
 export default router; 

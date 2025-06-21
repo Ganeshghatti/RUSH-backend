@@ -84,8 +84,7 @@ export const doctorUpdateSchema = z.object({
       .optional(),
     college: z.string()
       .optional(),
-    year: z.number()
-      .optional(),
+    year:z.number().nullable(),
     degreePost: z.string().optional(),
     degreeImage: z.string()
       .optional(),
