@@ -4,6 +4,7 @@ import User from "../../models/user/user-model";
 import Patient from "../../models/user/patient-model";
 import Doctor from "../../models/user/doctor-model";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
+import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 
 export const patientOnboard = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -206,12 +207,30 @@ export const getAppointmentsDoctorForPatient = async (req: Request, res: Respons
   try {
     const userId = req.user.id;
 
-    const doctors = await OnlineAppointment.find({ patientId: userId }).populate('doctorId', 'specialization experience userId onlineAppointment').populate('doctorId.userId', 'firstName lastName profilePic');
+    const appointments = await OnlineAppointment.find({ patientId: userId }).populate({
+      path: 'doctorId',
+      select: 'specialization experience userId onlineAppointment',
+      populate: {
+        path: 'userId',
+        select: 'firstName lastName profilePic'
+      }
+    });
+
+    // Generate signed URLs for profile pictures
+    const appointmentsWithSignedUrls = await Promise.all(
+      appointments.map(async (appointment) => {
+        const appointmentObj = appointment.toObject();
+        if (appointmentObj.doctorId) {
+          appointmentObj.doctorId = await generateSignedUrlsForDoctor(appointmentObj.doctorId);
+        }
+        return appointmentObj;
+      })
+    );
 
     res.status(200).json({
       success: true,
       message: "Appoinments doctor for patient retrieved successfully",
-      data: doctors
+      data: appointmentsWithSignedUrls
     });
     
   } catch (error) {
