@@ -14,6 +14,7 @@ import cookieParser from "cookie-parser";
 import adminRoutes from "./routes/admin/admin-route";
 import walletRoutes from "./routes/users/wallet";
 import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
+import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -78,6 +79,8 @@ app.use(symptomRoutes);
 app.use(adminRoutes);
 
 app.use(onlineAppointmentRoutes);
+
+app.use(emergencyAppointmentRoutes);
 
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
