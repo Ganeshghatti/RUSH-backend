@@ -8,6 +8,7 @@ import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
+import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map<string, NodeJS.Timeout>();
@@ -797,14 +798,28 @@ export const getDoctorDashboard = async (req: Request, res: Response): Promise<v
     }
 
     // Get all appointments for this doctor
-    const appointments = await OnlineAppointment.find({ 
-      doctorId: doctor._id 
-    })
-    .populate({
-      path: "patientId",
-      select: "firstName lastName profilePic",
-    })
-    .sort({ "slot.day": -1, "slot.time.start": -1 }); // Sort by most recent first
+    const [appointments, emergencyAppointments] = await Promise.all([
+      OnlineAppointment.find({ 
+        doctorId: doctor._id 
+      })
+      .populate({
+        path: "patientId",
+        select: "firstName lastName profilePic",
+      })
+      .sort({ "slot.day": -1, "slot.time.start": -1 }), // Sort by most recent first
+      EmergencyAppointment.find({ 
+        doctorId: doctor._id 
+      })
+      .populate({
+        path: "patientId",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode phone email profilePic",
+        },
+      })
+      .sort({ createdAt: -1 }) // Sort by newest first
+    ]);
 
     // Calculate appointment counts by status
     const totalAppointments = appointments.length;
@@ -836,6 +851,7 @@ export const getDoctorDashboard = async (req: Request, res: Response): Promise<v
         total: 0, // Set to 0 as requested
         average: 0,
       },
+      emergencyAppointments: emergencyAppointments
     };
 
     res.status(200).json({
@@ -847,7 +863,7 @@ export const getDoctorDashboard = async (req: Request, res: Response): Promise<v
     console.error("Error getting doctor dashboard:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to get dashboard data",
+      message: "Failed to get doctor dashboard data",
       error: error.message,
     });
   }
@@ -888,6 +904,9 @@ export const updateDoctorActiveStatus = async (
       doctorTimeouts.delete(doctorId);
     }
 
+    // Get current time
+    const activationTime = new Date();
+
     // Update the doctor document
     const updatedDoctor = await Doctor.findOneAndUpdate(
       { userId: doctorId },
@@ -920,7 +939,7 @@ export const updateDoctorActiveStatus = async (
         } catch (error) {
           console.error(`Failed to auto-disable doctor ${doctorId}:`, error);
         }
-             }, 60 * 60 * 1000); // 1 hour in milliseconds
+      }, 60 * 60 * 1000); // 1 hour in milliseconds
 
       // Store the timeout reference
       doctorTimeouts.set(doctorId, timeoutId);
@@ -931,6 +950,8 @@ export const updateDoctorActiveStatus = async (
       message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". Will automatically disable after 1 hour." : ""}`,
       data: {
         isActive: updatedDoctor.isActive,
+        activationTime: isActive ? activationTime : null,
+        deactivationTime: isActive ? new Date(activationTime.getTime() + 60 * 60 * 1000) : null // 1 hour from activation
       },
     });
   } catch (error: any) {
