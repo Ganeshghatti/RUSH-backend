@@ -42,6 +42,10 @@ const emergencyAppointmentSchema = new Schema(
       enum: ["pending", "in-progress", "completed"],
       default: "pending",
     },
+    roomName: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true, // Automatically manages createdAt and updatedAt

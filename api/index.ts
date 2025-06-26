@@ -15,6 +15,7 @@ import adminRoutes from "./routes/admin/admin-route";
 import walletRoutes from "./routes/users/wallet";
 import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
+import { sendSmsV2 } from "./controller/users/auth";
 
 // Load environment variables
 dotenv.config();
@@ -81,6 +82,8 @@ app.use(adminRoutes);
 app.use(onlineAppointmentRoutes);
 
 app.use(emergencyAppointmentRoutes);
+
+// sendSmsV2()
 
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

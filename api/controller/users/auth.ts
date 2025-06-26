@@ -107,6 +107,47 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+export const sendSmsV2 = async () => {
+  const xmlData = `<?xml version="1.0" encoding="UTF-8"?>
+<SingleSmsApiModel>
+  <senderId>TESTID</senderId>
+  <is_Unicode>true</is_Unicode>
+  <is_Flash>false</is_Flash>
+  <isRegisteredForDelivery>true</isRegisteredForDelivery>
+  <validityPeriod>24</validityPeriod>
+  <dataCoding>0</dataCoding>
+  <schedTime></schedTime>
+  <groupId></groupId>
+  <message>Hello, this is a test SMS</message>
+  <mobileNumbers>919555105391</mobileNumbers>
+  <serviceId>12345</serviceId>
+  <coRelator>ABC123</coRelator>
+  <linkId></linkId>
+  <principleEntityId>ABCDEF123456789</principleEntityId>
+  <templateId>123456789012345</templateId>
+  <apiKey>iBzgnGS5wX+L8eGbu3BIhkRD99MzntwQbMSF3e4cK9c=</apiKey>
+  <clientId>c6ace67c-757a-4ded-ba62-e5e06cf1c3d6</clientId>
+</SingleSmsApiModel>`;
+
+  try {
+    const response = await fetch('https://api.mylogin.co.in/api/v2/SendSMS', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/xml',
+      },
+      body: xmlData
+    });
+
+    const jsonResponse = await response.text();
+
+    console.log('dataParsed JSON:', jsonResponse);
+  } catch (error) {
+    console.error('SMS Send Failed:', error);
+  }
+};
+
+
+
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
