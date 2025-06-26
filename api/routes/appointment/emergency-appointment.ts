@@ -6,6 +6,7 @@ import {
   getPatientEmergencyAppointments,
   acceptEmergencyAppointment,
 } from "../../controller/appointment/emergency-appointment";
+import { createEmergencyRoomAccessToken } from "../../controller/appointment/create-emergency-token";
 import { RequestHandler } from "express";
 
 const router = Router();
@@ -40,6 +41,13 @@ router.route("/appointment/emergency/accept/:id")
     verifyToken as RequestHandler,
     checkRole("doctor") as RequestHandler,
     acceptEmergencyAppointment as RequestHandler
+  );
+
+// Route for creating access token for emergency appointment room
+router.route("/appointment/emergency/token")
+  .post(
+    verifyToken as RequestHandler,
+    createEmergencyRoomAccessToken as RequestHandler
   );
 
 export default router; 
