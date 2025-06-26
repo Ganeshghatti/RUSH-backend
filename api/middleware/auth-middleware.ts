@@ -51,7 +51,10 @@ export const verifyToken = async (
       return;
     }
 
+    console.log("decoded", decoded);
     const user = await User.findById(decoded.id);
+
+    console.log("user from the verified token", user);
 
     if (!user) {
       res.status(404).json({

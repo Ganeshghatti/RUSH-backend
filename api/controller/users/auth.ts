@@ -195,7 +195,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 4) {
       res.status(400).json({
         success: false,
         message: "Password must be at least 6 characters",
@@ -369,8 +369,19 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     if (role === "admin") {
       if (email === "urushdr@gmail.com" && password === "admin") {
+
+        const user = await User.findOne({ email });
+
+        if (!user) {
+          res.status(404).json({
+            success: false,
+            message: "User not found",
+          });
+          return;
+        }
+
         const token = jwt.sign(
-          { id: "6824400a23ab3e6625377847", email, role }, // use dummy id
+          { id: user._id, email, role }, 
           JWT_SECRET,
           { expiresIn: "24h" }
         );
@@ -517,6 +528,8 @@ export const findCurrentUser = async (
     }
 
     let user = await User.findById(id).select("-password");
+
+    console.log("user", user);
 
     if (!user) {
       res.status(404).json({
