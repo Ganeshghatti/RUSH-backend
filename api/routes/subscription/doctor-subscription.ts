@@ -6,7 +6,7 @@ import {
   deleteSubscription,
 } from "../../controller/subscription/subscription";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
-import { subscribeDoctor } from "../../controller/doctor/doctor";
+import { subscribeDoctor, verifyPaymentSubscription } from "../../controller/doctor/doctor";
 import { Router } from "express";
 import { upload } from "../media/media-routes";
 
@@ -39,6 +39,8 @@ router
     upload.single("paymentImage"),
     subscribeDoctor
   );
+
+router.route("/subscription/verify-payment").post(verifyToken, verifyPaymentSubscription);
 
 router.route("/subscription/active").get(verifyToken, getActiveSubscriptions);
 
