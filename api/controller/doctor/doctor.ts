@@ -9,6 +9,16 @@ import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
+import crypto from "crypto";
+import Razorpay from "razorpay";
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZ_KEY_ID,
+  key_secret: process.env.RAZ_KEY_SECRET,
+});
 
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map<string, NodeJS.Timeout>();
@@ -48,7 +58,7 @@ export const doctorOnboardV2 = async (
       registration,
       experience,
       specialization,
-      taxProof
+      taxProof,
     } = parsedData;
 
     console.log("Parsed data:", parsedData);
@@ -73,7 +83,7 @@ export const doctorOnboardV2 = async (
         ? JSON.parse(addressProof)
         : addressProof;
     const parsedBankDetails =
-      typeof bankDetails === "string" ? JSON.parse(bankDetails) : bankDetails
+      typeof bankDetails === "string" ? JSON.parse(bankDetails) : bankDetails;
 
     const parsedTaxProof =
       typeof taxProof === "string" ? JSON.parse(taxProof) : taxProof;
@@ -268,24 +278,30 @@ export const doctorOnboardV2 = async (
     const singleImageUrls = await Promise.all(singleImageUploads);
 
     // Map the results to their respective variables
-    const signatureImageUrl = singleImageKeys.indexOf("signatureImage") !== -1 
-      ? singleImageUrls[singleImageKeys.indexOf("signatureImage")] 
-      : undefined;
-    const upiQrImageUrl = singleImageKeys.indexOf("upiqrImage") !== -1 
-      ? singleImageUrls[singleImageKeys.indexOf("upiqrImage")] 
-      : undefined;
-    const profilePicUrl = singleImageKeys.indexOf("profilePic") !== -1 
-      ? singleImageUrls[singleImageKeys.indexOf("profilePic")] 
-      : undefined;
-    const personalIdProofImageUrl = singleImageKeys.indexOf("personalIdProofImage") !== -1 
-      ? singleImageUrls[singleImageKeys.indexOf("personalIdProofImage")] 
-      : undefined;
-    const addressProofImageUrl = singleImageKeys.indexOf("addressProofImage") !== -1 
-      ? singleImageUrls[singleImageKeys.indexOf("addressProofImage")] 
-      : undefined;
-    const taxProofImageUrl = singleImageKeys.indexOf("taxImage") !== -1 
-      ? singleImageUrls[singleImageKeys.indexOf("taxImage")] 
-      : undefined;
+    const signatureImageUrl =
+      singleImageKeys.indexOf("signatureImage") !== -1
+        ? singleImageUrls[singleImageKeys.indexOf("signatureImage")]
+        : undefined;
+    const upiQrImageUrl =
+      singleImageKeys.indexOf("upiqrImage") !== -1
+        ? singleImageUrls[singleImageKeys.indexOf("upiqrImage")]
+        : undefined;
+    const profilePicUrl =
+      singleImageKeys.indexOf("profilePic") !== -1
+        ? singleImageUrls[singleImageKeys.indexOf("profilePic")]
+        : undefined;
+    const personalIdProofImageUrl =
+      singleImageKeys.indexOf("personalIdProofImage") !== -1
+        ? singleImageUrls[singleImageKeys.indexOf("personalIdProofImage")]
+        : undefined;
+    const addressProofImageUrl =
+      singleImageKeys.indexOf("addressProofImage") !== -1
+        ? singleImageUrls[singleImageKeys.indexOf("addressProofImage")]
+        : undefined;
+    const taxProofImageUrl =
+      singleImageKeys.indexOf("taxImage") !== -1
+        ? singleImageUrls[singleImageKeys.indexOf("taxImage")]
+        : undefined;
 
     // Prepare update data for doctor
     const doctorUpdateData = {
@@ -337,10 +353,12 @@ export const doctorOnboardV2 = async (
         ...parsedBankDetails,
         upiQrImage: upiQrImageUrl,
       },
-      taxProof: parsedTaxProof ? {
-        ...parsedTaxProof,
-        image: taxProofImageUrl,
-      } : undefined
+      taxProof: parsedTaxProof
+        ? {
+            ...parsedTaxProof,
+            image: taxProofImageUrl,
+          }
+        : undefined,
     };
 
     console.log(" main data to update", doctorUpdateData);
@@ -362,11 +380,11 @@ export const doctorOnboardV2 = async (
           new: true,
           runValidators: true,
         }
-      )
+      ),
     ]);
 
     if (!updatedDoctor || !updatedUser) {
-      console.log("the error is here", updatedDoctor, updatedUser)
+      console.log("the error is here", updatedDoctor, updatedUser);
       res.status(500).json({
         success: false,
         message: "Failed to update doctor information",
@@ -399,7 +417,7 @@ export const subscribeDoctor = async (
 ): Promise<void> => {
   try {
     // Check for required form data
-    if (!req.body.data || !req.file) {
+    if (!req.body.data) {
       res.status(400).json({
         success: false,
         message:
@@ -420,10 +438,10 @@ export const subscribeDoctor = async (
       return;
     }
 
-    const { subscriptionId, paymentDetails } = formData;
+    const { subscriptionId } = formData;
     const { doctorId } = req.params;
 
-    if (!doctorId || !subscriptionId || !paymentDetails?.upiId) {
+    if (!doctorId || !subscriptionId ) {
       res.status(400).json({
         success: false,
         message:
@@ -495,39 +513,49 @@ export const subscribeDoctor = async (
         return;
     }
 
-    // Handle payment image upload to S3
-    const paymentImageKey = `doctors/subscriptions/payments/${Date.now()}-${
-      req.file.originalname
-    }`;
-    const paymentImageUrl = await UploadImgToS3({
-      key: paymentImageKey,
-      fileBuffer: req.file.buffer,
-      fileName: req.file.originalname,
-    });
-
-    // Create new subscription entry
-    const newSubscription = {
-      startDate: new Date(),
-      endDate,
-      paymentDetails: {
-        upiId: paymentDetails.upiId,
-        paymentImage: paymentImageUrl,
-      },
-      SubscriptionId: subscription._id,
+    const options = {
+      amount: subscription.price * 100,
+      currency: "INR",
+      receipt: "receipt_" + Math.random().toString(36).substring(7),
     };
 
-    console.log("newSubscription", newSubscription);
+    const order = await razorpay.orders.create(options);
+
+    console.log("order", order);
+
+    // Handle payment image upload to S3
+    // const paymentImageKey = `doctors/subscriptions/payments/${Date.now()}-${
+    //   req.file.originalname
+    // }`;
+    // const paymentImageUrl = await UploadImgToS3({
+    //   key: paymentImageKey,
+    //   fileBuffer: req.file.buffer,
+    //   fileName: req.file.originalname,
+    // });
+
+    // Create new subscription entry
+    // const newSubscription = {
+    //   startDate: new Date(),
+    //   endDate,
+    //   paymentDetails: {
+    //     upiId: paymentDetails.upiId,
+    //     paymentImage: "", // paymentImageUrl,
+    //   },
+    //   SubscriptionId: subscription._id,
+    // };
+
+    // console.log("newSubscription", newSubscription);
 
     // Add subscription to doctor's subscriptions array
-    doctor.subscriptions.push(newSubscription);
+    // doctor.subscriptions.push(newSubscription);
 
     // Save the updated doctor document
-    await doctor.save();
+    // await doctor.save();
 
     res.status(200).json({
       success: true,
       message: "Doctor subscribed successfully",
-      data: newSubscription,
+      data: order,
     });
   } catch (error) {
     console.error("Error in subscribing doctor:", error);
@@ -536,6 +564,26 @@ export const subscribeDoctor = async (
       message: "Failed to subscribe doctor",
       error: (error as Error).message,
     });
+  }
+};
+
+export const verifyPaymentSubscription = async (req: Request, res: Response) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      req.body;
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZ_KEY_SECRET || "")
+      .update(sign.toString())
+      .digest("hex");
+    if (razorpay_signature === expectedSign) {
+      // Payment is verified
+      res.status(200).json({ message: "Payment verified successfully" });
+    } else {
+      res.status(400).json({ error: "Invalid payment signature" });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: (err as Error).message });
   }
 };
 
@@ -556,11 +604,10 @@ export const getDoctorById = async (
     }
 
     // Find user and populate doctor data
-    const user = await User.findOne({ _id: userId })
-      .populate({
-        path: 'roleRefs.doctor',
-        select: '-password'
-      });
+    const user = await User.findOne({ _id: userId }).populate({
+      path: "roleRefs.doctor",
+      select: "-password",
+    });
 
     if (!user) {
       res.status(404).json({
@@ -623,14 +670,15 @@ export const getAllPatientsForDoctor = async (
     }
 
     // Find all appointments for this doctor and get unique patients
-    const appointments = await OnlineAppointment.find({ 
-      doctorId: doctor._id 
+    const appointments = await OnlineAppointment.find({
+      doctorId: doctor._id,
     })
-    .populate({
-      path: "patientId",
-      select: "firstName lastName countryCode phone gender email profilePic dob address",
-    })
-    .sort({ "slot.day": -1 }); // Sort by most recent appointments first
+      .populate({
+        path: "patientId",
+        select:
+          "firstName lastName countryCode phone gender email profilePic dob address",
+      })
+      .sort({ "slot.day": -1 }); // Sort by most recent appointments first
 
     if (!appointments || appointments.length === 0) {
       res.status(200).json({
@@ -643,21 +691,32 @@ export const getAllPatientsForDoctor = async (
 
     // Extract unique patients from appointments
     const uniquePatients = new Map();
-    
+
     appointments.forEach((appointment: any) => {
-      if (appointment.patientId && !uniquePatients.has(appointment.patientId._id.toString())) {
+      if (
+        appointment.patientId &&
+        !uniquePatients.has(appointment.patientId._id.toString())
+      ) {
         uniquePatients.set(appointment.patientId._id.toString(), {
           ...appointment.patientId.toObject(),
           lastAppointmentDate: appointment.slot.day,
-          totalAppointments: 1
+          totalAppointments: 1,
         });
-      } else if (appointment.patientId && uniquePatients.has(appointment.patientId._id.toString())) {
+      } else if (
+        appointment.patientId &&
+        uniquePatients.has(appointment.patientId._id.toString())
+      ) {
         // Update appointment count for existing patient
-        const existingPatient = uniquePatients.get(appointment.patientId._id.toString());
+        const existingPatient = uniquePatients.get(
+          appointment.patientId._id.toString()
+        );
         existingPatient.totalAppointments += 1;
-        
+
         // Update last appointment date if this one is more recent
-        if (new Date(appointment.slot.day) > new Date(existingPatient.lastAppointmentDate)) {
+        if (
+          new Date(appointment.slot.day) >
+          new Date(existingPatient.lastAppointmentDate)
+        ) {
           existingPatient.lastAppointmentDate = appointment.slot.day;
         }
       }
@@ -674,7 +733,10 @@ export const getAllPatientsForDoctor = async (
             const signedUrls = await generateSignedUrlsForUser(patient);
             return signedUrls;
           } catch (error) {
-            console.warn("Failed to generate signed URL for patient profile pic:", error);
+            console.warn(
+              "Failed to generate signed URL for patient profile pic:",
+              error
+            );
             return patient;
           }
         }
@@ -717,31 +779,43 @@ export const getDoctorAppointmentStats = async (
     }
 
     // Get all appointments for this doctor with populated patient data
-    const appointments = await OnlineAppointment.find({ 
-      doctorId: doctor._id 
+    const appointments = await OnlineAppointment.find({
+      doctorId: doctor._id,
     })
-    .populate({
-      path: "patientId",
-      select: "firstName lastName countryCode phone gender email profilePic dob address",
-    })
-    .sort({ "slot.day": -1, "slot.time.start": -1 }); // Sort by most recent first
+      .populate({
+        path: "patientId",
+        select:
+          "firstName lastName countryCode phone gender email profilePic dob address",
+      })
+      .sort({ "slot.day": -1, "slot.time.start": -1 }); // Sort by most recent first
 
     // Calculate counts by status
-    const pendingCount = appointments.filter(app => app.status === "pending").length;
-    const acceptedCount = appointments.filter(app => app.status === "accepted").length;
-    const rejectedCount = appointments.filter(app => app.status === "rejected").length;
+    const pendingCount = appointments.filter(
+      (app) => app.status === "pending"
+    ).length;
+    const acceptedCount = appointments.filter(
+      (app) => app.status === "accepted"
+    ).length;
+    const rejectedCount = appointments.filter(
+      (app) => app.status === "rejected"
+    ).length;
     const totalCount = appointments.length;
 
     // Generate signed URLs for patient profile pictures
     const appointmentsWithSignedUrls = await Promise.all(
       appointments.map(async (appointment: any) => {
         let patientWithUrls = appointment.patientId;
-        
+
         if (appointment.patientId && appointment.patientId.profilePic) {
           try {
-            patientWithUrls = await generateSignedUrlsForUser(appointment.patientId);
+            patientWithUrls = await generateSignedUrlsForUser(
+              appointment.patientId
+            );
           } catch (error) {
-            console.warn("Failed to generate signed URL for patient profile pic:", error);
+            console.warn(
+              "Failed to generate signed URL for patient profile pic:",
+              error
+            );
           }
         }
 
@@ -762,9 +836,9 @@ export const getDoctorAppointmentStats = async (
         total: totalCount,
         pending: pendingCount,
         accepted: acceptedCount,
-        rejected: rejectedCount
+        rejected: rejectedCount,
       },
-      appointments: appointmentsWithSignedUrls
+      appointments: appointmentsWithSignedUrls,
     };
 
     res.status(200).json({
@@ -782,7 +856,10 @@ export const getDoctorAppointmentStats = async (
   }
 };
 
-export const getDoctorDashboard = async (req: Request, res: Response): Promise<void> => {
+export const getDoctorDashboard = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const doctorId = req.user.id; // Get doctor's user ID from auth middleware
 
@@ -799,37 +876,43 @@ export const getDoctorDashboard = async (req: Request, res: Response): Promise<v
 
     // Get all appointments for this doctor
     const [appointments, emergencyAppointments] = await Promise.all([
-      OnlineAppointment.find({ 
-        doctorId: doctor._id 
+      OnlineAppointment.find({
+        doctorId: doctor._id,
       })
-      .populate({
-        path: "patientId",
-        select: "firstName lastName profilePic",
+        .populate({
+          path: "patientId",
+          select: "firstName lastName profilePic",
+        })
+        .sort({ "slot.day": -1, "slot.time.start": -1 }), // Sort by most recent first
+      EmergencyAppointment.find({
+        doctorId: doctor._id,
       })
-      .sort({ "slot.day": -1, "slot.time.start": -1 }), // Sort by most recent first
-      EmergencyAppointment.find({ 
-        doctorId: doctor._id 
-      })
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode phone email profilePic",
-        },
-      })
-      .sort({ createdAt: -1 }) // Sort by newest first
+        .populate({
+          path: "patientId",
+          select: "userId",
+          populate: {
+            path: "userId",
+            select: "firstName lastName countryCode phone email profilePic",
+          },
+        })
+        .sort({ createdAt: -1 }), // Sort by newest first
     ]);
 
     // Calculate appointment counts by status
     const totalAppointments = appointments.length;
-    const pendingAppointments = appointments.filter(app => app.status === "pending").length;
-    const acceptedAppointments = appointments.filter(app => app.status === "accepted").length;
-    const rejectedAppointments = appointments.filter(app => app.status === "rejected").length;
+    const pendingAppointments = appointments.filter(
+      (app) => app.status === "pending"
+    ).length;
+    const acceptedAppointments = appointments.filter(
+      (app) => app.status === "accepted"
+    ).length;
+    const rejectedAppointments = appointments.filter(
+      (app) => app.status === "rejected"
+    ).length;
 
     // Get unique patient count
     const uniquePatientIds = new Set();
-    appointments.forEach(appointment => {
+    appointments.forEach((appointment) => {
       if (appointment.patientId) {
         uniquePatientIds.add(appointment.patientId._id.toString());
       }
@@ -851,7 +934,7 @@ export const getDoctorDashboard = async (req: Request, res: Response): Promise<v
         total: 0, // Set to 0 as requested
         average: 0,
       },
-      emergencyAppointments: emergencyAppointments
+      emergencyAppointments: emergencyAppointments,
     };
 
     res.status(200).json({
@@ -934,7 +1017,9 @@ export const updateDoctorActiveStatus = async (
             { $set: { isActive: false } },
             { new: true }
           );
-          console.log(`Doctor ${doctorId} automatically set to inactive after 1 hour`);
+          console.log(
+            `Doctor ${doctorId} automatically set to inactive after 1 hour`
+          );
           doctorTimeouts.delete(doctorId);
         } catch (error) {
           console.error(`Failed to auto-disable doctor ${doctorId}:`, error);
@@ -947,11 +1032,15 @@ export const updateDoctorActiveStatus = async (
 
     res.status(200).json({
       success: true,
-      message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". Will automatically disable after 1 hour." : ""}`,
+      message: `Doctor status updated to ${isActive ? "active" : "inactive"}${
+        isActive ? ". Will automatically disable after 1 hour." : ""
+      }`,
       data: {
         isActive: updatedDoctor.isActive,
         activationTime: isActive ? activationTime : null,
-        deactivationTime: isActive ? new Date(activationTime.getTime() + 60 * 60 * 1000) : null // 1 hour from activation
+        deactivationTime: isActive
+          ? new Date(activationTime.getTime() + 60 * 60 * 1000)
+          : null, // 1 hour from activation
       },
     });
   } catch (error: any) {
