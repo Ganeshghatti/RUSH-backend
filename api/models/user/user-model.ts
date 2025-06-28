@@ -52,7 +52,7 @@ const userSchema = new Schema(
     },
     bankDetails: {
       accountName: { type: String },
-      accountNumber: { type: String, unique: true, sparse: true },
+      accountNumber: { type: String, sparse: true },
       ifscCode: { type: String },
       bankName: { type: String },
       bankAddress: { type: String },
