@@ -27,7 +27,7 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
 
     // Remove '+' from phone number
     const formattedPhoneNumber = phoneNumber.replace('+', '');
-    console.log(formattedPhoneNumber);
+    console.log("formattedPhoneNumber",formattedPhoneNumber);
 
     const message = encodeURIComponent(
       `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`
@@ -121,7 +121,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       { phone, otp: newOTP },
       { upsert: true, new: true }
     );
-
+    console.log(phone);
     await sendSMSV3(phone, newOTP);
 
     res.status(200).json({
