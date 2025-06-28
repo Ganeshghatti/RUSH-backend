@@ -26,7 +26,7 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
     }
 
     // Remove '+' from phone number
-    const formattedPhoneNumber = phoneNumber.replace('+', '');
+    const formattedPhoneNumber = phoneNumber.replace('+91', '');
     console.log("formattedPhoneNumber",formattedPhoneNumber);
 
     const message = encodeURIComponent(
