@@ -47,10 +47,10 @@ const doctorSchema = new Schema({
     {
       startDate: { type: Date, required: true, default: Date.now },
       endDate: { type: Date },
-      paymentDetails: {
-        upiId: { type: String },
-        paymentImage: { type: String },
-      },
+      // paymentDetails: {
+      //   upiId: { type: String },
+      //   paymentImage: { type: String },
+      // },
       SubscriptionId: {
         type: Schema.Types.ObjectId,
         ref: "DoctorSubscription",

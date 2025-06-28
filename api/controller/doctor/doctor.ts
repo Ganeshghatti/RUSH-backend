@@ -441,7 +441,7 @@ export const subscribeDoctor = async (
     const { subscriptionId } = formData;
     const { doctorId } = req.params;
 
-    if (!doctorId || !subscriptionId ) {
+    if (!doctorId || !subscriptionId) {
       res.status(400).json({
         success: false,
         message:
@@ -482,36 +482,36 @@ export const subscribeDoctor = async (
     }
 
     // Calculate end date based on subscription duration
-    const startDate = new Date();
-    let endDate: Date | undefined;
+    // const startDate = new Date();
+    // let endDate: Date | undefined;
 
-    switch (subscription.duration) {
-      case "1 month":
-        endDate = new Date(startDate);
-        endDate.setMonth(startDate.getMonth() + 1);
-        break;
-      case "3 months":
-        endDate = new Date(startDate);
-        endDate.setMonth(startDate.getMonth() + 3);
-        break;
-      case "1 year":
-        endDate = new Date(startDate);
-        endDate.setFullYear(startDate.getFullYear() + 1);
-        break;
-      case "2 years":
-        endDate = new Date(startDate);
-        endDate.setFullYear(startDate.getFullYear() + 2);
-        break;
-      case "lifetime":
-        endDate = undefined; // No end date for lifetime
-        break;
-      default:
-        res.status(400).json({
-          success: false,
-          message: "Invalid subscription duration",
-        });
-        return;
-    }
+    // switch (subscription.duration) {
+    //   case "1 month":
+    //     endDate = new Date(startDate);
+    //     endDate.setMonth(startDate.getMonth() + 1);
+    //     break;
+    //   case "3 months":
+    //     endDate = new Date(startDate);
+    //     endDate.setMonth(startDate.getMonth() + 3);
+    //     break;
+    //   case "1 year":
+    //     endDate = new Date(startDate);
+    //     endDate.setFullYear(startDate.getFullYear() + 1);
+    //     break;
+    //   case "2 years":
+    //     endDate = new Date(startDate);
+    //     endDate.setFullYear(startDate.getFullYear() + 2);
+    //     break;
+    //   case "lifetime":
+    //     endDate = undefined; // No end date for lifetime
+    //     break;
+    //   default:
+    //     res.status(400).json({
+    //       success: false,
+    //       message: "Invalid subscription duration",
+    //     });
+    //     return;
+    // }
 
     const options = {
       amount: subscription.price * 100,
@@ -567,10 +567,34 @@ export const subscribeDoctor = async (
   }
 };
 
-export const verifyPaymentSubscription = async (req: Request, res: Response) => {
+export const verifyPaymentSubscription = async (
+  req: Request,
+  res: Response
+) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
-      req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      subscriptionId,
+    } = req.body;
+
+    const userId = req.user.id;
+
+    if (
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature ||
+      !subscriptionId ||
+      !userId
+    ) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, userId",
+      });
+      return;
+    }
     const sign = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSign = crypto
       .createHmac("sha256", process.env.RAZ_KEY_SECRET || "")
@@ -578,9 +602,92 @@ export const verifyPaymentSubscription = async (req: Request, res: Response) => 
       .digest("hex");
     if (razorpay_signature === expectedSign) {
       // Payment is verified
-      res.status(200).json({ message: "Payment verified successfully" });
+      const doctor: any = await Doctor.findOne({ userId: userId });
+
+      if (!doctor) {
+        res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+        return;
+      }
+
+      const subscription = await DoctorSubscription.findById(subscriptionId);
+      if (!subscription) {
+        res.status(404).json({
+          success: false,
+          message: "Subscription plan not found",
+        });
+        return;
+      }
+
+      if (!subscription.isActive) {
+        res.status(400).json({
+          success: false,
+          message: "Subscription plan is not active",
+        });
+        return;
+      }
+
+      const startDate = new Date();
+      let endDate: Date | undefined;
+
+      switch (subscription.duration) {
+        case "1 month":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 1);
+          break;
+        case "3 months":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 3);
+          break;
+        case "20 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 20);
+          break;
+        case "15 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 15);
+          break;
+        case "10 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 10);
+          break;
+        case "5 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 5);
+          break;
+        case "lifetime":
+          endDate = undefined; // No end date for lifetime
+          break;
+        default:
+          res.status(400).json({
+            success: false,
+            message: "Invalid subscription duration",
+          });
+          return;
+      }
+
+      const newSubscription = {
+        startDate: new Date(),
+        endDate,
+        SubscriptionId: subscription._id,
+      };
+
+      doctor.subscriptions.push(newSubscription);
+
+      await doctor.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Payment verified successfully",
+        data: doctor,
+      });
     } else {
-      res.status(400).json({ error: "Invalid payment signature" });
+      res.status(400).json({
+        success: false,
+        message: "Invalid payment signature",
+      });
     }
   } catch (err: any) {
     res.status(500).json({ error: (err as Error).message });
