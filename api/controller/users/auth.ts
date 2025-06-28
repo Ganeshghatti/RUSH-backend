@@ -25,12 +25,15 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
       throw new Error("API key or Client ID not defined in environment variables.");
     }
 
+    // Remove '+' from phone number
+    const formattedPhoneNumber = phoneNumber.replace('+', '');
+    console.log(formattedPhoneNumber);
+
     const message = encodeURIComponent(
       `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`
     );
 
-    console.log(phoneNumber)
-    const url = `https://api.mylogin.co.in/api/v2/SendSMS?SenderId=RUSHDR&Message=${message}&MobileNumbers=${phoneNumber}&TemplateId=1707175033225166571&ApiKey=${apiKey}&ClientId=${clientId}`;
+    const url = `https://api.mylogin.co.in/api/v2/SendSMS?SenderId=RUSHDR&Message=${message}&MobileNumbers=${formattedPhoneNumber}&TemplateId=1707175033225166571&ApiKey=${apiKey}&ClientId=${clientId}`;
 
     const response = await fetch(url, {
       method: "GET",
