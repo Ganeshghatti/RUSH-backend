@@ -29,6 +29,7 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
       `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`
     );
 
+    console.log(phoneNumber)
     const url = `https://api.mylogin.co.in/api/v2/SendSMS?SenderId=RUSHDR&Message=${message}&MobileNumbers=${phoneNumber}&TemplateId=1707175033225166571&ApiKey=${apiKey}&ClientId=${clientId}`;
 
     const response = await fetch(url, {
