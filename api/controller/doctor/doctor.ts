@@ -453,7 +453,7 @@ export const subscribeDoctor = async (
     // Find doctor
     const doctor: any = await Doctor.findOne({ userId: doctorId }).populate({
       path: "userId",
-      select: "firstName lastName email phone",
+      select: "firstName lastName email phone countryCode",
     });
 
     if (!doctor) {
@@ -488,11 +488,6 @@ export const subscribeDoctor = async (
       amount: subscription.price * 100,
       currency: "INR",
       receipt: "receipt_" + Math.random().toString(36).substring(7),
-      prefill: {
-        name: doctor.userId.firstName + " " + doctor.userId.lastName,
-        email: doctor.userId.email,
-        contact: doctor.userId.phone,
-      }
     };
 
     const order = await razorpay.orders.create(options);
@@ -502,7 +497,15 @@ export const subscribeDoctor = async (
     res.status(200).json({
       success: true,
       message: "Doctor subscribed successfully",
-      data: order,
+      data: {
+        order,
+        prefill: {
+          name: doctor.userId.firstName + " " + doctor.userId.lastName,
+          email: doctor.userId.email,
+          contact: doctor.userId.phone,
+          countryCode: doctor.userId.countryCode || "+91",
+        }
+      },
     });
   } catch (error) {
     console.error("Error in subscribing doctor:", error);
