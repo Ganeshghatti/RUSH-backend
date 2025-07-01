@@ -451,7 +451,10 @@ export const subscribeDoctor = async (
     }
 
     // Find doctor
-    const doctor: any = await Doctor.findOne({ userId: doctorId });
+    const doctor: any = await Doctor.findOne({ userId: doctorId }).populate({
+      path: "userId",
+      select: "firstName lastName email phone countryCode",
+    });
 
     if (!doctor) {
       res.status(404).json({
@@ -481,38 +484,6 @@ export const subscribeDoctor = async (
       return;
     }
 
-    // Calculate end date based on subscription duration
-    // const startDate = new Date();
-    // let endDate: Date | undefined;
-
-    // switch (subscription.duration) {
-    //   case "1 month":
-    //     endDate = new Date(startDate);
-    //     endDate.setMonth(startDate.getMonth() + 1);
-    //     break;
-    //   case "3 months":
-    //     endDate = new Date(startDate);
-    //     endDate.setMonth(startDate.getMonth() + 3);
-    //     break;
-    //   case "1 year":
-    //     endDate = new Date(startDate);
-    //     endDate.setFullYear(startDate.getFullYear() + 1);
-    //     break;
-    //   case "2 years":
-    //     endDate = new Date(startDate);
-    //     endDate.setFullYear(startDate.getFullYear() + 2);
-    //     break;
-    //   case "lifetime":
-    //     endDate = undefined; // No end date for lifetime
-    //     break;
-    //   default:
-    //     res.status(400).json({
-    //       success: false,
-    //       message: "Invalid subscription duration",
-    //     });
-    //     return;
-    // }
-
     const options = {
       amount: subscription.price * 100,
       currency: "INR",
@@ -523,39 +494,18 @@ export const subscribeDoctor = async (
 
     console.log("order", order);
 
-    // Handle payment image upload to S3
-    // const paymentImageKey = `doctors/subscriptions/payments/${Date.now()}-${
-    //   req.file.originalname
-    // }`;
-    // const paymentImageUrl = await UploadImgToS3({
-    //   key: paymentImageKey,
-    //   fileBuffer: req.file.buffer,
-    //   fileName: req.file.originalname,
-    // });
-
-    // Create new subscription entry
-    // const newSubscription = {
-    //   startDate: new Date(),
-    //   endDate,
-    //   paymentDetails: {
-    //     upiId: paymentDetails.upiId,
-    //     paymentImage: "", // paymentImageUrl,
-    //   },
-    //   SubscriptionId: subscription._id,
-    // };
-
-    // console.log("newSubscription", newSubscription);
-
-    // Add subscription to doctor's subscriptions array
-    // doctor.subscriptions.push(newSubscription);
-
-    // Save the updated doctor document
-    // await doctor.save();
-
     res.status(200).json({
       success: true,
       message: "Doctor subscribed successfully",
-      data: order,
+      data: {
+        order,
+        prefill: {
+          name: doctor.userId.firstName + " " + doctor.userId.lastName,
+          email: doctor.userId.email,
+          contact: doctor.userId.phone,
+          countryCode: doctor.userId.countryCode || "+91",
+        }
+      },
     });
   } catch (error) {
     console.error("Error in subscribing doctor:", error);

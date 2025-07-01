@@ -162,8 +162,8 @@ export const getAllEmergencyAppointments = async (
   res: Response
 ): Promise<void> => {
   try {
-    // Find all emergency appointments with filters
-    const appointments = await EmergencyAppointment.find()
+    // Find all emergency appointments with pending status
+    const appointments = await EmergencyAppointment.find({ status: "pending" })
       .populate({
         path: "patientId",
         select: "userId",
@@ -366,3 +366,5 @@ export const acceptEmergencyAppointment = async (
     });
   }
 };
+
+

@@ -6,7 +6,6 @@ import Doctor from "../../models/user/doctor-model";
 import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
 import { generateSignedUrlsForSubscriptions, generateSignedUrlsForSubscription } from "../../utils/signed-url";
 
-
 export const createSubscription = async (
   req: Request,
   res: Response

@@ -175,8 +175,7 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
     // If no condition-based recommendations, get general recommended doctors
     if (recommendedDoctors.length === 0) {
       recommendedDoctors = await Doctor.find({
-        // status: "approved",
-        "onlineAppointment.isActive": true
+        status: "approved",
       })
       .populate('userId', 'firstName lastName profilePic')
       .select('userId specialization experience onlineAppointment')
