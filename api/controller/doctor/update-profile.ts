@@ -179,6 +179,9 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
     const { user, doctor } = validationResult.data;
 
+    console.log("user to update", user)
+    console.log("doctor to update", doctor)
+
     // Find the doctor record using userId
     const existingDoctor = await Doctor.findOne({ userId }).populate("userId");
     if (!existingDoctor) {
@@ -192,12 +195,21 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
     const updatePromises = [];
 
     // Helper function to process image fields and convert URLs to keys
-    const processImageFields = async (data: any): Promise<any> => {
+    // Fixed to exclude date fields and other non-image fields
+    const processImageFields = async (data: any, parentKey?: string): Promise<any> => {
       if (!data || typeof data !== 'object') return data;
       
       const processedData = { ...data };
       
+      // List of fields that should NOT be processed for image URLs
+      const excludeFields = ['dob', 'year', 'fromYear', 'toYear', 'minute', 'price'];
+      
       for (const [key, value] of Object.entries(processedData)) {
+        // Skip processing for excluded fields
+        if (excludeFields.includes(key)) {
+          continue;
+        }
+        
         if (typeof value === 'string' && value.includes('https://')) {
           // This is likely a presigned URL, convert to key
           const extractedKey = await getKeyFromSignedUrl(value);
@@ -207,30 +219,29 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
         } else if (Array.isArray(value)) {
           // Process arrays recursively
           processedData[key] = await Promise.all(
-            value.map(async (item) => await processImageFields(item))
+            value.map(async (item) => await processImageFields(item, key))
           );
         } else if (typeof value === 'object' && value !== null) {
           // Process nested objects recursively
-          processedData[key] = await processImageFields(value);
+          processedData[key] = await processImageFields(value, key);
         }
       }
       
       return processedData;
     };
 
-
     // Update User model if user data is provided
     if (user && Object.keys(user).length > 0) {
       const userUpdateData: any = { ...user };
       
-      // Convert dob string to Date if provided
-      if (user.dob) {
+      // Convert dob string to Date if provided (do this BEFORE processing image fields)
+      if (user?.dob && typeof user?.dob === "string") {
         userUpdateData.dob = new Date(user.dob);
       }
 
-      // Process image fields in user data
+      // Process image fields in user data (dob is now a Date object, so won't be processed)
       const processedUserData = await processImageFields(userUpdateData);
-      console.log("key only urls", processedUserData)
+      console.log("processed user data", processedUserData)
 
       updatePromises.push(
         User.findByIdAndUpdate(
@@ -246,7 +257,7 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
       // Process image fields in doctor data
       const processedDoctorData = await processImageFields(doctor);
 
-      console.log("key only urls", processedDoctorData)
+      console.log("processed doctor data", processedDoctorData)
 
       updatePromises.push(
         Doctor.findByIdAndUpdate(
