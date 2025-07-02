@@ -160,7 +160,8 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
         );
         
         recommendedDoctors = await Doctor.find({
-          status: "approved",
+          status: "approved",  // Only show approved doctors
+          subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
           $or: [
             { specialization: { $in: patientConditions } },
             { "registration.specialization": { $in: patientConditions } }
@@ -175,7 +176,8 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
     // If no condition-based recommendations, get general recommended doctors
     if (recommendedDoctors.length === 0) {
       recommendedDoctors = await Doctor.find({
-        status: "approved",
+        status: "approved",  // Only show approved doctors
+        subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
       })
       .populate('userId', 'firstName lastName profilePic')
       .select('userId specialization experience onlineAppointment')
