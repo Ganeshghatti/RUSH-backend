@@ -27,7 +27,7 @@ router
     updateDoctorOnlineAppointment as RequestHandler
   );
 
-router
+router   
   .route("/doctor/patients")
   .get(
     verifyToken as RequestHandler,

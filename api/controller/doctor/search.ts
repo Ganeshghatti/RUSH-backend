@@ -23,7 +23,8 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
 
     // Step 2: Doctor filter for matched userIds
     const doctorFilter: any = {
-      status: "approved"  // Only show approved doctors
+      status: "approved",  // Only show approved doctors
+      subscriptions: { $exists: true, $not: { $size: 0 } } // Only show doctors with at least one subscription
     };
     if (matchedUserIds.length > 0) {
       doctorFilter.userId = { $in: matchedUserIds };
@@ -45,7 +46,8 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
 
     // Step 3: Doctor filter for specialization match
     const specializationFilter: any = {
-      status: "approved"  // Only show approved doctors
+      status: "approved",  // Only show approved doctors
+      subscriptions: { $exists: true, $not: { $size: 0 } } // Only show doctors with at least one subscription
     };
     if (queryRegex) {
       specializationFilter.specialization = { $regex: queryRegex };
@@ -74,7 +76,10 @@ export const searchDoctor = async (req: Request, res: Response): Promise<void> =
     // Step 5: Fallback if empty
     let finalDoctors = combinedDoctors;
     if (finalDoctors.length === 0 && !query && !gender && !appointment) {
-      finalDoctors = await Doctor.find({ status: "approved" })  // Only show approved doctors
+      finalDoctors = await Doctor.find({ 
+        status: "approved",  // Only show approved doctors
+        subscriptions: { $exists: true, $not: { $size: 0 } } // Only show doctors with at least one subscription
+      })
         .select('-password')
         .populate({
           path: 'userId',
