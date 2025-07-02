@@ -13,7 +13,7 @@ const client = twilio(
 );
 
 // Helper function to convert media keys and profile pic to signed URLs
-const convertMediaKeysToUrls = async (appointments: any[]) => {
+export const convertMediaKeysToUrls = async (appointments: any[]) => {
   return Promise.all(
     appointments.map(async (appointment) => {
       const appointmentObj = appointment.toObject();

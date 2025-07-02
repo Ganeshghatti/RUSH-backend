@@ -5,6 +5,8 @@ import Patient from "../../models/user/patient-model";
 import Doctor from "../../models/user/doctor-model";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
+import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
+import { convertMediaKeysToUrls } from "../appointment/emergency-appointment";
 
 export const patientOnboard = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -114,8 +116,28 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
       return;
     }
 
+    // Find all emergency appointments for this patient
+    const appointments = await EmergencyAppointment.find({
+      patientId: patient._id,
+      status: "in-progress"
+    })
+      .populate({
+        path: "patientId",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode phone email profilePic",
+        },
+      })
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    // Convert media keys to signed URLs
+    const emergencyAppointmentsWithUrls = await convertMediaKeysToUrls(appointments);
+
     const currentDate = new Date();
-    const onlineAppointmentCounts = await Promise.all([
+
+    // Get online appointment counts
+    const [upcomingOnline, completedOnline, cancelledOnline, allOnline] = await Promise.all([
       // Upcoming online appointments (accepted and time is in future)
       OnlineAppointment.countDocuments({
         patientId: userId,
@@ -139,11 +161,35 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
       })
     ]);
 
+    // Get emergency appointment counts
+    const [pendingEmergency, inProgressEmergency, completedEmergency, allEmergency] = await Promise.all([
+      // Pending emergency appointments
+      EmergencyAppointment.countDocuments({
+        patientId: patient._id,
+        status: "pending"
+      }),
+      // In-progress emergency appointments
+      EmergencyAppointment.countDocuments({
+        patientId: patient._id,
+        status: "in-progress"
+      }),
+      // Completed emergency appointments
+      EmergencyAppointment.countDocuments({
+        patientId: patient._id,
+        status: "completed"
+      }),
+      // All emergency appointments
+      EmergencyAppointment.countDocuments({
+        patientId: patient._id
+      })
+    ]);
+
+    // Combine both appointment types counts
     const appointmentCounts = {
-      upcoming: onlineAppointmentCounts[0],
-      completed: onlineAppointmentCounts[1],
-      cancelled: onlineAppointmentCounts[2],
-      all: onlineAppointmentCounts[3]
+      upcoming: upcomingOnline + pendingEmergency, // Include both pending and in-progress emergency as upcoming
+      completed: completedOnline + completedEmergency,
+      cancelled: cancelledOnline, // Only online appointments can be cancelled
+      all: allOnline + allEmergency // Total of all appointments
     };
 
     // Get recommended doctors based on patient's health conditions
@@ -179,30 +225,34 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
         status: "approved",  // Only show approved doctors
         subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
       })
-      .populate('userId', 'firstName lastName profilePic')
-      .select('userId specialization experience onlineAppointment')
-      .sort({ createdAt: -1 })
-      .limit(10);
+        .populate('userId', 'firstName lastName profilePic')
+        .select('userId specialization experience onlineAppointment')
+        .limit(10);
     }
+
+    // Process recommended doctors to add signed URLs
+    const processedDoctors = await Promise.all(
+      recommendedDoctors.map(doctor => generateSignedUrlsForDoctor(doctor))
+    );
 
     res.status(200).json({
       success: true,
       message: "Patient dashboard data retrieved successfully",
       data: {
         appointmentCounts,
-        recommendedDoctors: recommendedDoctors
+        emergencyAppointments: emergencyAppointmentsWithUrls,
+        recommendedDoctors: processedDoctors
       }
     });
-
   } catch (error) {
-    console.error("Error in getting patient dashboard:", error);
+    console.error("Error getting patient dashboard:", error);
     res.status(500).json({
       success: false,
       message: "Failed to get patient dashboard data",
       error: (error as Error).message,
     });
   }
-}
+};
 
 export const getAppointmentsDoctorForPatient = async (req: Request, res: Response): Promise<void> => {
   try {

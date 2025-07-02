@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import User from "../../models/user/user-model";
 import Doctor from "../../models/user/doctor-model";
 import DoctorSubscription from "../../models/subscription-model";
-import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
+import { UploadImgToS3, GetSignedUrl } from "../../utils/aws_s3/upload-media";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
@@ -22,6 +22,44 @@ const razorpay = new Razorpay({
 
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map<string, NodeJS.Timeout>();
+
+// Define interfaces for populated fields
+interface UserDocument {
+  firstName: string;
+  lastName: string;
+  countryCode: string;
+  phone: string;
+  email: string;
+  profilePic?: string;
+}
+
+interface PatientDocument {
+  userId: UserDocument;
+}
+
+interface EmergencyAppointmentPopulated {
+  title: string;
+  description?: string;
+  patientId: {
+    userId: {
+      firstName: string;
+      lastName: string;
+      countryCode: string;
+      phone: string;
+      email: string;
+      profilePic?: string;
+    };
+  };
+  doctorId: mongoose.Types.ObjectId;
+  media?: string[];
+  location: string;
+  contactNumber?: string;
+  name?: string;
+  status: "pending" | "in-progress" | "completed";
+  roomName?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export const doctorOnboardV2 = async (
   req: Request,
@@ -932,7 +970,7 @@ export const getDoctorDashboard = async (
     }
 
     // Get all appointments for this doctor
-    const [appointments, emergencyAppointments] = await Promise.all([
+    const [onlineAppointments, emergencyAppointments] = await Promise.all([
       OnlineAppointment.find({
         doctorId: doctor._id,
       })
@@ -955,43 +993,74 @@ export const getDoctorDashboard = async (
         .sort({ createdAt: -1 }), // Sort by newest first
     ]);
 
-    // Calculate appointment counts by status
-    const totalAppointments = appointments.length;
-    const pendingAppointments = appointments.filter(
-      (app) => app.status === "pending"
-    ).length;
-    const acceptedAppointments = appointments.filter(
-      (app) => app.status === "accepted"
-    ).length;
-    const rejectedAppointments = appointments.filter(
-      (app) => app.status === "rejected"
-    ).length;
+    // Calculate online appointment counts by status
+    const onlineStats = {
+      total: onlineAppointments.length,
+      pending: onlineAppointments.filter((app) => app.status === "pending").length,
+      accepted: onlineAppointments.filter((app) => app.status === "accepted").length,
+      rejected: onlineAppointments.filter((app) => app.status === "rejected").length,
+    };
 
-    // Get unique patient count
-    const uniquePatientIds = new Set();
-    appointments.forEach((appointment) => {
-      if (appointment.patientId) {
-        uniquePatientIds.add(appointment.patientId._id.toString());
-      }
-    });
-    const totalPatients = uniquePatientIds.size;
+    // Calculate emergency appointment counts by status
+    const emergencyStats = {
+      total: emergencyAppointments.length,
+      pending: emergencyAppointments.filter((app) => app.status === "pending").length,
+      inProgress: emergencyAppointments.filter((app) => app.status === "in-progress").length,
+      completed: emergencyAppointments.filter((app) => app.status === "completed").length,
+    };
+
+    // Calculate total appointments across both types
+    const totalStats = {
+      total: onlineStats.total + emergencyStats.total,
+      pending: onlineStats.pending + emergencyStats.pending,
+      active: onlineStats.accepted + emergencyStats.inProgress,
+      completed: onlineStats.rejected + emergencyStats.completed, // Including rejected online appointments in completed count
+    };
+
+    // Process emergency appointments to add presigned URLs
+    const processedEmergencyAppointments = await Promise.all(
+      emergencyAppointments.map(async (appointment) => {
+        const appointmentObj = appointment.toObject() as any;
+        
+        // Generate presigned URLs for media array if it exists
+        if (Array.isArray(appointmentObj.media)) {
+          appointmentObj.media = await Promise.all(
+            appointmentObj.media.map(async (mediaKey: any) => {
+              if (mediaKey && typeof mediaKey === 'string' && mediaKey.trim() !== '') {
+                try {
+                  return await GetSignedUrl(mediaKey);
+                } catch (error) {
+                  console.warn("Could not generate signed URL for media:", mediaKey, error);
+                  return mediaKey;
+                }
+              }
+              return mediaKey;
+            })
+          );
+        }
+
+        // Generate presigned URL for patient's profile picture if it exists
+        if (appointmentObj.patientId?.userId?.profilePic) {
+          try {
+            appointmentObj.patientId.userId.profilePic = await GetSignedUrl(appointmentObj.patientId.userId.profilePic);
+          } catch (error) {
+            console.warn("Could not generate signed URL for profile picture:", appointmentObj.patientId.userId.profilePic, error);
+          }
+        }
+
+        return appointmentObj;
+      })
+    );
 
     // Prepare dashboard data
     const dashboardData = {
-      appointmentStats: {
-        total: totalAppointments,
-        pending: pendingAppointments,
-        accepted: acceptedAppointments,
-        rejected: rejectedAppointments,
-      },
-      patientStats: {
-        totalPatients: totalPatients,
-      },
+      appointmentStats: totalStats,
       reviews: {
         total: 0, // Set to 0 as requested
         average: 0,
       },
-      emergencyAppointments: emergencyAppointments,
+      // recentOnlineAppointments: onlineAppointments.slice(0, 5), // Get 5 most recent appointments
+      recentEmergencyAppointments: processedEmergencyAppointments.slice(0, 5),
     };
 
     res.status(200).json({
