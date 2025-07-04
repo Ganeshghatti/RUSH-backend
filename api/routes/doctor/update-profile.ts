@@ -5,7 +5,12 @@ import {
   updateDoctorOnlineAppointment,
 } from "../../controller/doctor/update-profile";
 import { RequestHandler } from "express";
-import { getAllPatientsForDoctor, getDoctorAppointmentStats, getDoctorDashboard, updateDoctorActiveStatus } from "../../controller/doctor/doctor";
+import {
+  getAllPatientsForDoctor,
+  getDoctorAppointmentStats,
+  getDoctorDashboard,
+  updateDoctorActiveStatus,
+} from "../../controller/doctor/doctor";
 
 const router = Router();
 
@@ -27,7 +32,7 @@ router
     updateDoctorOnlineAppointment as RequestHandler
   );
 
-router   
+router
   .route("/doctor/patients")
   .get(
     verifyToken as RequestHandler,

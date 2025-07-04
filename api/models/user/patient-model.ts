@@ -21,7 +21,7 @@ const patientSchema = new Schema({
         enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
       },
       conditions: [{ type: String }],
-      date: { type: Date, default: Date.now }, // Date when metrics were recorded
+      reportDate: { type: Date, default: Date.now }, 
     },
   ],
 });

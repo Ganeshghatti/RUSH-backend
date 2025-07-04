@@ -506,7 +506,7 @@ export const findCurrentUser = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { id } = req.user;
+    const { id, role } = req.user;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       res.status(400).json({
@@ -542,13 +542,16 @@ export const findCurrentUser = async (
     if (populatePaths.length > 0) {
       user = await user.populate(populatePaths);
     }
-
+    
     const userWithUrls = await generateSignedUrlsForUser(user);
 
     res.status(200).json({
       success: true,
       message: "User retrieved successfully",
-      data: userWithUrls,
+      data: {
+        currentRole: role,
+        ...userWithUrls,
+      },
     });
   } catch (error) {
     console.error("Error in finding user:", error);
