@@ -117,10 +117,11 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
       return;
     }
 
+    // pending
     // Find all emergency appointments for this patient
     const appointments = await EmergencyAppointment.find({
       patientId: patient._id,
-      status: "in-progress"
+      status: { $in: ["in-progress", "pending"] }
     })
       .populate({
         path: "patientId",
