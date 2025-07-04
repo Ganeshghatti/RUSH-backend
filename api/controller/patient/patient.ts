@@ -7,6 +7,7 @@ import OnlineAppointment from "../../models/appointment/online-appointment-model
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import { convertMediaKeysToUrls } from "../appointment/emergency-appointment";
+import { addHealthMetricsSchema } from "../../validation/validation";
 
 export const patientOnboard = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -293,3 +294,73 @@ export const getAppointmentsDoctorForPatient = async (req: Request, res: Respons
     });
   }
 }
+
+export const addHealthMetrics = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user.id;
+
+    // Validate request body
+    const validationResult = addHealthMetricsSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validationResult.error.errors,
+      });
+      return;
+    }
+
+    const { bloodPressure, bloodGlucose, weight, height, bloodGroup, conditions } = validationResult.data;
+
+    // Find patient by userId
+    const patient = await Patient.findOne({ userId });
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+      return;
+    }
+
+    // Create new health metric entry
+    const newHealthMetric = {
+      bloodPressure,
+      bloodGlucose,
+      weight,
+      height,
+      bloodGroup,
+      conditions,
+      reportDate: new Date(),
+    };
+
+    // Add health metric to patient's healthMetrics array
+    const updatedPatient = await Patient.findOneAndUpdate(
+      { userId },
+      { $push: { healthMetrics: newHealthMetric } },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedPatient) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to add health metrics",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Health metrics added successfully",
+      data: {
+        healthMetrics: updatedPatient.healthMetrics[updatedPatient.healthMetrics.length - 1]
+      },
+    });
+  } catch (error) {
+    console.error("Error adding health metrics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add health metrics",
+      error: (error as Error).message,
+    });
+  }
+};

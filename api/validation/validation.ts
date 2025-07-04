@@ -163,3 +163,22 @@ export const createEmergencyAppointmentSchema = z.object({
     .trim()
     .optional(),
 }).strict();
+
+// Health metrics validation schema
+export const addHealthMetricsSchema = z.object({
+  bloodPressure: z.string()
+    .optional(),
+  bloodGlucose: z.number()
+    .positive("Blood glucose must be a positive number")
+    .optional(),
+  weight: z.number()
+    .positive("Weight must be a positive number")
+    .optional(),
+  height: z.number()
+    .positive("Height must be a positive number")
+    .optional(),
+  bloodGroup: z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"])
+    .optional(),
+  conditions: z.array(z.string())
+    .optional(),
+}).strict();
