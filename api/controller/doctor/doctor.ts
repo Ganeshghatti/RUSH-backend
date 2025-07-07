@@ -524,8 +524,9 @@ export const subscribeDoctor = async (
 
     console.log("subscription active:", subscription);
 
+    // convert to amount to integer
     const options = {
-      amount: subscription.price * 100,
+      amount: Math.round(subscription.price * 100),
       currency: "INR",
       receipt: "receipt_" + Math.random().toString(36).substring(7),
     };
