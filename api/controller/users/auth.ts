@@ -91,7 +91,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Check if user exists and already has the specified role
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ phone });
     if (existingUser && existingUser.roles.includes(role)) {
       res.status(400).json({
         success: false,
@@ -100,6 +100,16 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const existingEmail = await User.findOne({ email });
+
+    if(existingEmail && existingEmail.phone !== phone){
+      res.status(400).json({
+        success: false,
+        message: "Email already used with different phone number",
+      });
+      return;
+    }
+    
     // Check if an OTP already exists for the phone number
     const existingOTP = await OTP.findOne({ phone });
 

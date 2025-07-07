@@ -502,7 +502,7 @@ export const subscribeDoctor = async (
       return;
     }
 
-    console.log("doctor", doctor);
+    console.log("doctor on subscribe: ", doctor);
 
     // Find subscription
     const subscription = await DoctorSubscription.findById(subscriptionId);
@@ -522,6 +522,8 @@ export const subscribeDoctor = async (
       return;
     }
 
+    console.log("subscription active:", subscription);
+
     const options = {
       amount: subscription.price * 100,
       currency: "INR",
@@ -530,7 +532,7 @@ export const subscribeDoctor = async (
 
     const order = await razorpay.orders.create(options);
 
-    console.log("order", order);
+    console.log("order created: ", order);
 
     res.status(200).json({
       success: true,
@@ -550,7 +552,7 @@ export const subscribeDoctor = async (
     res.status(500).json({
       success: false,
       message: "Failed to subscribe doctor",
-      error: (error as Error).message,
+      error: error,
     });
   }
 };
