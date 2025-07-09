@@ -42,6 +42,62 @@ export const getAllDoctors = async (
   }
 };
 
+export const getAllPatients = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    // Find all users who are patients and populate their patient data (excluding password)
+    const users = await User.find({ roles: "patient" })
+      .populate({
+        path: 'roleRefs.patient',
+        select: '-password'
+      });
+
+    if (!users || users.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: "No patient accounts found",
+      });
+      return;
+    }
+
+    // Filter out users where patient role ref failed to populate and generate signed URLs for basic user data only
+    const validUsers = users.filter(user => user.roleRefs?.patient && typeof user.roleRefs.patient === 'object');
+    
+    const usersWithSignedUrls = await Promise.all(
+      validUsers.map(async (user) => {
+        // Create a clone and only process basic user fields to avoid the signed URL error
+        const clone = JSON.parse(JSON.stringify(user));
+        
+        // Only handle profile picture for now
+        if (clone?.profilePic) {
+          try {
+            const { GetSignedUrl } = await import("../../utils/aws_s3/upload-media");
+            clone.profilePic = await GetSignedUrl(clone.profilePic);
+          } catch (error) {
+            console.warn("Could not generate signed URL for profile pic:", error);
+          }
+        }
+        
+        return clone;
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Patient accounts fetched successfully",
+      data: usersWithSignedUrls,
+    });
+  } catch (error) {
+    console.error("Error fetching patient accounts:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch patient accounts",
+    });
+  }
+};
+
 export const updateDoctorStatus = async (
   req: Request,
   res: Response

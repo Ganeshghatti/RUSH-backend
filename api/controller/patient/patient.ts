@@ -4,10 +4,59 @@ import User from "../../models/user/user-model";
 import Patient from "../../models/user/patient-model";
 import Doctor from "../../models/user/doctor-model";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
-import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
+import { generateSignedUrlsForDoctor, generateSignedUrlsForUser } from "../../utils/signed-url";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import { convertMediaKeysToUrls } from "../appointment/emergency-appointment";
 import { addHealthMetricsSchema } from "../../validation/validation";
+
+export const getPatientById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid patient ID format",
+      });
+      return;
+    }
+
+    // Find patient by patient ID and populate user details
+    const patient = await Patient.findById(id)
+      .populate({
+        path: 'userId',
+        select: '-password'
+      })
+      .select('-password');
+
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+      return;
+    }
+
+    // Generate signed URLs for the patient data
+    const patientWithSignedUrls = await generateSignedUrlsForUser(patient);
+
+    res.status(200).json({
+      success: true,
+      message: "Patient details fetched successfully",
+      data: patientWithSignedUrls,
+    });
+  } catch (error) {
+    console.error("Error fetching patient details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch patient details",
+    });
+  }
+};
 
 export const patientOnboard = async (req: Request, res: Response): Promise<void> => {
   try {

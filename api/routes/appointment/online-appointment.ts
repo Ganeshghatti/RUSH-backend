@@ -5,6 +5,7 @@ import {
   getDoctorAppointments,
   getPatientAppointments,
   updateAppointmentStatus,
+  getDoctorAppointmentByDate,
 } from "../../controller/appointment/online-appointment";
 import { createTwilioRoom } from "../../controller/appointment/create-room";
 import { createRoomAccessToken } from "../../controller/appointment/create-access-token";
@@ -28,7 +29,13 @@ router.route("/appointment/online/doctor")
     getDoctorAppointments as RequestHandler
   );
 
-
+// Route for doctors to get appointments by specific date
+router.route("/appointment/online/doctor/by-date")
+  .post(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    getDoctorAppointmentByDate as RequestHandler
+  );
 
 // Route for patients to get all their appointments
 router.route("/appointment/online/patient")
