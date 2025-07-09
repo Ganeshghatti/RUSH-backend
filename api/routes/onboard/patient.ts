@@ -1,3 +1,4 @@
+import { getPatientById } from './../../controller/patient/patient';
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { Router } from "express";
 import { patientOnboard, getPatientDashboard, getAppointmentsDoctorForPatient, addHealthMetrics } from "../../controller/patient/patient";
@@ -8,5 +9,6 @@ router.route("/onboard/patient/:userId").put(verifyToken, checkRole("patient"), 
 router.route("/dashboard").get(verifyToken, checkRole("patient"), getPatientDashboard);
 router.route("/appointments/doctor").get(verifyToken, checkRole("patient"), getAppointmentsDoctorForPatient);
 router.route("/health-metrics").post(verifyToken, checkRole("patient"), addHealthMetrics);
+router.route("/:id").get(verifyToken, getPatientById);
 
 export default router; 

@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
+import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import Doctor from "../../models/user/doctor-model";
+import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 
 // Book appointment by patient
@@ -164,8 +166,8 @@ export const getDoctorAppointments = async (
       return;
     }
 
-    // Find all appointments for this doctor
-    const appointments = await OnlineAppointment.find({ doctorId: doctor._id })
+    // Find all online appointments for this doctor
+    const onlineAppointments = await OnlineAppointment.find({ doctorId: doctor._id })
       .populate({
         path: "patientId",
         select: "firstName lastName countryCode gender email profilePic",
@@ -180,9 +182,30 @@ export const getDoctorAppointments = async (
       })
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
+    // Find all emergency appointments for this doctor
+    const emergencyAppointments = await EmergencyAppointment.find({ doctorId: doctor._id })
+      .populate({
+        path: "patientId",
+        select: "userId healthMetrics insurance mapLocation",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic phone dob address wallet",
+        },
+      })
+      .populate({
+        path: "doctorId",
+        select: "qualifications specialization userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
+      .sort({ createdAt: -1 }); // Sort by most recent created first
+
     res.status(200).json({
       success: true,
-      data: appointments,
+      onlineAppointment: onlineAppointments,
+      emergencyAppointment: emergencyAppointments,
       message: "Doctor appointments retrieved successfully",
     });
   } catch (error: any) {
@@ -201,10 +224,21 @@ export const getPatientAppointments = async (
   res: Response
 ): Promise<void> => {
   try {
-    const patientId = req.user.id; // Assuming the logged-in user is a patient
+    const userId = req.user.id; // Assuming the logged-in user is a patient
 
-    // Find all appointments for this patient
-    const appointments = await OnlineAppointment.find({ patientId })
+    // Find the patient record
+    const patient = await Patient.findOne({ userId });
+
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+      return;
+    }
+
+    // Find all online appointments for this patient (patientId references User)
+    const onlineAppointments = await OnlineAppointment.find({ patientId: userId })
       .populate({
         path: "patientId",
         select: "firstName lastName countryCode gender email profilePic",
@@ -219,9 +253,30 @@ export const getPatientAppointments = async (
       })
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
+    // Find all emergency appointments for this patient (patientId references Patient)
+    const emergencyAppointments = await EmergencyAppointment.find({ patientId: patient._id })
+      .populate({
+        path: "patientId",
+        select: "userId healthMetrics insurance mapLocation",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic phone dob address wallet",
+        },
+      })
+      .populate({
+        path: "doctorId",
+        select: "qualifications specialization userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
+      .sort({ createdAt: -1 }); // Sort by most recent created first
+
     res.status(200).json({
       success: true,
-      data: appointments,
+      onlineAppointment: onlineAppointments,
+      emergencyAppointment: emergencyAppointments,
       message: "Patient appointments retrieved successfully",
     });
   } catch (error: any) {
@@ -351,3 +406,103 @@ export const updateAppointmentStatus = async (
   }
 };
 
+export const getDoctorAppointmentByDate = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { date } = req.body; // Expected format: YYYY-MM-DD
+    const doctorId = req.user.id; // Assuming the logged-in user is a doctor
+
+    // Validate date parameter
+    if (!date) {
+      res.status(400).json({
+        success: false,
+        message: "Date is required in request body",
+      });
+      return;
+    }
+
+    // Find the doctor
+    const doctor = await Doctor.findOne({ userId: doctorId });
+
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
+
+    // Create date range for the specified date
+    const startDate = new Date(date as string);
+    const endDate = new Date(date as string);
+    endDate.setDate(endDate.getDate() + 1); // Next day
+
+    // Find all appointments for this doctor on the specified date
+    const appointments = await OnlineAppointment.find({
+      doctorId: doctor._id,
+      "slot.day": {
+        $gte: startDate,
+        $lt: endDate,
+      },
+    })
+      .populate({
+        path: "patientId",
+        select: "firstName lastName email phone countryCode gender profilePic dob address wallet",
+      })
+      .populate({
+        path: "doctorId",
+        select: "qualifications specialization userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
+      .sort({ "slot.time.start": 1 }); // Sort by appointment start time
+
+    res.status(200).json({
+      success: true,
+      data: appointments,
+      message: `Appointments for ${date} retrieved successfully`,
+      count: appointments.length,
+    });
+  } catch (error: any) {
+    console.error("Error getting doctor appointments by date:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error retrieving appointments by date",
+      error: error.message,
+    });
+  }
+};
+
+// Get all patients with populated user details
+export const getAllPatients = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    // Find all patients and populate user details
+    const patients = await Patient.find({})
+      .populate({
+        path: "userId",
+        select: "firstName lastName email phone countryCode gender profilePic dob address wallet prefix phoneVerified personalIdProof addressProof bankDetails taxProof isDocumentVerified createdAt",
+      })
+      .sort({ createdAt: -1 }); // Sort by most recent created first
+
+    res.status(200).json({
+      success: true,
+      data: patients,
+      message: "All patients retrieved successfully",
+      count: patients.length,
+    });
+  } catch (error: any) {
+    console.error("Error getting all patients:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error retrieving patients",
+      error: error.message,
+    });
+  }
+};
