@@ -42,6 +42,6 @@ router
 
 router.route("/subscription/verify-payment").post(verifyToken, verifyPaymentSubscription);
 
-router.route("/subscription/active").get(verifyToken, getActiveSubscriptions);
+router.route("/subscription/active").get(getActiveSubscriptions);
 
 export default router;
