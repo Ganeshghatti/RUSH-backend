@@ -1,6 +1,9 @@
+import { razorpayConfig } from './../../config/razorpay';
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
 import mongoose from "mongoose";
+import path from "path";
+import crypto from "crypto";
 
 export const updateWallet = async (
   req: Request,
@@ -38,6 +41,16 @@ export const updateWallet = async (
       return;
     }
 
+    const options = {
+      amount: Math.round(wallet * 100),
+      currency: "INR",
+      receipt: "receipt_" + Math.random().toString(36).substring(7),
+    };
+
+    const order = await razorpayConfig.orders.create(options);
+
+    console.log("order created: ", order);
+
     // Update wallet amount
     user.wallet = (user.wallet || 0) + wallet;
     await user.save();
@@ -46,7 +59,13 @@ export const updateWallet = async (
       success: true,
       message: "Wallet updated successfully",
       data: {
-        currentBalance: user.wallet,
+        order,
+        prefill: {
+          name: user.firstName + " " + user.lastName,
+          email: user.email,
+          contact: user.phone,
+          countryCode: user.countryCode || "+91",
+        }
       },
     });
   } catch (error) {
@@ -56,6 +75,78 @@ export const updateWallet = async (
       message: "Failed to update wallet",
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+};
+
+export const verifyPaymentWallet = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      wallet
+    } = req.body;
+
+    const userId = req.user.id;
+
+    if (
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature ||
+      !userId ||
+      !wallet
+    ) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, userId",
+      });
+      return;
+    }
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZ_KEY_SECRET || "")
+      .update(sign.toString())
+      .digest("hex");
+    if (razorpay_signature === expectedSign) {
+      // Payment is verified
+      const user = await User.findById(userId);
+
+      if (!user) {
+        res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+        return;
+      }
+
+      user.wallet = (user.wallet || 0) + wallet;
+      await user.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Payment verified successfully",
+        data: user,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Payment verified successfully",
+        data: {
+          currentBalance: user.wallet,
+        },
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Invalid payment signature",
+      });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: (err as Error).message });
   }
 };
 

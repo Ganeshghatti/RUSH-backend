@@ -11,55 +11,10 @@ import OnlineAppointment from "../../models/appointment/online-appointment-model
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import crypto from "crypto";
 import Razorpay from "razorpay";
-import * as dotenv from "dotenv";
-
-dotenv.config();
-
-const razorpay = new Razorpay({
-  key_id: process.env.RAZ_KEY_ID,
-  key_secret: process.env.RAZ_KEY_SECRET,
-});
+import { razorpayConfig } from "../../config/razorpay";
 
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map<string, NodeJS.Timeout>();
-
-// Define interfaces for populated fields
-interface UserDocument {
-  firstName: string;
-  lastName: string;
-  countryCode: string;
-  phone: string;
-  email: string;
-  profilePic?: string;
-}
-
-interface PatientDocument {
-  userId: UserDocument;
-}
-
-interface EmergencyAppointmentPopulated {
-  title: string;
-  description?: string;
-  patientId: {
-    userId: {
-      firstName: string;
-      lastName: string;
-      countryCode: string;
-      phone: string;
-      email: string;
-      profilePic?: string;
-    };
-  };
-  doctorId: mongoose.Types.ObjectId;
-  media?: string[];
-  location: string;
-  contactNumber?: string;
-  name?: string;
-  status: "pending" | "in-progress" | "completed";
-  roomName?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 export const doctorOnboardV2 = async (
   req: Request,
@@ -531,7 +486,7 @@ export const subscribeDoctor = async (
       receipt: "receipt_" + Math.random().toString(36).substring(7),
     };
 
-    const order = await razorpay.orders.create(options);
+    const order = await razorpayConfig.orders.create(options);
 
     console.log("order created: ", order);
 
