@@ -9,10 +9,6 @@ import EmergencyAppointment from "../../models/appointment/emergency-appointment
 import { convertMediaKeysToUrls } from "../appointment/emergency-appointment";
 import { addHealthMetricsSchema } from "../../validation/validation";
 
-import Family from "../../models/user/family-model";
-import { addFamilySchema, updateFamilySchema } from "../../validation/validation";
-import { generateSignedUrlsForFamily, generateSignedUrlsForFamilies } from "../../utils/signed-url";
-
 export const getPatientById = async (
   req: Request,
   res: Response

@@ -587,6 +587,14 @@ export const verifyPaymentSubscription = async (
           endDate = new Date(startDate);
           endDate.setMonth(startDate.getMonth() + 3);
           break;
+        case "1 year":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 1);
+          break;
+        case "2 years":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 24);
+          break;
         case "20 years":
           endDate = new Date(startDate);
           endDate.setFullYear(startDate.getFullYear() + 20);
@@ -602,6 +610,10 @@ export const verifyPaymentSubscription = async (
         case "5 years":
           endDate = new Date(startDate);
           endDate.setFullYear(startDate.getFullYear() + 5);
+          break;
+        case "40 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 40);
           break;
         case "lifetime":
           endDate = undefined; // No end date for lifetime
@@ -1108,7 +1120,7 @@ export const updateDoctorActiveStatus = async (
         } catch (error) {
           console.error(`Failed to auto-disable doctor ${doctorId}:`, error);
         }
-      }, 60 * 60 * 1000); // 1 hour in milliseconds
+      }, 2 * 60 * 1000); // 2 minutes in milliseconds
 
       // Store the timeout reference
       doctorTimeouts.set(doctorId, timeoutId);
@@ -1123,8 +1135,8 @@ export const updateDoctorActiveStatus = async (
         isActive: updatedDoctor.isActive,
         activationTime: isActive ? activationTime : null,
         deactivationTime: isActive
-          ? new Date(activationTime.getTime() + 60 * 60 * 1000)
-          : null, // 1 hour from activation
+          ? new Date(activationTime.getTime() + 2 * 60 * 1000)
+          : null, // 2 minutes from activation
       },
     });
   } catch (error: any) {
