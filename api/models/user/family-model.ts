@@ -1,7 +1,31 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-const familySchema = new Schema({
+export interface IFamily {
+  patientId: mongoose.Types.ObjectId;
+  relationship: "Father" | "Mother" | "Child" | "Sister" | "Brother" | "Father-in-law" | "Mother-in-law" | "Other";
+  address: {
+    line1?: string;
+    line2?: string;
+    locality?: string;
+    city?: string;
+    pincode?: string;
+    country?: string;
+  };
+  mobile?: string;
+  email?: string;
+  idNumber?: string;
+  idImage?: string;
+  insurance: {
+    policyNumber?: string;
+    provider?: string;
+    image?: string;
+  };
+}
+
+export type FamilyDocument = IFamily & mongoose.Document;
+
+const familySchema = new Schema<IFamily>({
   patientId: { type: Schema.Types.ObjectId, ref: "Patient", required: true },
   relationship: {
     type: String,
@@ -34,19 +58,19 @@ const familySchema = new Schema({
     provider: { type: String },
     image: { type: String },
   },
-  healthMetrics: [
-    {
-      bloodPressure: { type: String },
-      bloodGlucose: { type: Number },
-      weight: { type: Number },
-      height: { type: Number },
-      bloodGroup: {
-        type: String,
-        enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
-      },
-      conditions: [{ type: String }],
-    },
-  ],
+  // healthMetrics: [
+  //   {
+  //     bloodPressure: { type: String },
+  //     bloodGlucose: { type: Number },
+  //     weight: { type: Number },
+  //     height: { type: Number },
+  //     bloodGroup: {
+  //       type: String,
+  //       enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+  //     },
+  //     conditions: [{ type: String }],
+  //   },
+  // ],
 });
 
 const Family = mongoose.model("Family", familySchema);

@@ -182,3 +182,65 @@ export const addHealthMetricsSchema = z.object({
   conditions: z.array(z.string())
     .optional(),
 }).strict();
+
+// Family add validation schema
+export const addFamilySchema = z.object({
+  relationship: z.enum([
+    "Father",
+    "Mother",
+    "Child",
+    "Sister",
+    "Brother",
+    "Father-in-law",
+    "Mother-in-law",
+    "Other",
+  ]),
+  address: z.object({
+    line1: z.string().optional(),
+    line2: z.string().optional(),
+    locality: z.string().optional(),
+    city: z.string().optional(),
+    pincode: z.string().optional(),
+    country: z.string().optional(),
+  }).optional(),
+  mobile: z.string().optional(),
+  email: z.string().email().optional(),
+  idNumber: z.string().optional(),
+  idImage: z.string().optional(),
+  insurance: z.object({
+    policyNumber: z.string().optional(),
+    provider: z.string().optional(),
+    image: z.string().optional(),
+  }).optional(),
+}).strict();
+
+// Family update validation schema
+export const updateFamilySchema = z.object({
+  relationship: z.enum([
+    "Father",
+    "Mother",
+    "Child",
+    "Sister",
+    "Brother",
+    "Father-in-law",
+    "Mother-in-law",
+    "Other",
+  ]).optional(),
+  address: z.object({
+    line1: z.string().optional(),
+    line2: z.string().optional(),
+    locality: z.string().optional(),
+    city: z.string().optional(),
+    pincode: z.string().optional(),
+    country: z.string().optional(),
+  }).optional(),
+  mobile: z.string().optional(),
+  email: z.string().email().optional(),
+  idNumber: z.string().optional(),
+  idImage: z.string().optional(),
+  insurance: z.object({
+    policyNumber: z.string().optional(),
+    provider: z.string().optional(),
+    image: z.string().optional(),
+  }).optional(),
+}).strict();
