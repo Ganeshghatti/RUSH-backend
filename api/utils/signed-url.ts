@@ -174,3 +174,52 @@ export const generateSignedUrlsForSubscriptions = async (subscriptions: any[]) =
 
   return signedSubscriptions;
 };
+
+export const generateSignedUrlsForFamily = async (family: any) => {
+  const clone = JSON.parse(JSON.stringify(family));
+
+  const safeGetSignedUrl = async (key?: string) => {
+    if (!key || typeof key !== "string" || key.trim() === "") return key;
+    try {
+      return await GetSignedUrl(key);
+    } catch (error) {
+      console.warn("Could not generate signed URL for key:", key, error);
+      return key;
+    }
+  };
+
+  const promises: Promise<void>[] = [];
+
+  // ID image
+  if (clone?.idImage) {
+    promises.push(
+      safeGetSignedUrl(clone?.idImage).then(url => {
+        clone.idImage = url;
+      })
+    );
+  }
+
+  // Insurance image
+  if (clone?.insurance?.image) {
+    promises.push(
+      safeGetSignedUrl(clone?.insurance?.image).then(url => {
+        clone.insurance.image = url;
+      })
+    );
+  }
+
+  await Promise.all(promises);
+  return clone;
+};
+
+export const generateSignedUrlsForFamilies = async (families: any[]) => {
+  if (!Array.isArray(families)) {
+    return families;
+  }
+  
+  const signedFamilies = await Promise.all(
+    families.map(family => generateSignedUrlsForFamily(family))
+  );
+
+  return signedFamilies;
+};
