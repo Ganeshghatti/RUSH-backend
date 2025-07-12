@@ -39,7 +39,8 @@ const onlineAppointmentSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ["pending", "accepted", "rejected"],
+
+    enum: ["pending", "accepted", "rejected", "completed", "expired"],
     default: "pending",
   },
   roomName: {

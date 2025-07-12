@@ -16,6 +16,8 @@ import walletRoutes from "./routes/users/wallet";
 import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
 import { sendSMSV3 } from "./controller/users/auth";
+import cron from "node-cron";
+import { updateAppointmentExpiredStatus } from "./controller/appointment/online-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -92,4 +94,11 @@ app.use(emergencyAppointmentRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Cron job to update expired appointments
+// Runs once every 24 hours at midnight to check for expired appointments
+cron.schedule('0 0 * * *', async () => {
+  console.log('Running cron job to update expired appointments...');
+  await updateAppointmentExpiredStatus();
 });
