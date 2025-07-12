@@ -81,19 +81,83 @@ export const updateSubscription = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { isActive } = req.body;
+    const { isActive, name, description, features } = req.body;
 
-    if (isActive === undefined || typeof isActive !== "boolean") {
+    // Build update object with only provided fields
+    const updateData: any = {};
+
+    // Validate and add isActive if provided
+    if (isActive !== undefined) {
+      if (typeof isActive !== "boolean") {
+        res.status(400).json({
+          success: false,
+          message: "isActive field must be a boolean",
+        });
+        return;
+      }
+      updateData.isActive = isActive;
+    }
+
+    // Validate and add name if provided
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.trim() === "") {
+        res.status(400).json({
+          success: false,
+          message: "name field must be a non-empty string",
+        });
+        return;
+      }
+      updateData.name = name.trim();
+    }
+
+    // Validate and add description if provided
+    if (description !== undefined) {
+      if (typeof description !== "string" || description.trim() === "") {
+        res.status(400).json({
+          success: false,
+          message: "description field must be a non-empty string",
+        });
+        return;
+      }
+      updateData.description = description.trim();
+    }
+
+    // Validate and add features if provided
+    if (features !== undefined) {
+      if (!Array.isArray(features)) {
+        res.status(400).json({
+          success: false,
+          message: "features field must be an array",
+        });
+        return;
+      }
+      
+      // Validate each feature is a string
+      for (const feature of features) {
+        if (typeof feature !== "string" || feature.trim() === "") {
+          res.status(400).json({
+            success: false,
+            message: "All features must be non-empty strings",
+          });
+          return;
+        }
+      }
+      
+      updateData.features = features.map((feature: string) => feature.trim());
+    }
+
+    // Check if at least one field is provided for update
+    if (Object.keys(updateData).length === 0) {
       res.status(400).json({
         success: false,
-        message: "isActive field is required and must be a boolean",
+        message: "At least one field (isActive, name, description, or features) must be provided for update",
       });
       return;
     }
 
     const subscription = await DoctorSubscription.findByIdAndUpdate(
       id,
-      { isActive },
+      updateData,
       { new: true, runValidators: true }
     );
 

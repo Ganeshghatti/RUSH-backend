@@ -506,3 +506,31 @@ export const getAllPatients = async (
     });
   }
 };
+
+export const updateAppointmentExpiredStatus = async () => {
+  try {
+    const now = new Date();
+    
+    // Find appointments that have passed their slot end time and are still pending or accepted
+    const expiredAppointments = await OnlineAppointment.find({
+      "slot.time.end": { $lt: now }, 
+      status: { $in: ["pending", "accepted"] } 
+    });
+
+    if (expiredAppointments.length > 0) {
+      const updateResult = await OnlineAppointment.updateMany(
+        {
+          "slot.time.end": { $lt: now },
+          status: { $in: ["pending", "accepted"] }
+        },
+        {
+          $set: { status: "expired" }
+        }
+      );
+
+      console.log(`Updated ${updateResult.modifiedCount} expired appointments`);
+    }
+  } catch (error: any) {
+    console.error("Error updating expired appointments:", error.message);
+  }
+}
