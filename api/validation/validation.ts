@@ -133,7 +133,7 @@ export const doctorUpdateSchema = z.object({
   clinicVisit: z.object({
     isActive: z.boolean().optional(),
   }).optional(),
-}).strict();
+}).strict();  
 
 // Complete profile update validation schema
 export const updateProfileSchema = z.object({
@@ -195,6 +195,10 @@ export const addFamilySchema = z.object({
     "Mother-in-law",
     "Other",
   ]),
+  profilePic: z.string().optional(),
+  gender: z.enum(["Male", "Female", "Other"]).optional(),
+  age: z.number().optional(),
+  email: z.string().email().optional(),
   address: z.object({
     line1: z.string().optional(),
     line2: z.string().optional(),
@@ -204,7 +208,6 @@ export const addFamilySchema = z.object({
     country: z.string().optional(),
   }).optional(),
   mobile: z.string().optional(),
-  email: z.string().email().optional(),
   idNumber: z.string().optional(),
   idImage: z.string().optional(),
   insurance: z.object({
@@ -226,6 +229,10 @@ export const updateFamilySchema = z.object({
     "Mother-in-law",
     "Other",
   ]).optional(),
+  profilePic: z.string().optional(),
+  gender: z.enum(["Male", "Female", "Other"]).optional(),
+  age: z.number().optional(),
+  email: z.string().email().optional(),
   address: z.object({
     line1: z.string().optional(),
     line2: z.string().optional(),
@@ -235,7 +242,6 @@ export const updateFamilySchema = z.object({
     country: z.string().optional(),
   }).optional(),
   mobile: z.string().optional(),
-  email: z.string().email().optional(),
   idNumber: z.string().optional(),
   idImage: z.string().optional(),
   insurance: z.object({
