@@ -371,3 +371,92 @@ export const updateHealthMetricsSchema = z.object({
   currentSymptoms: z.array(z.string()).optional(),
   otherSymptomsText: z.string().optional(),
 }).strict();
+
+// Clinic validation schemas
+export const clinicCreateSchema = z.object({
+  clinicName: z.string()
+    .min(1, "Clinic name is required")
+    .max(100, "Clinic name must be less than 100 characters"),
+  address: z.object({
+    line1: z.string()
+      .min(1, "Address line 1 is required")
+      .max(200, "Address line 1 must be less than 200 characters"),
+    line2: z.string()
+      .max(200, "Address line 2 must be less than 200 characters")
+      .optional(),
+    landmark: z.string()
+      .max(100, "Landmark must be less than 100 characters")
+      .optional(),
+    locality: z.string()
+      .min(1, "Locality is required")
+      .max(100, "Locality must be less than 100 characters"),
+    city: z.string()
+      .min(1, "City is required")
+      .max(50, "City must be less than 50 characters"),
+    pincode: z.string()
+      .min(6, "Pincode must be at least 6 characters")
+      .max(10, "Pincode must be less than 10 characters"),
+    country: z.string()
+      .min(1, "Country is required")
+      .max(50, "Country must be less than 50 characters")
+      .default("India"),
+  }),
+  consultationFee: z.number()
+    .min(0, "Consultation fee must be a positive number")
+    .max(10000, "Consultation fee must be less than 10,000"),
+  operationalDays: z.array(
+    z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])
+  )
+    .min(1, "At least one operational day is required")
+    .max(7, "Maximum 7 operational days allowed"),
+  timeSlots: z.array(z.object({
+    duration: z.number()
+      .refine((val) => [15, 30, 45, 60].includes(val), {
+        message: "Duration must be 15, 30, 45, or 60 minutes"
+      }),
+    startTime: z.string()
+      .regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "Start time must be in HH:MM format"),
+    endTime: z.string()
+      .regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, "End time must be in HH:MM format"),
+  }))
+    .min(1, "At least one time slot is required"),
+  isActive: z.boolean().optional().default(true),
+}).strict();
+
+export const clinicUpdateSchema = clinicCreateSchema.partial().strict();
+
+// Clinic appointment booking validation
+export const clinicAppointmentBookSchema = z.object({
+  doctorId: z.string()
+    .min(1, "Doctor ID is required"),
+  clinicId: z.string()
+    .min(1, "Clinic ID is required"),
+  slot: z.object({
+    day: z.string()
+      .min(1, "Appointment day is required"),
+    duration: z.number()
+      .refine((val) => [15, 30, 45, 60].includes(val), {
+        message: "Duration must be 15, 30, 45, or 60 minutes"
+      }),
+    time: z.object({
+      start: z.string()
+        .min(1, "Start time is required"),
+      end: z.string()
+        .min(1, "End time is required"),
+    }),
+  }),
+  history: z.object({
+    title: z.string()
+      .max(200, "History title must be less than 200 characters")
+      .optional(),
+  }).optional(),
+}).strict();
+
+// OTP validation schema
+export const otpValidationSchema = z.object({
+  appointmentId: z.string()
+    .min(1, "Appointment ID is required"),
+  otp: z.string()
+    .length(6, "OTP must be exactly 6 characters")
+    .regex(/^[A-Z0-9]{6}$/, "OTP must contain only uppercase letters and numbers"),
+}).strict();

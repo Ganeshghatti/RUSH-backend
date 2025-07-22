@@ -16,9 +16,11 @@ import adminRoutes from "./routes/admin/admin-route";
 import walletRoutes from "./routes/users/wallet";
 import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
+import clinicAppointmentRoutes from "./routes/appointment/clinic-appointment";
 import { sendSMSV3 } from "./controller/users/auth";
 import cron from "node-cron";
 import { updateAppointmentExpiredStatus } from "./controller/appointment/online-appointment";
+import { updateClinicAppointmentExpiredStatus } from "./controller/appointment/clinic-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -88,6 +90,8 @@ app.use(onlineAppointmentRoutes);
 
 app.use(emergencyAppointmentRoutes);
 
+app.use(clinicAppointmentRoutes);
+
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 //   console.error(err);
@@ -103,4 +107,5 @@ app.listen(PORT, () => {
 cron.schedule('0 0 * * *', async () => {
   console.log('Running cron job to update expired appointments...');
   await updateAppointmentExpiredStatus();
+  await updateClinicAppointmentExpiredStatus();
 });
