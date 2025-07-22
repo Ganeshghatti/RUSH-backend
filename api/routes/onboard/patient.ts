@@ -15,6 +15,6 @@ router.route("/family").post(verifyToken, checkRole("patient"), addFamily);
 router.route("/family").get(verifyToken, checkRole("patient"), getFamilyDetails);
 router.route("/family/:familyId").put(verifyToken, checkRole("patient"), updateFamily);
 router.route("/family/:familyId").delete(verifyToken, checkRole("patient"), removeFamily);
-router.route("/:id").get(verifyToken, getPatientById);
+router.route("/user/:userId").get(verifyToken, getPatientById);
 
 export default router; 

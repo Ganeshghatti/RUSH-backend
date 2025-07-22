@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import User from "../../models/user/user-model";
 import Doctor from "../../models/user/doctor-model";
-import DoctorSubscription from "../../models/subscription-model";
+import DoctorSubscription from "../../models/doctor-subscription";
 import { UploadImgToS3, GetSignedUrl } from "../../utils/aws_s3/upload-media";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import path from "path";

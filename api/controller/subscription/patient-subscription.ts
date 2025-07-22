@@ -1,0 +1,247 @@
+import { Request, Response } from "express";
+import PatientSubscription from "../../models/patient-subscription";
+import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
+import QRCode from "qrcode";
+import { generateSignedUrlsForSubscriptions } from "../../utils/signed-url";
+
+export const createSubscription = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { price, name, description, features, isActive, duration } = req.body;
+    console.log("body",req.body);
+    if (price < 0) {
+      res.status(400).json({
+        success: false,
+        message: "Price must be a non-negative number (0 or greater)",
+      });
+      return;
+    }
+
+    // Validate required fields
+    if (!name || !description || !duration) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Missing required subscription fields: price, name, description, and duration are required",
+      });
+      return;
+    }
+
+    const upiLink = `upi://pay?pa=yespay.bizsbiz81637@yesbankltd&pn=RUSHDR&am=${parseFloat(
+      price
+    ).toFixed(2)}&cu=INR`;
+
+    const qrCodeDataUrl = await QRCode.toDataURL(upiLink);
+
+    // Convert Data URL to Buffer
+    const base64Data = qrCodeDataUrl.replace(/^data:image\/png;base64,/, "");
+    const qrBuffer = Buffer.from(base64Data, "base64");
+
+    // Upload QR code to S3
+    const timestamp = Date.now();
+    const s3Key = `qr-codes/subscription-${timestamp}.png`;
+
+    const signedUrl = await UploadImgToS3({
+      key: s3Key,
+      fileBuffer: qrBuffer,
+      fileName: `subscription-${timestamp}.png`,
+    });
+
+    const subscription = await PatientSubscription.create({
+      price: parseFloat(price).toFixed(2),
+      name,
+      description,
+      features: features || [],
+      isActive: isActive,
+      duration,
+      qrCodeImage: signedUrl,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Subscription created successfully",
+      data: subscription,
+    });
+  } catch (error) {
+    console.error("Error creating subscription:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create subscription",
+    });
+  }
+};
+
+export const updateSubscription = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { isActive, name, description, features } = req.body;
+
+    // Build update object with only provided fields
+    const updateData: any = {};
+
+    // Validate and add isActive if provided
+    if (isActive !== undefined) {
+      if (typeof isActive !== "boolean") {
+        res.status(400).json({
+          success: false,
+          message: "isActive field must be a boolean",
+        });
+        return;
+      }
+      updateData.isActive = isActive;
+    }
+
+    // Validate and add name if provided
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.trim() === "") {
+        res.status(400).json({
+          success: false,
+          message: "name field must be a non-empty string",
+        });
+        return;
+      }
+      updateData.name = name.trim();
+    }
+
+    // Validate and add description if provided
+    if (description !== undefined) {
+      if (typeof description !== "string" || description.trim() === "") {
+        res.status(400).json({
+          success: false,
+          message: "description field must be a non-empty string",
+        });
+        return;
+      }
+      updateData.description = description.trim();
+    }
+
+    // Validate and add features if provided
+    if (features !== undefined) {
+      if (!Array.isArray(features)) {
+        res.status(400).json({
+          success: false,
+          message: "features field must be an array",
+        });
+        return;
+      }
+      
+      // Validate each feature is a string
+      for (const feature of features) {
+        if (typeof feature !== "string" || feature.trim() === "") {
+          res.status(400).json({
+            success: false,
+            message: "All features must be non-empty strings",
+          });
+          return;
+        }
+      }
+      
+      updateData.features = features.map((feature: string) => feature.trim());
+    }
+
+    // Check if at least one field is provided for update
+    if (Object.keys(updateData).length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "At least one field (isActive, name, description, or features) must be provided for update",
+      });
+      return;
+    }
+
+    const subscription = await PatientSubscription.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!subscription) {
+      res.status(404).json({
+        success: false,
+        message: "Subscription not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Subscription updated successfully",
+      data: subscription,
+    });
+  } catch (error) {
+    console.error("Error updating subscription:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update subscription",
+    });
+  }
+};
+
+export const getSubscriptions = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const subscriptions = await PatientSubscription.find({});
+
+    if (!subscriptions || subscriptions.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: "No subscriptions found",
+      });
+      return;
+    }
+
+    const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(subscriptions);
+
+    res.status(200).json({
+      success: true,
+      message: "Subscriptions fetched successfully",
+      data: subscriptionsWithSignedUrls,
+    });
+  } catch (error) {
+    console.error("Error fetching subscriptions:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch subscriptions",
+    });
+  }
+};
+
+export const getActiveSubscriptions = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const activeSubscriptions = await PatientSubscription.find({
+      isActive: true,
+    });
+
+    if (!activeSubscriptions || activeSubscriptions.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: "No active subscriptions found",
+      });
+      return;
+    }
+
+    // Generate signed URLs for all active subscriptions
+    const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(activeSubscriptions);
+
+    res.status(200).json({
+      success: true,
+      message: "Active subscriptions fetched successfully",
+      data: subscriptionsWithSignedUrls,
+    });
+  } catch (error) {
+    console.error("Error fetching active subscriptions:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch active subscriptions",
+    });
+  }
+};
