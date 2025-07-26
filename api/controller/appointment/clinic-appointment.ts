@@ -2,18 +2,18 @@ import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
 import User from "../../models/user/user-model";
 import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
-import { 
-  clinicCreateSchema, 
-  clinicUpdateSchema, 
+import {
+  clinicCreateSchema,
+  clinicUpdateSchema,
   clinicAppointmentBookSchema,
-  otpValidationSchema 
+  otpValidationSchema,
 } from "../../validation/validation";
 import mongoose from "mongoose";
-import { 
-  generateOTP, 
-  isOTPExpired, 
+import {
+  generateOTP,
+  isOTPExpired,
   getOTPExpirationTime,
-  isMaxAttemptsReached 
+  isMaxAttemptsReached,
 } from "../../utils/otp-utils";
 
 // Interface for authenticated request
@@ -25,8 +25,36 @@ interface AuthRequest extends Request {
   };
 }
 
+// Helper function to populate clinic details from doctor's embedded clinics
+const populateClinicDetails = (appointments: any[], doctor: any) => {
+  return appointments.map((appointment) => {
+    const clinicVisit = doctor.clinicVisit as any;
+    const clinic = (clinicVisit?.clinics || []).find(
+      (c: any) => c._id.toString() === appointment.clinicId
+    );
+
+    return {
+      ...appointment.toObject(),
+      clinicDetails: clinic
+        ? {
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
+        : null,
+    };
+  });
+};
+
 // Add clinic to doctor's profile
-export const addClinic = async (req: AuthRequest, res: Response): Promise<void> => {
+export const addClinic = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const validation = clinicCreateSchema.safeParse(req.body);
     if (!validation.success) {
@@ -66,7 +94,7 @@ export const addClinic = async (req: AuthRequest, res: Response): Promise<void> 
     // Add clinic using mongoose push method
     (doctor.clinicVisit as any).clinics.push(clinicData);
     (doctor.clinicVisit as any).isActive = true;
-    
+
     await doctor.save();
 
     res.status(201).json({
@@ -86,7 +114,10 @@ export const addClinic = async (req: AuthRequest, res: Response): Promise<void> 
 };
 
 // Get all clinics for a doctor
-export const getDoctorClinics = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getDoctorClinics = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const doctorId = req.user?.id;
     if (!doctorId) {
@@ -97,7 +128,9 @@ export const getDoctorClinics = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const doctor = await Doctor.findOne({ userId: doctorId }).select("clinicVisit");
+    const doctor = await Doctor.findOne({ userId: doctorId }).select(
+      "clinicVisit"
+    );
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -125,11 +158,14 @@ export const getDoctorClinics = async (req: AuthRequest, res: Response): Promise
 };
 
 // Update clinic details
-export const updateClinic = async (req: AuthRequest, res: Response): Promise<void> => {
+export const updateClinic = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const { clinicId } = req.params;
     const validation = clinicUpdateSchema.safeParse(req.body);
-    
+
     if (!validation.success) {
       res.status(400).json({
         success: false,
@@ -159,9 +195,11 @@ export const updateClinic = async (req: AuthRequest, res: Response): Promise<voi
 
     const clinicVisit = doctor.clinicVisit as any;
     const clinics = clinicVisit?.clinics || [];
-    
+
     // Find and update the specific clinic
-    const clinicIndex = clinics.findIndex((clinic: any) => clinic._id.toString() === clinicId);
+    const clinicIndex = clinics.findIndex(
+      (clinic: any) => clinic._id.toString() === clinicId
+    );
 
     if (clinicIndex === -1) {
       res.status(404).json({
@@ -196,7 +234,10 @@ export const updateClinic = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 // Delete clinic
-export const deleteClinic = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deleteClinic = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const { clinicId } = req.params;
     const doctorId = req.user?.id;
@@ -221,7 +262,7 @@ export const deleteClinic = async (req: AuthRequest, res: Response): Promise<voi
     const clinicVisit = doctor.clinicVisit as any;
     const clinics = clinicVisit?.clinics || [];
     const initialLength = clinics.length;
-    
+
     // Remove clinic using pull method
     (doctor.clinicVisit as any).clinics.pull({ _id: clinicId });
 
@@ -254,7 +295,10 @@ export const deleteClinic = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 // Get doctor's clinic availability for patients
-export const getDoctorClinicAvailability = async (req: Request, res: Response): Promise<void> => {
+export const getDoctorClinicAvailability = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { doctorId } = req.params;
 
@@ -288,7 +332,9 @@ export const getDoctorClinicAvailability = async (req: Request, res: Response): 
     }
 
     // Filter only active clinics
-    const activeClinics = (clinicVisit?.clinics || []).filter((clinic: any) => clinic.isActive);
+    const activeClinics = (clinicVisit?.clinics || []).filter(
+      (clinic: any) => clinic.isActive
+    );
 
     res.status(200).json({
       success: true,
@@ -312,7 +358,10 @@ export const getDoctorClinicAvailability = async (req: Request, res: Response): 
 };
 
 // Book clinic appointment
-export const bookClinicAppointment = async (req: AuthRequest, res: Response): Promise<void> => {
+export const bookClinicAppointment = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const validation = clinicAppointmentBookSchema.safeParse(req.body);
     if (!validation.success) {
@@ -333,7 +382,7 @@ export const bookClinicAppointment = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const { doctorId, clinicId, slot, history } = validation.data;
+    const { doctorId, clinicId, slot } = validation.data;
 
     // Validate doctor and clinic
     const doctor = await Doctor.findById(doctorId);
@@ -349,7 +398,7 @@ export const bookClinicAppointment = async (req: AuthRequest, res: Response): Pr
     const clinic = (clinicVisit?.clinics || []).find(
       (c: any) => c._id.toString() === clinicId && c.isActive
     );
-    
+
     if (!clinic) {
       res.status(404).json({
         success: false,
@@ -368,14 +417,17 @@ export const bookClinicAppointment = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    // Check wallet balance
-    if (patient.wallet < clinic.consultationFee) {
+    // Check wallet balance (including frozen amount to ensure total available funds)
+    const availableBalance = (patient as any).getAvailableBalance();
+    if (availableBalance < clinic.consultationFee) {
       res.status(400).json({
         success: false,
         message: "Insufficient wallet balance",
         data: {
           required: clinic.consultationFee,
-          available: patient.wallet,
+          available: availableBalance,
+          totalWallet: patient.wallet,
+          frozenAmount: patient.frozenAmount || 0,
         },
       });
       return;
@@ -404,20 +456,14 @@ export const bookClinicAppointment = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    // Deduct from wallet
-    patient.wallet -= clinic.consultationFee;
-    await patient.save();
+    // Don't deduct from wallet yet - will be frozen when doctor confirms
+    // Amount will be deducted only when appointment is confirmed by doctor
 
     // Create appointment
     const appointment = new ClinicAppointment({
       doctorId: doctor._id,
       patientId: patientId,
       clinicId: clinicId,
-      clinicDetails: {
-        clinicName: clinic.clinicName,
-        address: clinic.address,
-        consultationFee: clinic.consultationFee,
-      },
       slot: {
         day: appointmentDay,
         duration: slot.duration,
@@ -426,12 +472,11 @@ export const bookClinicAppointment = async (req: AuthRequest, res: Response): Pr
           end: endTime,
         },
       },
-      history: history || {},
-      status: "confirmed",
+      status: "pending", // Changed from "confirmed" to "pending"
       paymentDetails: {
         amount: clinic.consultationFee,
-        walletDeducted: clinic.consultationFee,
-        paymentStatus: "completed",
+        walletDeducted: 0, // Will be updated when doctor confirms
+        paymentStatus: "pending", // Will be updated when doctor confirms
       },
     });
 
@@ -439,10 +484,13 @@ export const bookClinicAppointment = async (req: AuthRequest, res: Response): Pr
 
     res.status(201).json({
       success: true,
-      message: "Clinic appointment booked successfully",
+      message:
+        "Clinic appointment booked successfully. Payment will be processed when doctor confirms the appointment.",
       data: {
         appointment: appointment,
         walletBalance: patient.wallet,
+        availableBalance: (patient as any).getAvailableBalance(),
+        note: "Amount will be deducted from wallet when doctor confirms the appointment",
       },
     });
   } catch (error) {
@@ -454,8 +502,246 @@ export const bookClinicAppointment = async (req: AuthRequest, res: Response): Pr
   }
 };
 
+// Confirm clinic appointment (Doctor only)
+export const confirmClinicAppointment = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { appointmentId } = req.params;
+    const doctorUserId = req.user?.id;
+
+    if (!doctorUserId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
+
+    // Find doctor by userId
+    const doctor = await Doctor.findOne({ userId: doctorUserId });
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor profile not found",
+      });
+      return;
+    }
+
+    // Find appointment
+    const appointment = await ClinicAppointment.findOne({
+      _id: appointmentId,
+      doctorId: doctor._id,
+    });
+
+    if (!appointment) {
+      res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+      return;
+    }
+
+    if (appointment.status !== "pending") {
+      res.status(400).json({
+        success: false,
+        message: "Only pending appointments can be confirmed",
+      });
+      return;
+    }
+
+    // Update appointment status to confirmed and generate OTP
+    appointment.status = "confirmed";
+    appointment.otp = {
+      code: generateOTP(),
+      generatedAt: new Date(),
+      expiresAt: getOTPExpirationTime(),
+      attempts: 0,
+      maxAttempts: 3,
+      isUsed: false,
+    };
+
+    // Freeze the payment amount from patient's wallet
+    const doctorWithClinic = await Doctor.findById(appointment.doctorId);
+    if (doctorWithClinic) {
+      const clinicVisit = doctorWithClinic.clinicVisit as any;
+      const clinic = (clinicVisit?.clinics || []).find(
+        (c: any) => c._id.toString() === appointment.clinicId
+      );
+
+      if (clinic) {
+        // Get patient and freeze the amount
+        const patient = await User.findById(appointment.patientId);
+        if (patient) {
+          const availableBalance = (patient as any).getAvailableBalance();
+
+          if (availableBalance >= clinic.consultationFee) {
+            // Freeze the amount using helper method
+            const freezeSuccess = (patient as any).freezeAmount(
+              clinic.consultationFee
+            );
+            if (freezeSuccess) {
+              await patient.save();
+
+              // Update payment details
+              appointment.paymentDetails = {
+                amount: clinic.consultationFee,
+                walletDeducted: clinic.consultationFee,
+                paymentStatus: "frozen", // Amount is frozen, not yet deducted
+              };
+            } else {
+              res.status(500).json({
+                success: false,
+                message: "Failed to freeze payment amount",
+              });
+              return;
+            }
+          } else {
+            res.status(400).json({
+              success: false,
+              message: "Patient has insufficient wallet balance",
+              data: {
+                required: clinic.consultationFee,
+                available: availableBalance,
+              },
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    await appointment.save();
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Appointment confirmed successfully. Payment amount has been frozen from patient's wallet.",
+      data: {
+        appointmentId: appointment._id,
+        status: appointment.status,
+        otpGenerated: true,
+        paymentStatus: appointment.paymentDetails?.paymentStatus,
+        amountFrozen: appointment.paymentDetails?.walletDeducted,
+      },
+    });
+  } catch (error) {
+    console.error("Error confirming clinic appointment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// Cancel/Reject clinic appointment (Doctor only)
+export const cancelClinicAppointment = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { appointmentId } = req.params;
+    const doctorUserId = req.user?.id;
+
+    if (!doctorUserId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
+
+    // Find doctor by userId
+    const doctor = await Doctor.findOne({ userId: doctorUserId });
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor profile not found",
+      });
+      return;
+    }
+
+    // Find appointment
+    const appointment = await ClinicAppointment.findOne({
+      _id: appointmentId,
+      doctorId: doctor._id,
+    });
+
+    if (!appointment) {
+      res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+      return;
+    }
+
+    if (
+      appointment.status === "completed" ||
+      appointment.status === "cancelled"
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Cannot cancel completed or already cancelled appointments",
+      });
+      return;
+    }
+
+    // Handle refunds based on payment status
+    let refundAmount = 0;
+    if (
+      appointment.paymentDetails?.walletDeducted &&
+      appointment.paymentDetails.walletDeducted > 0
+    ) {
+      const patient = await User.findById(appointment.patientId);
+      if (patient) {
+        refundAmount = appointment.paymentDetails.walletDeducted;
+
+        if (appointment.paymentDetails.paymentStatus === "frozen") {
+          // If amount was frozen, unfreeze it using helper method
+          (patient as any).unfreezeAmount(refundAmount);
+        } else if (appointment.paymentDetails.paymentStatus === "completed") {
+          // If amount was already deducted, refund to wallet
+          patient.wallet += refundAmount;
+        }
+
+        await patient.save();
+      }
+    }
+
+    // Update appointment status to cancelled
+    appointment.status = "cancelled";
+    // Note: Cancellation reason removed since history field is removed
+
+    await appointment.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Appointment cancelled successfully",
+      data: {
+        appointmentId: appointment._id,
+        status: appointment.status,
+        refunded: refundAmount,
+        refundType:
+          appointment.paymentDetails?.paymentStatus === "frozen"
+            ? "unfrozen"
+            : "refunded",
+      },
+    });
+  } catch (error) {
+    console.error("Error cancelling clinic appointment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 // Get patient's clinic appointments
-export const getPatientClinicAppointments = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getPatientClinicAppointments = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const patientId = req.user?.id;
     if (!patientId) {
@@ -467,7 +753,7 @@ export const getPatientClinicAppointments = async (req: AuthRequest, res: Respon
     }
 
     const appointments = await ClinicAppointment.find({ patientId })
-      .populate("doctorId", "userId specialization")
+      .populate("doctorId", "userId specialization clinicVisit")
       .populate({
         path: "doctorId",
         populate: {
@@ -477,11 +763,35 @@ export const getPatientClinicAppointments = async (req: AuthRequest, res: Respon
       })
       .sort({ "slot.day": -1 });
 
+    // Populate clinic details from embedded clinics
+    const appointmentsWithClinicDetails = appointments.map((appointment) => {
+      const doctor = appointment.doctorId as any;
+      const clinicVisit = doctor?.clinicVisit as any;
+      const clinic = (clinicVisit?.clinics || []).find(
+        (c: any) => c._id.toString() === appointment.clinicId
+      );
+
+      return {
+        ...appointment.toObject(),
+        clinicDetails: clinic
+          ? {
+              clinicName: clinic.clinicName,
+              address: clinic.address,
+              consultationFee: clinic.consultationFee,
+              frontDeskNumber: clinic.frontDeskNumber,
+              operationalDays: clinic.operationalDays,
+              timeSlots: clinic.timeSlots,
+              isActive: clinic.isActive,
+            }
+          : null,
+      };
+    });
+
     res.status(200).json({
       success: true,
       message: "Patient clinic appointments retrieved successfully",
       data: {
-        appointments: appointments,
+        appointments: appointmentsWithClinicDetails,
       },
     });
   } catch (error) {
@@ -494,7 +804,10 @@ export const getPatientClinicAppointments = async (req: AuthRequest, res: Respon
 };
 
 // Get doctor's clinic appointments
-export const getDoctorClinicAppointments = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getDoctorClinicAppointments = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const doctorUserId = req.user?.id;
     if (!doctorUserId) {
@@ -519,11 +832,34 @@ export const getDoctorClinicAppointments = async (req: AuthRequest, res: Respons
       .populate("patientId", "firstName lastName profilePic phone")
       .sort({ "slot.day": -1 });
 
+    // Populate clinic details from embedded clinics
+    const appointmentsWithClinicDetails = appointments.map((appointment) => {
+      const clinicVisit = doctor.clinicVisit as any;
+      const clinic = (clinicVisit?.clinics || []).find(
+        (c: any) => c._id.toString() === appointment.clinicId
+      );
+
+      return {
+        ...appointment.toObject(),
+        clinicDetails: clinic
+          ? {
+              clinicName: clinic.clinicName,
+              address: clinic.address,
+              consultationFee: clinic.consultationFee,
+              frontDeskNumber: clinic.frontDeskNumber,
+              operationalDays: clinic.operationalDays,
+              timeSlots: clinic.timeSlots,
+              isActive: clinic.isActive,
+            }
+          : null,
+      };
+    });
+
     res.status(200).json({
       success: true,
       message: "Doctor clinic appointments retrieved successfully",
       data: {
-        appointments: appointments,
+        appointments: appointmentsWithClinicDetails,
       },
     });
   } catch (error) {
@@ -536,7 +872,10 @@ export const getDoctorClinicAppointments = async (req: AuthRequest, res: Respons
 };
 
 // Generate or retrieve OTP for appointment
-export const getAppointmentOTP = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getAppointmentOTP = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const { appointmentId } = req.params;
     const patientId = req.user?.id;
@@ -565,37 +904,39 @@ export const getAppointmentOTP = async (req: AuthRequest, res: Response): Promis
     if (appointment.status !== "confirmed") {
       res.status(400).json({
         success: false,
-        message: "OTP can only be generated for confirmed appointments",
-      });
-      return;
-    }
-
-    // Check if appointment is for today
-    const today = new Date();
-    const appointmentDay = new Date(appointment.slot?.day || "");
-    const isToday = today.toDateString() === appointmentDay.toDateString();
-
-    if (!isToday) {
-      res.status(400).json({
-        success: false,
-        message: "OTP can only be generated on the appointment day",
+        message: "OTP can only be retrieved for confirmed appointments",
       });
       return;
     }
 
     const otpData = appointment.otp as any;
-    
-    // Generate new OTP if none exists or if existing OTP is expired
-    if (!otpData?.code || (otpData?.expiresAt && isOTPExpired(otpData.expiresAt))) {
-      appointment.otp = {
-        code: generateOTP(),
-        generatedAt: new Date(),
-        expiresAt: getOTPExpirationTime(),
-        attempts: 0,
-        maxAttempts: 3,
-        isUsed: false,
-      };
-      await appointment.save();
+
+    // Check if OTP exists (should exist as it's generated during confirmation)
+    if (!otpData?.code) {
+      res.status(400).json({
+        success: false,
+        message: "No OTP found for this appointment. Please contact support.",
+      });
+      return;
+    }
+
+    // Check if OTP has expired
+    if (otpData?.expiresAt && isOTPExpired(otpData.expiresAt)) {
+      res.status(400).json({
+        success: false,
+        message:
+          "OTP has expired. Please contact your doctor for a new appointment.",
+      });
+      return;
+    }
+
+    // Check if OTP is already used
+    if (otpData?.isUsed) {
+      res.status(400).json({
+        success: false,
+        message: "OTP has already been used",
+      });
+      return;
     }
 
     const updatedOtpData = appointment.otp as any;
@@ -618,7 +959,10 @@ export const getAppointmentOTP = async (req: AuthRequest, res: Response): Promis
 };
 
 // Validate OTP and complete appointment
-export const validateVisitOTP = async (req: AuthRequest, res: Response): Promise<void> => {
+export const validateVisitOTP = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
   try {
     const validation = otpValidationSchema.safeParse(req.body);
     if (!validation.success) {
@@ -674,7 +1018,7 @@ export const validateVisitOTP = async (req: AuthRequest, res: Response): Promise
     }
 
     const otpData = appointment.otp as any;
-    
+
     // Check if OTP exists
     if (!otpData?.code) {
       res.status(400).json({
@@ -694,7 +1038,9 @@ export const validateVisitOTP = async (req: AuthRequest, res: Response): Promise
     }
 
     // Check if max attempts reached
-    if (isMaxAttemptsReached(otpData?.attempts || 0, otpData?.maxAttempts || 3)) {
+    if (
+      isMaxAttemptsReached(otpData?.attempts || 0, otpData?.maxAttempts || 3)
+    ) {
       res.status(400).json({
         success: false,
         message: "Maximum OTP verification attempts exceeded",
@@ -717,8 +1063,9 @@ export const validateVisitOTP = async (req: AuthRequest, res: Response): Promise
     // Validate OTP
     if (otpData?.code !== otp.toUpperCase()) {
       await appointment.save();
-      
-      const remainingAttempts = (otpData?.maxAttempts || 3) - ((appointment.otp as any).attempts);
+
+      const remainingAttempts =
+        (otpData?.maxAttempts || 3) - (appointment.otp as any).attempts;
       res.status(400).json({
         success: false,
         message: "Invalid OTP",
@@ -732,6 +1079,33 @@ export const validateVisitOTP = async (req: AuthRequest, res: Response): Promise
     // OTP is valid - complete the appointment
     appointment.status = "completed";
     (appointment.otp as any).isUsed = true;
+
+    // Process final payment: convert frozen amount to actual deduction
+    if (
+      appointment.paymentDetails?.paymentStatus === "frozen" &&
+      appointment.paymentDetails?.walletDeducted > 0
+    ) {
+      const patient = await User.findById(appointment.patientId);
+      if (patient) {
+        const deductAmount = appointment.paymentDetails.walletDeducted;
+
+        // Deduct from frozen amount using helper method
+        const deductSuccess = (patient as any).deductFrozenAmount(deductAmount);
+        if (deductSuccess) {
+          await patient.save();
+
+          // Update payment status to completed
+          appointment.paymentDetails.paymentStatus = "completed";
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to process final payment",
+          });
+          return;
+        }
+      }
+    }
+
     await appointment.save();
 
     res.status(200).json({
@@ -754,7 +1128,7 @@ export const validateVisitOTP = async (req: AuthRequest, res: Response): Promise
 export const updateClinicAppointmentExpiredStatus = async (): Promise<void> => {
   try {
     const now = new Date();
-    
+
     // Find appointments that should be expired (end time has passed and status is still pending/confirmed)
     const expiredAppointments = await ClinicAppointment.updateMany(
       {
@@ -766,7 +1140,9 @@ export const updateClinicAppointmentExpiredStatus = async (): Promise<void> => {
       }
     );
 
-    console.log(`Updated ${expiredAppointments.modifiedCount} expired clinic appointments`);
+    console.log(
+      `Updated ${expiredAppointments.modifiedCount} expired clinic appointments`
+    );
   } catch (error) {
     console.error("Error updating expired clinic appointments:", error);
   }

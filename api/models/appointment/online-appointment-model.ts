@@ -35,7 +35,7 @@ const onlineAppointmentSchema = new Schema({
   history: {
     title: {
       type: String,
-    }
+    },
   },
   status: {
     type: String,
@@ -45,7 +45,7 @@ const onlineAppointmentSchema = new Schema({
   },
   roomName: {
     type: String,
-  }
+  },
 });
 
 const OnlineAppointment = mongoose.model(

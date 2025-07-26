@@ -7,12 +7,12 @@ import crypto from "crypto";
 export const generateOTP = (): string => {
   const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let otp = "";
-  
+
   for (let i = 0; i < 6; i++) {
     const randomIndex = crypto.randomInt(0, characters.length);
     otp += characters[randomIndex];
   }
-  
+
   return otp;
 };
 
@@ -51,6 +51,9 @@ export const getOTPExpirationTime = (): Date => {
  * @param {number} maxAttempts - Maximum allowed attempts
  * @returns {boolean} - True if max attempts reached
  */
-export const isMaxAttemptsReached = (attempts: number, maxAttempts: number = 3): boolean => {
+export const isMaxAttemptsReached = (
+  attempts: number,
+  maxAttempts: number = 3
+): boolean => {
   return attempts >= maxAttempts;
 };

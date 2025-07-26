@@ -82,7 +82,15 @@ const doctorSchema = new Schema({
       {
         day: {
           type: String,
-          enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+          enum: [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+          ],
         },
         duration: [
           {
@@ -134,10 +142,19 @@ const doctorSchema = new Schema({
           country: { type: String, required: true, default: "India" },
         },
         consultationFee: { type: Number, required: true },
+        frontDeskNumber: { type: String, required: true },
         operationalDays: [
           {
             type: String,
-            enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+            enum: [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+              "sunday",
+            ],
           },
         ],
         timeSlots: [
@@ -148,7 +165,7 @@ const doctorSchema = new Schema({
               required: true,
             },
             startTime: { type: String, required: true }, // "09:00"
-            endTime: { type: String, required: true },   // "17:00"
+            endTime: { type: String, required: true }, // "17:00"
           },
         ],
         isActive: { type: Boolean, default: true },

@@ -4,10 +4,17 @@ import User from "../../models/user/user-model";
 import Patient from "../../models/user/patient-model";
 import Doctor from "../../models/user/doctor-model";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
-import { generateSignedUrlsForDoctor, generateSignedUrlsForUser } from "../../utils/signed-url";
+import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
+import {
+  generateSignedUrlsForDoctor,
+  generateSignedUrlsForUser,
+} from "../../utils/signed-url";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import { convertMediaKeysToUrls } from "../appointment/emergency-appointment";
-import { addHealthMetricsSchema, updateHealthMetricsSchema } from "../../validation/validation";
+import {
+  addHealthMetricsSchema,
+  updateHealthMetricsSchema,
+} from "../../validation/validation";
 import { HealthMetrics } from "../../models/health-metrics-model";
 
 export const getPatientById = async (
@@ -29,10 +36,10 @@ export const getPatientById = async (
     // Find patient by patient ID and populate user details
     const patient = await Patient.findById(id)
       .populate({
-        path: 'userId',
-        select: '-password'
+        path: "userId",
+        select: "-password",
       })
-      .select('-password');
+      .select("-password");
 
     if (!patient) {
       res.status(404).json({
@@ -59,7 +66,10 @@ export const getPatientById = async (
   }
 };
 
-export const patientOnboard = async (req: Request, res: Response): Promise<void> => {
+export const patientOnboard = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { userId } = req.params;
     const {
@@ -126,9 +136,9 @@ export const patientOnboard = async (req: Request, res: Response): Promise<void>
       {
         new: true,
         runValidators: true,
-        select: '-password'
+        select: "-password",
       }
-    ); 
+    );
 
     if (!updatedPatient) {
       res.status(500).json({
@@ -153,12 +163,18 @@ export const patientOnboard = async (req: Request, res: Response): Promise<void>
   }
 };
 
-export const getPatientDashboard = async (req: Request, res: Response): Promise<void> => {
+export const getPatientDashboard = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const userId = req.user.id;
 
-    const patient = await Patient.findOne({ userId }).populate('userId', 'firstName lastName profilePic');
-    
+    const patient = await Patient.findOne({ userId }).populate(
+      "userId",
+      "firstName lastName profilePic"
+    );
+
     if (!patient) {
       res.status(404).json({
         success: false,
@@ -171,7 +187,7 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
     // Find all emergency appointments for this patient
     const appointments = await EmergencyAppointment.find({
       patientId: patient._id,
-      status: { $in: ["in-progress", "pending"] }
+      status: { $in: ["in-progress", "pending"] },
     })
       .populate({
         path: "patientId",
@@ -184,79 +200,112 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
       .sort({ createdAt: -1 }); // Sort by newest first
 
     // Convert media keys to signed URLs
-    const emergencyAppointmentsWithUrls = await convertMediaKeysToUrls(appointments);
+    const emergencyAppointmentsWithUrls = await convertMediaKeysToUrls(
+      appointments
+    );
 
     const currentDate = new Date();
 
     // Get online appointment counts
-    const [upcomingOnline, completedOnline, cancelledOnline, allOnline] = await Promise.all([
-      // Upcoming online appointments (accepted and time is in future)
-      OnlineAppointment.countDocuments({
-        patientId: userId,
-        status: "accepted",
-        "slot.time.start": { $gte: currentDate }
-      }),
-      // Completed online appointments (accepted and time is in past)
-      OnlineAppointment.countDocuments({
-        patientId: userId,
-        status: "accepted",
-        "slot.time.start": { $lt: currentDate }
-      }),
-      // Cancelled online appointments (rejected)
-      OnlineAppointment.countDocuments({
-        patientId: userId,
-        status: "rejected"
-      }),
-      // All online appointments for the patient
-      OnlineAppointment.countDocuments({
-        patientId: userId
-      })
-    ]);
+    const [upcomingOnline, completedOnline, cancelledOnline, allOnline] =
+      await Promise.all([
+        // Upcoming online appointments (accepted and time is in future)
+        OnlineAppointment.countDocuments({
+          patientId: userId,
+          status: "accepted",
+          "slot.time.start": { $gte: currentDate },
+        }),
+        // Completed online appointments (accepted and time is in past)
+        OnlineAppointment.countDocuments({
+          patientId: userId,
+          status: "accepted",
+          "slot.time.start": { $lt: currentDate },
+        }),
+        // Cancelled online appointments (rejected)
+        OnlineAppointment.countDocuments({
+          patientId: userId,
+          status: "rejected",
+        }),
+        // All online appointments for the patient
+        OnlineAppointment.countDocuments({
+          patientId: userId,
+        }),
+      ]);
+
+    // Get clinic appointment counts
+    const [upcomingClinic, completedClinic, cancelledClinic, allClinic] =
+      await Promise.all([
+        // Upcoming clinic appointments (confirmed and day is today or in future)
+        ClinicAppointment.countDocuments({
+          patientId: userId,
+          status: "confirmed",
+          "slot.day": { $gte: new Date(currentDate.toDateString()) },
+        }),
+        // Completed clinic appointments
+        ClinicAppointment.countDocuments({
+          patientId: userId,
+          status: "completed",
+        }),
+        // Cancelled clinic appointments
+        ClinicAppointment.countDocuments({
+          patientId: userId,
+          status: "cancelled",
+        }),
+        // All clinic appointments for the patient
+        ClinicAppointment.countDocuments({
+          patientId: userId,
+        }),
+      ]);
 
     // Get emergency appointment counts
-    const [pendingEmergency, inProgressEmergency, completedEmergency, allEmergency] = await Promise.all([
+    const [
+      pendingEmergency,
+      inProgressEmergency,
+      completedEmergency,
+      allEmergency,
+    ] = await Promise.all([
       // Pending emergency appointments
       EmergencyAppointment.countDocuments({
         patientId: patient._id,
-        status: "pending"
+        status: "pending",
       }),
       // In-progress emergency appointments
       EmergencyAppointment.countDocuments({
         patientId: patient._id,
-        status: "in-progress"
+        status: "in-progress",
       }),
       // Completed emergency appointments
       EmergencyAppointment.countDocuments({
         patientId: patient._id,
-        status: "completed"
+        status: "completed",
       }),
       // All emergency appointments
       EmergencyAppointment.countDocuments({
-        patientId: patient._id
-      })
+        patientId: patient._id,
+      }),
     ]);
 
-    // Combine both appointment types counts
+    // Combine all appointment types counts
     const appointmentCounts = {
-      upcoming: upcomingOnline + pendingEmergency, // Include both pending and in-progress emergency as upcoming
-      completed: completedOnline + completedEmergency,
-      cancelled: cancelledOnline, // Only online appointments can be cancelled
-      all: allOnline + allEmergency // Total of all appointments
+      upcoming: upcomingOnline + pendingEmergency + upcomingClinic, // Include confirmed clinic appointments
+      completed: completedOnline + completedEmergency + completedClinic,
+      cancelled: cancelledOnline + cancelledClinic, // Both online and clinic appointments can be cancelled
+      all: allOnline + allEmergency + allClinic, // Total of all appointments
     };
 
     // Get recommended doctors based on patient's health conditions
     let recommendedDoctors: any[] = [];
-    
+
     // if (patient.healthMetrics && patient.healthMetrics.length > 0) {
     //   // Get latest health metrics
     //   const latestHealthMetrics = patient.healthMetrics[patient.healthMetrics.length - 1];
-      
+
     //   if (latestHealthMetrics.conditions && latestHealthMetrics.conditions.length > 0) {
     //     // Find doctors whose specialization matches patient's conditions
-    //     const patientConditions = latestHealthMetrics.conditions.map(condition => 
+    //     const patientConditions = latestHealthMetrics.conditions.map(condition =>
     //       new RegExp(condition, 'i') // Case insensitive matching
     //     );
-        
+
     //     recommendedDoctors = await Doctor.find({
     //       status: "approved",  // Only show approved doctors
     //       subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
@@ -274,17 +323,17 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
     // If no condition-based recommendations, get general recommended doctors
     if (recommendedDoctors.length === 0) {
       recommendedDoctors = await Doctor.find({
-        status: "approved",  // Only show approved doctors
+        status: "approved", // Only show approved doctors
         subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
       })
-        .populate('userId', 'firstName lastName profilePic')
-        .select('userId specialization experience onlineAppointment')
+        .populate("userId", "firstName lastName profilePic")
+        .select("userId specialization experience onlineAppointment")
         .limit(10);
     }
 
     // Process recommended doctors to add signed URLs
     const processedDoctors = await Promise.all(
-      recommendedDoctors.map(doctor => generateSignedUrlsForDoctor(doctor))
+      recommendedDoctors.map((doctor) => generateSignedUrlsForDoctor(doctor))
     );
 
     res.status(200).json({
@@ -293,8 +342,8 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
       data: {
         appointmentCounts,
         emergencyAppointments: emergencyAppointmentsWithUrls,
-        recommendedDoctors: processedDoctors
-      }
+        recommendedDoctors: processedDoctors,
+      },
     });
   } catch (error) {
     console.error("Error getting patient dashboard:", error);
@@ -306,47 +355,115 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
   }
 };
 
-export const getAppointmentsDoctorForPatient = async (req: Request, res: Response): Promise<void> => {
+export const getAppointmentsDoctorForPatient = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const userId = req.user.id;
 
-    const appointments = await OnlineAppointment.find({ patientId: userId }).populate({
-      path: 'doctorId',
-      select: 'specialization experience userId onlineAppointment',
+    // Get online appointments
+    const onlineAppointments = await OnlineAppointment.find({
+      patientId: userId,
+    }).populate({
+      path: "doctorId",
+      select: "specialization experience userId onlineAppointment",
       populate: {
-        path: 'userId',
-        select: 'firstName lastName profilePic'
-      }
+        path: "userId",
+        select: "firstName lastName profilePic",
+      },
     });
+
+    // Get clinic appointments
+    const clinicAppointments = await ClinicAppointment.find({
+      patientId: userId,
+    }).populate({
+      path: "doctorId",
+      select: "specialization experience userId clinicVisit",
+      populate: {
+        path: "userId",
+        select: "firstName lastName profilePic",
+      },
+    });
+
+    // Add appointment type to differentiate between online and clinic appointments
+    const onlineAppointmentsWithType = onlineAppointments.map(
+      (appointment) => ({
+        ...appointment.toObject(),
+        appointmentType: "online",
+      })
+    );
+
+    // Add clinic details and appointment type to clinic appointments
+    const clinicAppointmentsWithType = clinicAppointments.map((appointment) => {
+      const appointmentObj = appointment.toObject();
+      const doctor = appointmentObj.doctorId as any;
+      const clinicVisit = doctor?.clinicVisit as any;
+      const clinic = (clinicVisit?.clinics || []).find(
+        (c: any) => c._id.toString() === appointment.clinicId
+      );
+
+      return {
+        ...appointmentObj,
+        appointmentType: "clinic",
+        clinicDetails: clinic
+          ? {
+              clinicName: clinic.clinicName,
+              address: clinic.address,
+              consultationFee: clinic.consultationFee,
+              frontDeskNumber: clinic.frontDeskNumber,
+              operationalDays: clinic.operationalDays,
+              timeSlots: clinic.timeSlots,
+              isActive: clinic.isActive,
+            }
+          : null,
+      };
+    });
+
+    // Combine all appointments
+    const allAppointments = [
+      ...onlineAppointmentsWithType,
+      ...clinicAppointmentsWithType,
+    ];
 
     // Generate signed URLs for profile pictures
     const appointmentsWithSignedUrls = await Promise.all(
-      appointments.map(async (appointment) => {
-        const appointmentObj = appointment.toObject();
-        if (appointmentObj.doctorId) {
-          appointmentObj.doctorId = await generateSignedUrlsForDoctor(appointmentObj.doctorId);
+      allAppointments.map(async (appointment) => {
+        if (appointment.doctorId) {
+          appointment.doctorId = await generateSignedUrlsForDoctor(
+            appointment.doctorId
+          );
         }
-        return appointmentObj;
+        return appointment;
       })
+    );
+
+    // Sort by creation date (most recent first)
+    appointmentsWithSignedUrls.sort(
+      (a: any, b: any) =>
+        new Date(b.createdAt || 0).getTime() -
+        new Date(a.createdAt || 0).getTime()
     );
 
     res.status(200).json({
       success: true,
-      message: "Appoinments doctor for patient retrieved successfully",
-      data: appointmentsWithSignedUrls
+      message: "Appointments for patient retrieved successfully",
+      data: appointmentsWithSignedUrls,
     });
-    
   } catch (error) {
-    console.error("Error in getting appoinments doctor for patient:", error);
+    console.error("Error in getting appointments for patient:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to get appoinments doctor for patient",
+      message: "Failed to get appointments for patient",
       error: (error as Error).message,
     });
   }
-}
+};
 
-export const updateHealthMetrics = async (req: Request, res: Response): Promise<void> => {
+export const updateHealthMetrics = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const userId = req.user.id;
 
@@ -418,7 +535,10 @@ export const updateHealthMetrics = async (req: Request, res: Response): Promise<
   }
 };
 
-export const getHealthMetrics = async (req: Request, res: Response): Promise<void> => {
+export const getHealthMetrics = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const userId = req.user.id;
 
@@ -433,7 +553,9 @@ export const getHealthMetrics = async (req: Request, res: Response): Promise<voi
     }
 
     // Find health metrics for this patient
-    const healthMetrics = await HealthMetrics.findOne({ patientId: patient._id });
+    const healthMetrics = await HealthMetrics.findOne({
+      patientId: patient._id,
+    });
 
     if (!healthMetrics) {
       res.status(404).json({

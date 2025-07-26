@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
-import { 
-  bookOnlineAppointment, 
+import {
+  bookOnlineAppointment,
   getDoctorAppointments,
   getPatientAppointments,
   updateAppointmentStatus,
@@ -14,15 +14,17 @@ import { RequestHandler } from "express";
 const router = Router();
 
 // Route for patients to book online appointments
-router.route("/appointment/online/book")
+router
+  .route("/appointment/online/book")
   .post(
-    verifyToken as RequestHandler, 
-    checkRole("patient") as RequestHandler, 
+    verifyToken as RequestHandler,
+    checkRole("patient") as RequestHandler,
     bookOnlineAppointment as RequestHandler
   );
 
 // Route for doctors to get all their appointments
-router.route("/appointment/online/doctor")
+router
+  .route("/appointment/online/doctor")
   .get(
     verifyToken as RequestHandler,
     checkRole("doctor") as RequestHandler,
@@ -30,7 +32,8 @@ router.route("/appointment/online/doctor")
   );
 
 // Route for doctors to get appointments by specific date
-router.route("/appointment/online/doctor/by-date")
+router
+  .route("/appointment/online/doctor/by-date")
   .post(
     verifyToken as RequestHandler,
     checkRole("doctor") as RequestHandler,
@@ -38,7 +41,8 @@ router.route("/appointment/online/doctor/by-date")
   );
 
 // Route for patients to get all their appointments
-router.route("/appointment/online/patient")
+router
+  .route("/appointment/online/patient")
   .get(
     verifyToken as RequestHandler,
     checkRole("patient") as RequestHandler,
@@ -46,7 +50,8 @@ router.route("/appointment/online/patient")
   );
 
 // Route for doctors to update appointment status
-router.route("/appointment/online/:appointmentId/status")
+router
+  .route("/appointment/online/:appointmentId/status")
   .put(
     verifyToken as RequestHandler,
     checkRole("doctor") as RequestHandler,
@@ -54,18 +59,15 @@ router.route("/appointment/online/:appointmentId/status")
   );
 
 // Route to create a new twilio room
-router.route("/appointment/online/create-room")
-  .post(
-    verifyToken as RequestHandler,
-    // checkRole("doctor") as RequestHandler, // Only doctors can trigger room creation
-    createTwilioRoom as RequestHandler
-  );
+router.route("/appointment/online/create-room").post(
+  verifyToken as RequestHandler,
+  // checkRole("doctor") as RequestHandler, // Only doctors can trigger room creation
+  createTwilioRoom as RequestHandler
+);
 
 // Route to create access token for doctor and patient
-router.route("/appointment/online/access-token")
-  .post(
-    verifyToken as RequestHandler,
-    createRoomAccessToken as RequestHandler
-  )
+router
+  .route("/appointment/online/access-token")
+  .post(verifyToken as RequestHandler, createRoomAccessToken as RequestHandler);
 
-export default router; 
+export default router;
