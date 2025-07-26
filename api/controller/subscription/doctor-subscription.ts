@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import DoctorSubscription from "../../models/subscription-model";
+import DoctorSubscription from "../../models/doctor-subscription";
 import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
 import QRCode from "qrcode";
 import Doctor from "../../models/user/doctor-model";

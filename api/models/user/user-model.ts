@@ -16,7 +16,7 @@ const userSchema = new Schema(
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     countryCode: { type: String, required: true },
-    phone: { type: String, required: true },
+    phone: { type: String, required: true, unique: true },
     phoneVerified: { type: Boolean, default: false },
     gender: { type: String, enum: ["Male", "Female", "Other"], default: "Male", required: true },
     dob: { type: Date },
@@ -52,7 +52,7 @@ const userSchema = new Schema(
     },
     bankDetails: {
       accountName: { type: String },
-      accountNumber: { type: String, sparse: true },
+      accountNumber: { type: String },
       ifscCode: { type: String },
       bankName: { type: String },
       bankAddress: { type: String },

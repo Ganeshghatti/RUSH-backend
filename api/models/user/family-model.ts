@@ -3,7 +3,19 @@ const { Schema } = mongoose;
 
 export interface IFamily {
   patientId: mongoose.Types.ObjectId;
-  relationship: "Father" | "Mother" | "Child" | "Sister" | "Brother" | "Father-in-law" | "Mother-in-law" | "Other";
+  relationship:
+    | "Father"
+    | "Mother"
+    | "Child"
+    | "Sister"
+    | "Brother"
+    | "Father-in-law"
+    | "Mother-in-law"
+    | "Other";
+  profilePic?: string;
+  gender?: "Male" | "Female" | "Other";
+  age?: number;
+  email?: string;
   address: {
     line1?: string;
     line2?: string;
@@ -13,13 +25,23 @@ export interface IFamily {
     country?: string;
   };
   mobile?: string;
-  email?: string;
   idNumber?: string;
   idImage?: string;
   insurance: {
     policyNumber?: string;
     provider?: string;
     image?: string;
+  };
+  healthMetrics?: {
+    diabetes: Boolean;
+    hypertension: Boolean;
+    heartDisease: Boolean;
+    stroke: Boolean;
+    cancer: [String];
+    thyroid: Boolean;
+    mentalIllness: Boolean;
+    geneticDisorders: Boolean;
+    Other: String;
   };
 }
 
@@ -41,6 +63,13 @@ const familySchema = new Schema<IFamily>({
     ],
     required: true,
   },
+  profilePic: { type: String },
+  gender: {
+    type: String,
+    enum: ["Male", "Female", "Other"],
+  },
+  age: { type: Number },
+  email: { type: String },
   address: {
     line1: { type: String },
     line2: { type: String },
@@ -50,7 +79,6 @@ const familySchema = new Schema<IFamily>({
     country: { type: String },
   },
   mobile: { type: String },
-  email: { type: String },
   idNumber: { type: String },
   idImage: { type: String },
   insurance: {
@@ -58,19 +86,17 @@ const familySchema = new Schema<IFamily>({
     provider: { type: String },
     image: { type: String },
   },
-  // healthMetrics: [
-  //   {
-  //     bloodPressure: { type: String },
-  //     bloodGlucose: { type: Number },
-  //     weight: { type: Number },
-  //     height: { type: Number },
-  //     bloodGroup: {
-  //       type: String,
-  //       enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
-  //     },
-  //     conditions: [{ type: String }],
-  //   },
-  // ],
+  healthMetrics: {
+    diabetes: Boolean,
+    hypertension: Boolean,
+    heartDisease: Boolean,
+    stroke: Boolean,
+    cancer: [String],
+    thyroid: Boolean,
+    mentalIllness: Boolean,
+    geneticDisorders: Boolean,
+    Other: String,
+  },
 });
 
 const Family = mongoose.model("Family", familySchema);

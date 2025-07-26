@@ -7,7 +7,8 @@ import OnlineAppointment from "../../models/appointment/online-appointment-model
 import { generateSignedUrlsForDoctor, generateSignedUrlsForUser } from "../../utils/signed-url";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import { convertMediaKeysToUrls } from "../appointment/emergency-appointment";
-import { addHealthMetricsSchema } from "../../validation/validation";
+import { addHealthMetricsSchema, updateHealthMetricsSchema } from "../../validation/validation";
+import { HealthMetrics } from "../../models/health-metrics-model";
 
 export const getPatientById = async (
   req: Request,
@@ -246,29 +247,29 @@ export const getPatientDashboard = async (req: Request, res: Response): Promise<
     // Get recommended doctors based on patient's health conditions
     let recommendedDoctors: any[] = [];
     
-    if (patient.healthMetrics && patient.healthMetrics.length > 0) {
-      // Get latest health metrics
-      const latestHealthMetrics = patient.healthMetrics[patient.healthMetrics.length - 1];
+    // if (patient.healthMetrics && patient.healthMetrics.length > 0) {
+    //   // Get latest health metrics
+    //   const latestHealthMetrics = patient.healthMetrics[patient.healthMetrics.length - 1];
       
-      if (latestHealthMetrics.conditions && latestHealthMetrics.conditions.length > 0) {
-        // Find doctors whose specialization matches patient's conditions
-        const patientConditions = latestHealthMetrics.conditions.map(condition => 
-          new RegExp(condition, 'i') // Case insensitive matching
-        );
+    //   if (latestHealthMetrics.conditions && latestHealthMetrics.conditions.length > 0) {
+    //     // Find doctors whose specialization matches patient's conditions
+    //     const patientConditions = latestHealthMetrics.conditions.map(condition => 
+    //       new RegExp(condition, 'i') // Case insensitive matching
+    //     );
         
-        recommendedDoctors = await Doctor.find({
-          status: "approved",  // Only show approved doctors
-          subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
-          $or: [
-            { specialization: { $in: patientConditions } },
-            { "registration.specialization": { $in: patientConditions } }
-          ]
-        })
-        .populate('userId', 'firstName lastName profilePic')
-        .select('userId specialization experience onlineAppointment')
-        .limit(10);
-      }
-    }
+    //     recommendedDoctors = await Doctor.find({
+    //       status: "approved",  // Only show approved doctors
+    //       subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
+    //       $or: [
+    //         { specialization: { $in: patientConditions } },
+    //         { "registration.specialization": { $in: patientConditions } }
+    //       ]
+    //     })
+    //     .populate('userId', 'firstName lastName profilePic')
+    //     .select('userId specialization experience onlineAppointment')
+    //     .limit(10);
+    //   }
+    // }
 
     // If no condition-based recommendations, get general recommended doctors
     if (recommendedDoctors.length === 0) {
@@ -345,12 +346,12 @@ export const getAppointmentsDoctorForPatient = async (req: Request, res: Respons
   }
 }
 
-export const addHealthMetrics = async (req: Request, res: Response): Promise<void> => {
+export const updateHealthMetrics = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user.id;
 
     // Validate request body
-    const validationResult = addHealthMetricsSchema.safeParse(req.body);
+    const validationResult = updateHealthMetricsSchema.safeParse(req.body);
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
@@ -359,8 +360,6 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
       });
       return;
     }
-
-    const { bloodPressure, bloodGlucose, weight, height, bloodGroup, conditions } = validationResult.data;
 
     // Find patient by userId
     const patient = await Patient.findOne({ userId });
@@ -372,44 +371,88 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    // Create new health metric entry
-    const newHealthMetric = {
-      bloodPressure,
-      bloodGlucose,
-      weight,
-      height,
-      bloodGroup,
-      conditions,
-      reportDate: new Date(),
-    };
+    const updateData = validationResult.data;
 
-    // Add health metric to patient's healthMetrics array
-    const updatedPatient = await Patient.findOneAndUpdate(
-      { userId },
-      { $push: { healthMetrics: newHealthMetric } },
-      { new: true, runValidators: true }
-    );
+    // Try to find existing health metrics for this patient
+    let healthMetrics = await HealthMetrics.findOne({ patientId: patient._id });
 
-    if (!updatedPatient) {
-      res.status(500).json({
+    if (healthMetrics) {
+      // Update existing health metrics document
+      healthMetrics = await HealthMetrics.findOneAndUpdate(
+        { patientId: patient._id },
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Health metrics updated successfully",
+        data: healthMetrics,
+      });
+    } else {
+      // Create new health metrics document if none exists
+      healthMetrics = new HealthMetrics({
+        patientId: patient._id,
+        ...updateData,
+      });
+
+      const savedHealthMetrics = await healthMetrics.save();
+
+      patient.healthMetricsId = savedHealthMetrics._id;
+
+      await patient.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Health metrics created successfully",
+        data: savedHealthMetrics,
+      });
+    }
+  } catch (error) {
+    console.error("Error updating health metrics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update health metrics",
+      error: (error as Error).message,
+    });
+  }
+};
+
+export const getHealthMetrics = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user.id;
+
+    // Find patient by userId
+    const patient = await Patient.findOne({ userId });
+    if (!patient) {
+      res.status(404).json({
         success: false,
-        message: "Failed to add health metrics",
+        message: "Patient not found",
+      });
+      return;
+    }
+
+    // Find health metrics for this patient
+    const healthMetrics = await HealthMetrics.findOne({ patientId: patient._id });
+
+    if (!healthMetrics) {
+      res.status(404).json({
+        success: false,
+        message: "Health metrics not found",
       });
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: "Health metrics added successfully",
-      data: {
-        healthMetrics: updatedPatient.healthMetrics[updatedPatient.healthMetrics.length - 1]
-      },
+      message: "Health metrics retrieved successfully",
+      data: healthMetrics,
     });
   } catch (error) {
-    console.error("Error adding health metrics:", error);
+    console.error("Error fetching health metrics:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to add health metrics",
+      message: "Failed to fetch health metrics",
       error: (error as Error).message,
     });
   }

@@ -10,20 +10,7 @@ const patientSchema = new Schema({
     provider: { type: String },
     image: { type: String },
   },
-  healthMetrics: [
-    {
-      bloodPressure: { type: String }, // e.g., "120/80"
-      bloodGlucose: { type: Number }, // Average blood glucose level
-      weight: { type: Number }, // in kg
-      height: { type: Number }, // in cm
-      bloodGroup: {
-        type: String,
-        enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
-      },
-      conditions: [{ type: String }],
-      reportDate: { type: Date, default: Date.now }, 
-    },
-  ],
+  healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrics" },
 });
 
 const Patient = mongoose.model("Patient", patientSchema);

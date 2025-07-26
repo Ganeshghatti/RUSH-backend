@@ -8,6 +8,7 @@ import mediaRoutes from "./routes/media/media-routes";
 import patientRoutes from "./routes/onboard/patient"
 import doctorRoutes from "./routes/onboard/doctor";
 import doctorSubscriptionRoutes from "./routes/subscription/doctor-subscription";
+import patientSubscriptionRoutes from "./routes/subscription/patient-subscription";
 import doctorProfileRoutes from "./routes/doctor/update-profile";
 import symptomRoutes from "./routes/symptom/symptom-route";
 import cookieParser from "cookie-parser";
@@ -75,6 +76,7 @@ app.use("/patient", patientRoutes);
 
 app.use("/doctor", doctorRoutes);
 app.use("/doctor", doctorSubscriptionRoutes);
+app.use("/patient", patientSubscriptionRoutes);
 app.use("/api", doctorProfileRoutes);
 app.use("/user", walletRoutes);
 

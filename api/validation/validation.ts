@@ -133,7 +133,7 @@ export const doctorUpdateSchema = z.object({
   clinicVisit: z.object({
     isActive: z.boolean().optional(),
   }).optional(),
-}).strict();
+}).strict();  
 
 // Complete profile update validation schema
 export const updateProfileSchema = z.object({
@@ -195,6 +195,10 @@ export const addFamilySchema = z.object({
     "Mother-in-law",
     "Other",
   ]),
+  profilePic: z.string().optional(),
+  gender: z.enum(["Male", "Female", "Other"]).optional(),
+  age: z.number().optional(),
+  email: z.string().email().optional(),
   address: z.object({
     line1: z.string().optional(),
     line2: z.string().optional(),
@@ -204,13 +208,23 @@ export const addFamilySchema = z.object({
     country: z.string().optional(),
   }).optional(),
   mobile: z.string().optional(),
-  email: z.string().email().optional(),
   idNumber: z.string().optional(),
   idImage: z.string().optional(),
   insurance: z.object({
     policyNumber: z.string().optional(),
     provider: z.string().optional(),
     image: z.string().optional(),
+  }).optional(),
+  healthMetrics: z.object({
+    diabetes: z.boolean().optional(),
+    hypertension: z.boolean().optional(),
+    heartDisease: z.boolean().optional(),
+    stroke: z.boolean().optional(),
+    cancer: z.array(z.string()).optional(),
+    thyroid: z.boolean().optional(),
+    mentalIllness: z.boolean().optional(),
+    geneticDisorders: z.boolean().optional(),
+    Other: z.string().optional(),
   }).optional(),
 }).strict();
 
@@ -226,6 +240,10 @@ export const updateFamilySchema = z.object({
     "Mother-in-law",
     "Other",
   ]).optional(),
+  profilePic: z.string().optional(),
+  gender: z.enum(["Male", "Female", "Other"]).optional(),
+  age: z.number().optional(),
+  email: z.string().email().optional(),
   address: z.object({
     line1: z.string().optional(),
     line2: z.string().optional(),
@@ -235,7 +253,6 @@ export const updateFamilySchema = z.object({
     country: z.string().optional(),
   }).optional(),
   mobile: z.string().optional(),
-  email: z.string().email().optional(),
   idNumber: z.string().optional(),
   idImage: z.string().optional(),
   insurance: z.object({

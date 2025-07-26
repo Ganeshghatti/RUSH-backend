@@ -190,6 +190,15 @@ export const generateSignedUrlsForFamily = async (family: any) => {
 
   const promises: Promise<void>[] = [];
 
+  // Profile picture
+  if (clone?.profilePic) {
+    promises.push(
+      safeGetSignedUrl(clone?.profilePic).then(url => {
+        clone.profilePic = url;
+      })
+    );
+  }
+
   // ID image
   if (clone?.idImage) {
     promises.push(
