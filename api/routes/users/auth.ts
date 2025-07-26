@@ -3,6 +3,7 @@ import { verifyToken } from './../../middleware/auth-middleware';
 import { Router } from "express";
 import { sendOtp, verifyOtp, login, findCurrentUser, logout } from "../../controller/users/auth";
 import rateLimit from "express-rate-limit";
+import { verifyRecaptcha } from '../../middleware/recaptcha-middleware';
 
 const router = Router();
 

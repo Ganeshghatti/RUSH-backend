@@ -49,12 +49,6 @@ export const updateWallet = async (
 
     const order = await razorpayConfig.orders.create(options);
 
-    console.log("order created: ", order);
-
-    // Update wallet amount
-    user.wallet = (user.wallet || 0) + wallet;
-    await user.save();
-
     res.status(200).json({
       success: true,
       message: "Wallet updated successfully",
