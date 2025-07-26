@@ -289,13 +289,13 @@ export const updateHealthMetricsSchema = z.object({
       "skinDisorders",
       "visionProblems",
       "hearingLoss",
-      "sleepDisorders"
+      "sleepDisorders",
+      "covid"
     ]),
     hadCondition: z.enum(["i dont know", "i think so", "yes", "no"]),
     ageOfOnset: z.number().optional(),
     treatmentStatus: z.enum(["Ongoing", "Controlled", "Not Treated"]).optional(),
     reports: z.array(z.string()).optional(),
-    covidStatus: z.enum(["Never infected", "Recovered", "Vaccinated", "Boosted"]).optional(),
   })).optional(),
   vitals: z.array(z.object({
     temperature: z.number().optional(),

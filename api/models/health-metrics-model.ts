@@ -37,6 +37,7 @@ const MedicalCondition = {
   VISION_PROBLEMS: "visionProblems",
   HEARING_LOSS: "hearingLoss",
   SLEEP_DISORDERS: "sleepDisorders",
+  COVID: 'covid'
 } as const;
 
 const HadCondition = {
@@ -56,13 +57,6 @@ const PregnancyStatus = {
   PREGNANT: "Pregnant",
   NOT_PREGNANT: "Not Pregnant",
   TRYING: "Trying",
-} as const;
-
-const CovidStatus = {
-  NEVER_INFECTED: "Never infected",
-  RECOVERED: "Recovered",
-  VACCINATED: "Vaccinated",
-  BOOSTED: "Boosted",
 } as const;
 
 const SleepPattern = {
@@ -96,10 +90,6 @@ const healthMetricsSchema = new Schema(
       ageOfOnset: Number,
       treatmentStatus: { type: String, enum: Object.values(TreatmentStatus) },
       reports: [String],
-      covidStatus: {
-        type: String,
-        enum: Object.values(CovidStatus),
-      },
     }],
     vitals: [{
       temperature: Number,
@@ -167,7 +157,6 @@ export {
   HadCondition,
   MenstrualCycle,
   PregnancyStatus,
-  CovidStatus,
   SleepPattern,
   StressLevel,
 };
