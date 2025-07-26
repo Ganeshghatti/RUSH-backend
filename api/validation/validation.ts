@@ -275,6 +275,7 @@ export const updateFamilySchema = z.object({
 
 // Health metrics update validation schema
 export const updateHealthMetricsSchema = z.object({
+  reports: z.array(z.string()).optional(),
   medicalHistory: z.array(z.object({
     condition: z.enum([
       "diabetes",
@@ -305,14 +306,15 @@ export const updateHealthMetricsSchema = z.object({
       "skinDisorders",
       "visionProblems",
       "hearingLoss",
-      "sleepDisorders"
+      "sleepDisorders",
+      "covid"
     ]),
-    hasCondition: z.boolean().optional(),
+    hadCondition: z.enum(["i dont know", "i think so", "yes", "no"]),
     ageOfOnset: z.number().optional(),
-    treatmentStatus: z.enum(["Ongoing", "Controlled", "Resolved", "Not Treated"]).optional(),
+    treatmentStatus: z.enum(["Ongoing", "Controlled", "Not Treated"]).optional(),
     reports: z.array(z.string()).optional(),
   })).optional(),
-  vitals: z.object({
+  vitals: z.array(z.object({
     temperature: z.number().optional(),
     bloodPressure: z.string().optional(),
     pulseRate: z.number().optional(),
@@ -321,11 +323,10 @@ export const updateHealthMetricsSchema = z.object({
     bloodSugarFasting: z.number().optional(),
     bloodSugarPP: z.number().optional(),
     oxygenSaturation: z.number().optional(),
-    painScale: z.number().min(0).max(10).optional(),
     height: z.number().positive().optional(),
     weight: z.number().positive().optional(),
     bmi: z.number().optional(),
-  }).optional(),
+  })).optional(),
   femaleHealth: z.object({
     lastMenstrualPeriod: z.string().optional(),
     menstrualCycle: z.enum(["Regular", "Irregular", "Menopause"]).optional(),
@@ -336,25 +337,14 @@ export const updateHealthMetricsSchema = z.object({
     abortions: z.number().optional(),
   }).optional(),
   medications: z.object({
-    currentMedications: z.string().optional(),
     otcHerbalUse: z.string().optional(),
     allergiesDrug: z.array(z.string()).optional(),
     allergiesFood: z.array(z.string()).optional(),
     allergiesEnvironmental: z.array(z.string()).optional(),
-    pastSurgeries: z.array(z.string()).optional(),
-    hospitalizations: z.array(z.string()).optional(),
     recentVaccinations: z.array(z.string()).optional(),
-    recentTravelHistory: z.array(z.string()).optional(),
     tobaccoUse: z.boolean().optional(),
     alcoholUse: z.boolean().optional(),
     drugUse: z.boolean().optional(),
-  }).optional(),
-  infections: z.object({
-    covidStatus: z.enum(["Never infected", "Recovered", "Vaccinated", "Boosted"]).optional(),
-    tbExposure: z.boolean().optional(),
-    hivHepatitisRisk: z.boolean().optional(),
-    contagiousExposure: z.boolean().optional(),
-    occupationalRisk: z.boolean().optional(),
   }).optional(),
   mentalHealth: z.object({
     memoryIssues: z.boolean().optional(),
@@ -368,6 +358,4 @@ export const updateHealthMetricsSchema = z.object({
     brushingHabit: z.string().optional(),
     oralConcerns: z.string().optional(),
   }).optional(),
-  currentSymptoms: z.array(z.string()).optional(),
-  otherSymptomsText: z.string().optional(),
 }).strict();

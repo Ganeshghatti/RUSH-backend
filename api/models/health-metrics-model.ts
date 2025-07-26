@@ -4,19 +4,7 @@ const { Schema } = mongoose;
 const TreatmentStatus = {
   ONGOING: "Ongoing",
   CONTROLLED: "Controlled",
-  RESOLVED: "Resolved",
   NOT_TREATED: "Not Treated",
-} as const;
-
-const DiabetesType = {
-  TYPE_1: "Type 1",
-  TYPE_2: "Type 2",
-  GESTATIONAL: "Gestational",
-} as const;
-
-const ThyroidType = {
-  HYPO: "Hypo",
-  HYPER: "Hyper",
 } as const;
 
 const MedicalCondition = {
@@ -49,6 +37,14 @@ const MedicalCondition = {
   VISION_PROBLEMS: "visionProblems",
   HEARING_LOSS: "hearingLoss",
   SLEEP_DISORDERS: "sleepDisorders",
+  COVID: 'covid'
+} as const;
+
+const HadCondition = {
+  I_DONT_KNOW: "i dont know",
+  I_THINK_SO: "i think so",
+  YES: "yes",
+  NO: "no",
 } as const;
 
 const MenstrualCycle = {
@@ -61,13 +57,6 @@ const PregnancyStatus = {
   PREGNANT: "Pregnant",
   NOT_PREGNANT: "Not Pregnant",
   TRYING: "Trying",
-} as const;
-
-const CovidStatus = {
-  NEVER_INFECTED: "Never infected",
-  RECOVERED: "Recovered",
-  VACCINATED: "Vaccinated",
-  BOOSTED: "Boosted",
 } as const;
 
 const SleepPattern = {
@@ -86,18 +75,23 @@ const StressLevel = {
 const healthMetricsSchema = new Schema(
   {
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    reports: [String],
     medicalHistory: [{
       condition: { 
         type: String, 
         enum: Object.values(MedicalCondition),
         required: true 
       },
-      hasCondition: { type: Boolean, default: false },
+      hadCondition: { 
+        type: String, 
+        enum: Object.values(HadCondition),
+        required: true 
+      },
       ageOfOnset: Number,
       treatmentStatus: { type: String, enum: Object.values(TreatmentStatus) },
       reports: [String],
     }],
-    vitals: {
+    vitals: [{
       temperature: Number,
       bloodPressure: String,
       pulseRate: Number,
@@ -106,11 +100,10 @@ const healthMetricsSchema = new Schema(
       bloodSugarFasting: Number,
       bloodSugarPP: Number,
       oxygenSaturation: Number,
-      painScale: { type: Number, min: 0, max: 10 },
       height: Number,
       weight: Number,
       bmi: Number,
-    },
+    }],
     femaleHealth: {
       lastMenstrualPeriod: Date,
       menstrualCycle: {
@@ -127,28 +120,14 @@ const healthMetricsSchema = new Schema(
       abortions: Number,
     },
     medications: {
-      currentMedications: String,
       otcHerbalUse: String,
       allergiesDrug: [String],
       allergiesFood: [String],
       allergiesEnvironmental: [String],
-      pastSurgeries: [String],
-      hospitalizations: [String],
       recentVaccinations: [String],
-      recentTravelHistory: [String],
       tobaccoUse: Boolean,
       alcoholUse: Boolean,
       drugUse: Boolean,
-    },
-    infections: {
-      covidStatus: {
-        type: String,
-        enum: Object.values(CovidStatus),
-      },
-      tbExposure: Boolean,
-      hivHepatitisRisk: Boolean,
-      contagiousExposure: Boolean,
-      occupationalRisk: Boolean,
     },
     mentalHealth: {
       memoryIssues: Boolean,
@@ -168,20 +147,16 @@ const healthMetricsSchema = new Schema(
       brushingHabit: String,
       oralConcerns: String,
     },
-    currentSymptoms: [String],
-    otherSymptomsText: String,
   },
   { timestamps: true }
 );
 
 export {
   TreatmentStatus,
-  DiabetesType,
-  ThyroidType,
   MedicalCondition,
+  HadCondition,
   MenstrualCycle,
   PregnancyStatus,
-  CovidStatus,
   SleepPattern,
   StressLevel,
 };
