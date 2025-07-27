@@ -41,7 +41,8 @@ export const createEmergencyRoomAccessToken = async(req: Request, res: Response)
             if (patient && appointment.patientId.toString() === patient._id.toString()) {
                 isAuthorized = true;
             }
-        } else if (user.roles.includes('doctor')) {
+        } 
+        if (!isAuthorized && user.roles.includes('doctor')) {
             const doctor = await Doctor.findById(user?.roleRefs?.doctor);
             if (doctor && appointment.doctorId && appointment.doctorId.toString() === doctor._id.toString()) {
                 isAuthorized = true;
