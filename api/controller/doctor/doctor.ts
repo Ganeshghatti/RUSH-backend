@@ -8,6 +8,7 @@ import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
+import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import crypto from "crypto";
 import Razorpay from "razorpay";
@@ -500,7 +501,7 @@ export const subscribeDoctor = async (
           email: doctor.userId.email,
           contact: doctor.userId.phone,
           countryCode: doctor.userId.countryCode || "+91",
-        }
+        },
       },
     });
   } catch (error) {
@@ -843,8 +844,8 @@ export const getDoctorAppointmentStats = async (
       return;
     }
 
-    // Get all appointments for this doctor with populated patient data
-    const appointments = await OnlineAppointment.find({
+    // Get all online appointments for this doctor with populated patient data
+    const onlineAppointments = await OnlineAppointment.find({
       doctorId: doctor._id,
     })
       .populate({
@@ -854,21 +855,74 @@ export const getDoctorAppointmentStats = async (
       })
       .sort({ "slot.day": -1, "slot.time.start": -1 }); // Sort by most recent first
 
-    // Calculate counts by status
-    const pendingCount = appointments.filter(
+    // Get all clinic appointments for this doctor with populated patient data
+    const clinicAppointments = await ClinicAppointment.find({
+      doctorId: doctor._id,
+    })
+      .populate({
+        path: "patientId",
+        select:
+          "firstName lastName countryCode phone gender email profilePic dob address",
+      })
+      .sort({ "slot.day": -1, "slot.time.start": -1 }); // Sort by most recent first
+
+    // Add appointment type to online appointments
+    const onlineAppointmentsWithType = onlineAppointments.map(
+      (appointment) => ({
+        ...appointment.toObject(),
+        appointmentType: "online",
+      })
+    );
+
+    // Add clinic details and appointment type to clinic appointments
+    const clinicAppointmentsWithType = clinicAppointments.map((appointment) => {
+      const appointmentObj = appointment.toObject();
+      const clinicVisit = doctor.clinicVisit as any;
+      const clinic = (clinicVisit?.clinics || []).find(
+        (c: any) => c._id.toString() === appointment.clinicId
+      );
+
+      return {
+        ...appointmentObj,
+        appointmentType: "clinic",
+        clinicDetails: clinic
+          ? {
+              clinicName: clinic.clinicName,
+              address: clinic.address,
+              consultationFee: clinic.consultationFee,
+              frontDeskNumber: clinic.frontDeskNumber,
+              operationalDays: clinic.operationalDays,
+              timeSlots: clinic.timeSlots,
+              isActive: clinic.isActive,
+            }
+          : null,
+      };
+    });
+
+    // Combine all appointments
+    const allAppointments = [
+      ...onlineAppointmentsWithType,
+      ...clinicAppointmentsWithType,
+    ];
+
+    // Calculate counts by status for all appointments
+    const pendingCount = allAppointments.filter(
       (app) => app.status === "pending"
     ).length;
-    const acceptedCount = appointments.filter(
-      (app) => app.status === "accepted"
+    const acceptedConfirmedCount = allAppointments.filter(
+      (app) => app.status === "accepted" || app.status === "confirmed"
     ).length;
-    const rejectedCount = appointments.filter(
-      (app) => app.status === "rejected"
+    const rejectedCancelledCount = allAppointments.filter(
+      (app) => app.status === "rejected" || app.status === "cancelled"
     ).length;
-    const totalCount = appointments.length;
+    const completedCount = allAppointments.filter(
+      (app) => app.status === "completed"
+    ).length;
+    const totalCount = allAppointments.length;
 
     // Generate signed URLs for patient profile pictures
     const appointmentsWithSignedUrls = await Promise.all(
-      appointments.map(async (appointment: any) => {
+      allAppointments.map(async (appointment: any) => {
         let patientWithUrls = appointment.patientId;
 
         if (appointment.patientId && appointment.patientId.profilePic) {
@@ -890,9 +944,19 @@ export const getDoctorAppointmentStats = async (
           slot: appointment.slot,
           history: appointment.history,
           status: appointment.status,
+          appointmentType: appointment.appointmentType,
           roomName: appointment.roomName,
+          clinicDetails: appointment.clinicDetails || null,
+          createdAt: appointment.createdAt,
+          updatedAt: appointment.updatedAt,
         };
       })
+    );
+
+    // Sort by creation date (most recent first)
+    appointmentsWithSignedUrls.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
     // Prepare the response data
@@ -900,8 +964,9 @@ export const getDoctorAppointmentStats = async (
       counts: {
         total: totalCount,
         pending: pendingCount,
-        accepted: acceptedCount,
-        rejected: rejectedCount,
+        acceptedConfirmed: acceptedConfirmedCount,
+        rejectedCancelled: rejectedCancelledCount,
+        completed: completedCount,
       },
       appointments: appointmentsWithSignedUrls,
     };
@@ -966,17 +1031,25 @@ export const getDoctorDashboard = async (
     // Calculate online appointment counts by status
     const onlineStats = {
       total: onlineAppointments.length,
-      pending: onlineAppointments.filter((app) => app.status === "pending").length,
-      accepted: onlineAppointments.filter((app) => app.status === "accepted").length,
-      rejected: onlineAppointments.filter((app) => app.status === "rejected").length,
+      pending: onlineAppointments.filter((app) => app.status === "pending")
+        .length,
+      accepted: onlineAppointments.filter((app) => app.status === "accepted")
+        .length,
+      rejected: onlineAppointments.filter((app) => app.status === "rejected")
+        .length,
     };
 
     // Calculate emergency appointment counts by status
     const emergencyStats = {
       total: emergencyAppointments.length,
-      pending: emergencyAppointments.filter((app) => app.status === "pending").length,
-      inProgress: emergencyAppointments.filter((app) => app.status === "in-progress").length,
-      completed: emergencyAppointments.filter((app) => app.status === "completed").length,
+      pending: emergencyAppointments.filter((app) => app.status === "pending")
+        .length,
+      inProgress: emergencyAppointments.filter(
+        (app) => app.status === "in-progress"
+      ).length,
+      completed: emergencyAppointments.filter(
+        (app) => app.status === "completed"
+      ).length,
     };
 
     // Calculate total appointments across both types
@@ -991,16 +1064,24 @@ export const getDoctorDashboard = async (
     const processedEmergencyAppointments = await Promise.all(
       emergencyAppointments.map(async (appointment) => {
         const appointmentObj = appointment.toObject() as any;
-        
+
         // Generate presigned URLs for media array if it exists
         if (Array.isArray(appointmentObj.media)) {
           appointmentObj.media = await Promise.all(
             appointmentObj.media.map(async (mediaKey: any) => {
-              if (mediaKey && typeof mediaKey === 'string' && mediaKey.trim() !== '') {
+              if (
+                mediaKey &&
+                typeof mediaKey === "string" &&
+                mediaKey.trim() !== ""
+              ) {
                 try {
                   return await GetSignedUrl(mediaKey);
                 } catch (error) {
-                  console.warn("Could not generate signed URL for media:", mediaKey, error);
+                  console.warn(
+                    "Could not generate signed URL for media:",
+                    mediaKey,
+                    error
+                  );
                   return mediaKey;
                 }
               }
@@ -1012,9 +1093,15 @@ export const getDoctorDashboard = async (
         // Generate presigned URL for patient's profile picture if it exists
         if (appointmentObj.patientId?.userId?.profilePic) {
           try {
-            appointmentObj.patientId.userId.profilePic = await GetSignedUrl(appointmentObj.patientId.userId.profilePic);
+            appointmentObj.patientId.userId.profilePic = await GetSignedUrl(
+              appointmentObj.patientId.userId.profilePic
+            );
           } catch (error) {
-            console.warn("Could not generate signed URL for profile picture:", appointmentObj.patientId.userId.profilePic, error);
+            console.warn(
+              "Could not generate signed URL for profile picture:",
+              appointmentObj.patientId.userId.profilePic,
+              error
+            );
           }
         }
 

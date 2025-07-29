@@ -82,7 +82,15 @@ const doctorSchema = new Schema({
       {
         day: {
           type: String,
-          enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+          enum: [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+          ],
         },
         duration: [
           {
@@ -121,6 +129,50 @@ const doctorSchema = new Schema({
   },
   clinicVisit: {
     isActive: { type: Boolean, default: false },
+    clinics: [
+      {
+        clinicName: { type: String, required: true },
+        address: {
+          line1: { type: String, required: true },
+          line2: { type: String },
+          landmark: { type: String },
+          locality: { type: String, required: true },
+          city: { type: String, required: true },
+          pincode: { type: String, required: true },
+          country: { type: String, required: true, default: "India" },
+        },
+        consultationFee: { type: Number, required: true },
+        frontDeskNumber: { type: String, required: true },
+        operationalDays: [
+          {
+            type: String,
+            enum: [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+              "sunday",
+            ],
+          },
+        ],
+        timeSlots: [
+          {
+            duration: {
+              type: Number,
+              enum: [15, 30, 45, 60],
+              required: true,
+            },
+            startTime: { type: String, required: true }, // "09:00"
+            endTime: { type: String, required: true }, // "17:00"
+          },
+        ],
+        isActive: { type: Boolean, default: true },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   isActive: { type: Boolean, default: true },
   message: [

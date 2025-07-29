@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/db";
 import authRoutes from "./routes/users/auth";
 import mediaRoutes from "./routes/media/media-routes";
-import patientRoutes from "./routes/onboard/patient"
+import patientRoutes from "./routes/onboard/patient";
 import doctorRoutes from "./routes/onboard/doctor";
 import doctorSubscriptionRoutes from "./routes/subscription/doctor-subscription";
 import patientSubscriptionRoutes from "./routes/subscription/patient-subscription";
@@ -16,9 +16,11 @@ import adminRoutes from "./routes/admin/admin-route";
 import walletRoutes from "./routes/users/wallet";
 import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
+import clinicAppointmentRoutes from "./routes/appointment/clinic-appointment";
 import { sendSMSV3 } from "./controller/users/auth";
 import cron from "node-cron";
 import { updateAppointmentExpiredStatus } from "./controller/appointment/online-appointment";
+import { updateClinicAppointmentExpiredStatus } from "./controller/appointment/clinic-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -29,24 +31,24 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.set('trust proxy', 1);
+app.set("trust proxy", 1);
 app.use(
   cors({
     origin: [
-      "https://app.rushdr.com",   
-      "http://localhost:5173",   
+      "https://app.rushdr.com",
+      "http://localhost:5173",
       "http://localhost:3000",
       "https://admin.rushdr.com",
       "https://rushdr.com",
-      "https://www.rushdr.com"
+      "https://www.rushdr.com",
     ],
     credentials: true,
   })
 );
 
 // Middleware
-app.use(express.json({ limit: '1000mb' }));
-app.use(express.urlencoded({ limit: '1000mb', extended: true }));
+app.use(express.json({ limit: "1000mb" }));
+app.use(express.urlencoded({ limit: "1000mb", extended: true }));
 app.use(cookieParser());
 
 // Global rate limiting - applies to all routes
@@ -88,6 +90,8 @@ app.use(onlineAppointmentRoutes);
 
 app.use(emergencyAppointmentRoutes);
 
+app.use(clinicAppointmentRoutes);
+
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 //   console.error(err);
@@ -100,7 +104,8 @@ app.listen(PORT, () => {
 
 // Cron job to update expired appointments
 // Runs once every 24 hours at midnight to check for expired appointments
-cron.schedule('0 0 * * *', async () => {
-  console.log('Running cron job to update expired appointments...');
+cron.schedule("0 0 * * *", async () => {
+  console.log("Running cron job to update expired appointments...");
   await updateAppointmentExpiredStatus();
+  await updateClinicAppointmentExpiredStatus();
 });
