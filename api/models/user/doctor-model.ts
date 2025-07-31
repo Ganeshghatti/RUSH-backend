@@ -146,20 +146,19 @@ const doctorSchema = new Schema({
         frontDeskNumber: { type: String, required: true },
         availability: [
           {
-            operationalDays: [
-              {
-                type: String,
-                enum: [
-                  "monday",
-                  "tuesday",
-                  "wednesday",
-                  "thursday",
-                  "friday",
-                  "saturday",
-                  "sunday",
-                ],
-              },
-            ],
+            day: {
+              type: String,
+              required: true,
+              enum: [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+              ],
+            },
             timings: [
               {
                 startTime: { type: String, required: true },

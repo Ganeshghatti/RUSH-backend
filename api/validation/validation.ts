@@ -405,10 +405,19 @@ export const clinicSchema = z.object({
     country: z.string().default("India"),
   }),
   consultationFee: z.number().positive(),
+  frontDeskName: z.string(),
   frontDeskNumber: z.string(),
   availability: z.array(
     z.object({
-      operationalDays: z.array(z.string()),
+      day: z.enum([
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ]),
       timings: z.array(
         z.object({
           startTime: z.string(),
@@ -422,7 +431,7 @@ export const clinicSchema = z.object({
 
 export const clinicUpdateRequestSchema = z.object({
   clinics: z.array(clinicSchema),
-  isActive: z.boolean(),   
+  isActive: z.boolean(),
 });
 
 export const clinicPatchRequestSchema = clinicUpdateRequestSchema.partial();

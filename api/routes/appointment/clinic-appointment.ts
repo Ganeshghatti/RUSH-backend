@@ -14,7 +14,7 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 //   getAppointmentOTP,
 //   validateVisitOTP,
 // } from "../../controller/appointment/clinic-appointment";
-import { patchClinicDetails } from "../../controller/appointment/clinic-appointment";
+import { updateClinicDetails } from "../../controller/appointment/clinic-appointment";
 import { RequestHandler } from "express";
 
 const router = Router();
@@ -37,7 +37,7 @@ router.patch(
   "/doctor/clinics",
   verifyToken as RequestHandler,
   checkRole("doctor") as RequestHandler,
-  patchClinicDetails as RequestHandler
+  updateClinicDetails as RequestHandler
 );
 
 // router

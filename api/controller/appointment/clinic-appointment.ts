@@ -356,7 +356,7 @@ const populateClinicDetails = (appointments: any[], doctor: any) => {
 //     res.status(500).json({ success: false, message: "Internal server error" });
 //   }
 // };
-export const patchClinicDetails = async (
+export const updateClinicDetails = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
