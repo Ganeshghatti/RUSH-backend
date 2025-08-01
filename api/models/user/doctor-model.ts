@@ -126,6 +126,40 @@ const doctorSchema = new Schema({
   },
   homeVisit: {
     isActive: { type: Boolean, default: false },
+    fixedPrice: { type: Number, default: 0 },
+    travelCost: { type: Number, default: 0 },
+    availability: [
+      {
+        day: {
+          type: String,
+          enum: [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+          ],
+        },
+        duration: [
+          {
+            start: {
+              type: String,
+            },
+            end: {
+              type: String,
+            },
+          },
+        ],
+      },
+    ],
+    location: {
+      type: { type: String, enum: ["Point"], default: "Point" },
+      coordinates: { type: [Number], default: [0, 0] },
+    },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
   },
   clinicVisit: {
     isActive: { type: Boolean, default: false },

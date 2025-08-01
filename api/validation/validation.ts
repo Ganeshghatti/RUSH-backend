@@ -448,7 +448,91 @@ export const clinicAppointmentBookSchema = z.object({
     ]),
     time: z.object({
       start: z.string(),
-      end: z.string()
+      end: z.string(),
+    }),
+  }),
+});
+
+// Home visit appointment validation schemas
+export const homeVisitAppointmentBookSchema = z.object({
+  doctorId: z.string().min(1, "Doctor ID is required"),
+  slot: z.object({
+    day: z.string().min(1, "Day is required"),
+    duration: z.union([
+      z.literal(15),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+    ]),
+    time: z.object({
+      start: z.string().min(1, "Start time is required"),
+      end: z.string().min(1, "End time is required"),
+    }),
+    history: z
+      .object({
+        title: z.string().optional(),
+      })
+      .optional(),
+  }),
+  patientAddress: z.object({
+    line1: z.string().min(1, "Address line 1 is required"),
+    line2: z.string().optional(),
+    landmark: z.string().optional(),
+    locality: z.string().min(1, "Locality is required"),
+    city: z.string().min(1, "City is required"),
+    pincode: z.string().min(1, "Pincode is required"),
+    country: z.string().default("India"),
+    location: z.object({
+      type: z.literal("Point").default("Point"),
+      coordinates: z
+        .array(z.number())
+        .length(2, "Coordinates must be [longitude, latitude]"),
+    }),
+  }),
+});
+
+export const homeVisitConfigUpdateSchema = z.object({
+  isActive: z.boolean().optional(),
+  fixedPrice: z.number().min(0, "Fixed price must be non-negative").optional(),
+  travelCost: z.number().min(0, "Travel cost must be non-negative").optional(),
+  availability: z
+    .array(
+      z.object({
+        day: z.enum([
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ]),
+        duration: z.array(
+          z.object({
+            start: z.string(),
+            end: z.string(),
+          })
+        ),
+      })
+    )
+    .optional(),
+  location: z
+    .object({
+      type: z.literal("Point").default("Point"),
+      coordinates: z
+        .array(z.number())
+        .length(2, "Coordinates must be [longitude, latitude]"),
     })
-  })
-})
+    .optional(),
+});
+
+export const homeVisitAppointmentStatusUpdateSchema = z.object({
+  status: z.enum(["pending", "accepted", "rejected"], {
+    required_error: "Status is required",
+    invalid_type_error: "Status must be pending, accepted, or rejected",
+  }),
+});
+
+export const homeVisitAppointmentCompleteSchema = z.object({
+  otp: z.string().min(1, "OTP is required"),
+});
