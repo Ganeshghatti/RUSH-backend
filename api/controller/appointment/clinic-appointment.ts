@@ -2,10 +2,7 @@ import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
 import User from "../../models/user/user-model";
 import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
-import {
-  clinicUpdateRequestSchema,
-  clinicPatchRequestSchema,
-} from "../../validation/validation";
+import { clinicPatchRequestSchema, clinicAppointmentBookSchema } from "../../validation/validation";
 import mongoose from "mongoose";
 import {
   generateOTP,
@@ -293,69 +290,6 @@ const populateClinicDetails = (appointments: any[], doctor: any) => {
 // };
 
 // single function to add, update and delete a clinic
-// export const updateAllClinics = async(
-//   req: AuthRequest,
-//   res: Response
-// ): Promise<void> => {
-//   try {
-
-//     // validate incoming array of clinic
-//     const validation = clinicUpdateRequestSchema.safeParse(req.body);
-//     if (!validation.success) {
-//       res.status(400).json({
-//         success: false,
-//         message: "Validation error: Invalid data format.",
-//         errors: validation.error.errors,
-//       });
-//       return;
-//     }
-
-//     // Authenticate the user
-//     const doctorId = req.user?.id;
-//     if (!doctorId) {
-//       res.status(401).json({
-//         success: false,
-//         message: "User not authenticated",
-//       });
-//       return;
-//     }
-
-//     // Extract the data from the validated body.
-//     console.log("Validation ",validation)
-//     const { clinics: newClinics, isActive: newIsActiveStatus } = validation.data;
-//     const updatedDoctor = await Doctor.findOneAndUpdate(
-//       { userId: doctorId },
-//       {
-//         // Use $set to replace the entire clinics array and update isActive status
-//         $set: {
-//           "clinicVisit.clinics": newClinics,
-//           "clinicVisit.isActive": newIsActiveStatus,
-//         },
-//       },
-//       {
-//         new: true,
-//         select: "clinicVisit",
-//       }
-//     );
-
-//     console.log("Updated Doctor ",updatedDoctor)
-
-//     if (!updatedDoctor) {
-//       res.status(404).json({ success: false, message: "Doctor profile not found" });
-//       return;
-//     }
-
-//     // a successful response.
-//     res.status(200).json({
-//       success: true,
-//       message: "Clinics updated successfully",
-//       data: updatedDoctor.clinicVisit,
-//     });
-//   } catch (err) {
-//     console.error("Error updating clinics:", err);
-//     res.status(500).json({ success: false, message: "Internal server error" });
-//   }
-// };
 export const updateClinicDetails = async (
   req: AuthRequest,
   res: Response
@@ -492,149 +426,149 @@ export const getDoctorClinicAvailability = async (
 };
 
 // Book clinic appointment
-// export const bookClinicAppointment = async (
-//   req: AuthRequest,
-//   res: Response
-// ): Promise<void> => {
-//   try {
-//     const validation = clinicAppointmentBookSchema.safeParse(req.body);
-//     if (!validation.success) {
-//       res.status(400).json({
-//         success: false,
-//         message: "Validation error",
-//         errors: validation.error.errors,
-//       });
-//       return;
-//     }
+export const bookClinicAppointment = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const validation = clinicAppointmentBookSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: validation.error.errors,
+      });
+      return;
+    }
 
-//     const patientId = req.user?.id;
-//     if (!patientId) {
-//       res.status(401).json({
-//         success: false,
-//         message: "User not authenticated",
-//       });
-//       return;
-//     }
+    const patientId = req.user?.id;
+    if (!patientId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
 
-//     const { doctorId, clinicId, slot } = validation.data;
+    const { doctorId, clinicId, slot } = validation.data;
 
-//     // Validate doctor and clinic
-//     const doctor = await Doctor.findById(doctorId);
-//     if (!doctor) {
-//       res.status(404).json({
-//         success: false,
-//         message: "Doctor not found",
-//       });
-//       return;
-//     }
+    // Validate doctor and clinic
+    const doctor = await Doctor.findById(doctorId);
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
 
-//     const clinicVisit = doctor.clinicVisit as any;
-//     const clinic = (clinicVisit?.clinics || []).find(
-//       (c: any) => c._id.toString() === clinicId && c.isActive
-//     );
+    const clinicVisit = doctor.clinicVisit as any;
+    const clinic = (clinicVisit?.clinics || []).find(
+      (c: any) => c._id.toString() === clinicId && c.isActive
+    );
 
-//     if (!clinic) {
-//       res.status(404).json({
-//         success: false,
-//         message: "Clinic not found or inactive",
-//       });
-//       return;
-//     }
+    if (!clinic) {
+      res.status(404).json({
+        success: false,
+        message: "Clinic not found or inactive",
+      });
+      return;
+    }
 
-//     // Get patient details for wallet check
-//     const patient = await User.findById(patientId);
-//     if (!patient) {
-//       res.status(404).json({
-//         success: false,
-//         message: "Patient not found",
-//       });
-//       return;
-//     }
+    // Get patient details for wallet check
+    const patient = await User.findById(patientId);
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+      return;
+    }
 
-//     // Check wallet balance (including frozen amount to ensure total available funds)
-//     const availableBalance = (patient as any).getAvailableBalance();
-//     if (availableBalance < clinic.consultationFee) {
-//       res.status(400).json({
-//         success: false,
-//         message: "Insufficient wallet balance",
-//         data: {
-//           required: clinic.consultationFee,
-//           available: availableBalance,
-//           totalWallet: patient.wallet,
-//           frozenAmount: patient.frozenAmount || 0,
-//         },
-//       });
-//       return;
-//     }
+    // Check wallet balance (including frozen amount to ensure total available funds)
+    const availableBalance = (patient as any).getAvailableBalance();
+    if (availableBalance < clinic.consultationFee) {
+      res.status(400).json({
+        success: false,
+        message: "Insufficient wallet balance",
+        data: {
+          required: clinic.consultationFee,
+          available: availableBalance,
+          totalWallet: patient.wallet,
+          frozenAmount: patient.frozenAmount || 0,
+        },
+      });
+      return;
+    }
 
-//     // Parse slot dates
-//     const appointmentDay = new Date(slot.day);
-//     const startTime = new Date(slot.time.start);
-//     const endTime = new Date(slot.time.end);
+    // Parse slot dates
+    const appointmentDay = new Date(slot.day);
+    const startTime = new Date(slot.time.start);
+    const endTime = new Date(slot.time.end);
 
-//     // Check for conflicting appointments
-//     const conflictingAppointment = await ClinicAppointment.findOne({
-//       doctorId: doctor._id,
-//       clinicId: clinicId,
-//       "slot.day": appointmentDay,
-//       "slot.time.start": { $lt: endTime },
-//       "slot.time.end": { $gt: startTime },
-//       status: { $in: ["pending", "confirmed"] },
-//     });
+    // Check for conflicting appointments
+    const conflictingAppointment = await ClinicAppointment.findOne({
+      doctorId: doctor._id,
+      clinicId: clinicId,
+      "slot.day": appointmentDay,
+      "slot.time.start": { $lt: endTime },
+      "slot.time.end": { $gt: startTime },
+      status: { $in: ["pending", "confirmed"] },
+    });
 
-//     if (conflictingAppointment) {
-//       res.status(400).json({
-//         success: false,
-//         message: "Time slot is already booked",
-//       });
-//       return;
-//     }
+    if (conflictingAppointment) {
+      res.status(400).json({
+        success: false,
+        message: "Time slot is already booked",
+      });
+      return;
+    }
 
-//     // Don't deduct from wallet yet - will be frozen when doctor confirms
-//     // Amount will be deducted only when appointment is confirmed by doctor
+    // Don't deduct from wallet yet - will be frozen when doctor confirms
+    // Amount will be deducted only when appointment is confirmed by doctor
 
-//     // Create appointment
-//     const appointment = new ClinicAppointment({
-//       doctorId: doctor._id,
-//       patientId: patientId,
-//       clinicId: clinicId,
-//       slot: {
-//         day: appointmentDay,
-//         duration: slot.duration,
-//         time: {
-//           start: startTime,
-//           end: endTime,
-//         },
-//       },
-//       status: "pending", // Changed from "confirmed" to "pending"
-//       paymentDetails: {
-//         amount: clinic.consultationFee,
-//         walletDeducted: 0, // Will be updated when doctor confirms
-//         paymentStatus: "pending", // Will be updated when doctor confirms
-//       },
-//     });
+    // Create appointment
+    const appointment = new ClinicAppointment({
+      doctorId: doctor._id,
+      patientId: patientId,
+      clinicId: clinicId,
+      slot: {
+        day: appointmentDay,
+        duration: slot.duration,
+        time: {
+          start: startTime,
+          end: endTime,
+        },
+      },
+      status: "pending", // Changed from "confirmed" to "pending"
+      paymentDetails: {
+        amount: clinic.consultationFee,
+        walletDeducted: 0, // Will be updated when doctor confirms
+        paymentStatus: "pending", // Will be updated when doctor confirms
+      },
+    });
 
-//     await appointment.save();
+    await appointment.save();
 
-//     res.status(201).json({
-//       success: true,
-//       message:
-//         "Clinic appointment booked successfully. Payment will be processed when doctor confirms the appointment.",
-//       data: {
-//         appointment: appointment,
-//         walletBalance: patient.wallet,
-//         availableBalance: (patient as any).getAvailableBalance(),
-//         note: "Amount will be deducted from wallet when doctor confirms the appointment",
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error booking clinic appointment:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//     });
-//   }
-// };
+    res.status(201).json({
+      success: true,
+      message:
+        "Clinic appointment booked successfully. Payment will be processed when doctor confirms the appointment.",
+      data: {
+        appointment: appointment,
+        walletBalance: patient.wallet,
+        availableBalance: (patient as any).getAvailableBalance(),
+        note: "Amount will be deducted from wallet when doctor confirms the appointment",
+      },
+    });
+  } catch (error) {
+    console.error("Error booking clinic appointment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
 
 // Confirm clinic appointment (Doctor only)
 // export const confirmClinicAppointment = async (

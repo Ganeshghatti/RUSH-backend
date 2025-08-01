@@ -14,25 +14,12 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 //   getAppointmentOTP,
 //   validateVisitOTP,
 // } from "../../controller/appointment/clinic-appointment";
-import { updateClinicDetails } from "../../controller/appointment/clinic-appointment";
+import { updateClinicDetails, bookClinicAppointment } from "../../controller/appointment/clinic-appointment";
 import { RequestHandler } from "express";
 
 const router = Router();
 
-// Doctor clinic management routes
-// router
-//   .route("/doctor/clinic")
-//   .post(
-//     verifyToken as RequestHandler,
-//     checkRole("doctor") as RequestHandler,
-//     addClinic as RequestHandler
-//   )
-//   .get(
-//     verifyToken as RequestHandler,
-//     checkRole("doctor") as RequestHandler,
-//     getDoctorClinics as RequestHandler
-//   );
-
+// update clinic details
 router.patch(
   "/doctor/clinics",
   verifyToken as RequestHandler,
@@ -58,13 +45,13 @@ router.patch(
 //   .route("/appointment/clinic/doctor/:doctorId")
 //   .get(getDoctorClinicAvailability as RequestHandler);
 
-// router
-//   .route("/appointment/clinic/book")
-//   .post(
-//     verifyToken as RequestHandler,
-//     checkRole("patient") as RequestHandler,
-//     bookClinicAppointment as RequestHandler
-//   );
+router
+  .route("/appointment/clinic/book")
+  .post(
+    verifyToken as RequestHandler,
+    checkRole("patient") as RequestHandler,
+    bookClinicAppointment as RequestHandler
+  );
 
 // Patient clinic appointments
 // router
