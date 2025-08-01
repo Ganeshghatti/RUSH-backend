@@ -463,6 +463,7 @@ export const bookClinicAppointment = async (
     }
 
     const clinicVisit = doctor.clinicVisit as any;
+    console.log("CLINIC VISIT ", clinicVisit)
     const clinic = (clinicVisit?.clinics || []).find(
       (c: any) => c._id.toString() === clinicId && c.isActive
     );

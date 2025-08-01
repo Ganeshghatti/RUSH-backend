@@ -168,7 +168,9 @@ export const getDoctorAppointments = async (
     }
 
     // Find all online appointments for this doctor
-    const onlineAppointments = await OnlineAppointment.find({ doctorId: doctor._id })
+    const onlineAppointments = await OnlineAppointment.find({
+      doctorId: doctor._id,
+    })
       .populate({
         path: "patientId",
         select: "firstName lastName countryCode gender email profilePic",
@@ -184,13 +186,16 @@ export const getDoctorAppointments = async (
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
     // Find all emergency appointments for this doctor
-    const emergencyAppointments = await EmergencyAppointment.find({ doctorId: doctor._id })
+    const emergencyAppointments = await EmergencyAppointment.find({
+      doctorId: doctor._id,
+    })
       .populate({
         path: "patientId",
         select: "userId healthMetrics insurance mapLocation",
         populate: {
           path: "userId",
-          select: "firstName lastName countryCode gender email profilePic phone dob address wallet",
+          select:
+            "firstName lastName countryCode gender email profilePic phone dob address wallet",
         },
       })
       .populate({
@@ -204,7 +209,24 @@ export const getDoctorAppointments = async (
       .sort({ createdAt: -1 }); // Sort by most recent created first
 
     // Find all clinic appointments for this doctor
-    const clinicAppointments = await ClinicAppointment.find({ doctorId: doctor._id })
+    const clinicAppointments = await ClinicAppointment.find({
+      doctorId: doctor._id,
+    })
+      .populate({
+        path: "doctorId",
+        select: "userId specialization clinicVisit",
+        populate: {
+          path: "userId",
+          select: "firstName lastName profilePic",
+        },
+      })
+      .populate({
+        path: "patientId",
+        select: "firstName lastName profilePic phone",
+      })
+      .sort({ "slot.day": -1 });
+
+    console.log("Clinic appointments for doctor", clinicAppointments);
 
     res.status(200).json({
       success: true,
@@ -243,7 +265,9 @@ export const getPatientAppointments = async (
     }
 
     // Find all online appointments for this patient (patientId references User)
-    const onlineAppointments = await OnlineAppointment.find({ patientId: userId })
+    const onlineAppointments = await OnlineAppointment.find({
+      patientId: userId,
+    })
       .populate({
         path: "patientId",
         select: "firstName lastName countryCode gender email profilePic",
@@ -259,13 +283,16 @@ export const getPatientAppointments = async (
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
     // Find all emergency appointments for this patient (patientId references Patient)
-    const emergencyAppointments = await EmergencyAppointment.find({ patientId: patient._id })
+    const emergencyAppointments = await EmergencyAppointment.find({
+      patientId: patient._id,
+    })
       .populate({
         path: "patientId",
         select: "userId healthMetrics insurance mapLocation",
         populate: {
           path: "userId",
-          select: "firstName lastName countryCode gender email profilePic phone dob address wallet",
+          select:
+            "firstName lastName countryCode gender email profilePic phone dob address wallet",
         },
       })
       .populate({
@@ -279,7 +306,19 @@ export const getPatientAppointments = async (
       .sort({ createdAt: -1 }); // Sort by most recent created first
 
     // Find all clinic appointments for this patient
-    const clinicAppointments = await ClinicAppointment.find({ patientId: patient._id})
+    const clinicAppointments = await ClinicAppointment.find({
+      patientId: userId,
+    })
+      .populate("doctorId", "userId specialization clinicVisit")
+      .populate({
+        path: "doctorId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName profilePic",
+        },
+      })
+      .sort({ "slot.day": -1 });
+    console.log("Clinic appointments for patient", clinicAppointments);
 
     res.status(200).json({
       success: true,
@@ -458,7 +497,8 @@ export const getDoctorAppointmentByDate = async (
     })
       .populate({
         path: "patientId",
-        select: "firstName lastName email phone countryCode gender profilePic dob address wallet",
+        select:
+          "firstName lastName email phone countryCode gender profilePic dob address wallet",
       })
       .populate({
         path: "doctorId",
@@ -496,7 +536,8 @@ export const getAllPatients = async (
     const patients = await Patient.find({})
       .populate({
         path: "userId",
-        select: "firstName lastName email phone countryCode gender profilePic dob address wallet prefix phoneVerified personalIdProof addressProof bankDetails taxProof isDocumentVerified createdAt",
+        select:
+          "firstName lastName email phone countryCode gender profilePic dob address wallet prefix phoneVerified personalIdProof addressProof bankDetails taxProof isDocumentVerified createdAt",
       })
       .sort({ createdAt: -1 }); // Sort by most recent created first
 
@@ -519,21 +560,21 @@ export const getAllPatients = async (
 export const updateAppointmentExpiredStatus = async () => {
   try {
     const now = new Date();
-    
+
     // Find appointments that have passed their slot end time and are still pending or accepted
     const expiredAppointments = await OnlineAppointment.find({
-      "slot.time.end": { $lt: now }, 
-      status: { $in: ["pending", "accepted"] } 
+      "slot.time.end": { $lt: now },
+      status: { $in: ["pending", "accepted"] },
     });
 
     if (expiredAppointments.length > 0) {
       const updateResult = await OnlineAppointment.updateMany(
         {
           "slot.time.end": { $lt: now },
-          status: { $in: ["pending", "accepted"] }
+          status: { $in: ["pending", "accepted"] },
         },
         {
-          $set: { status: "expired" }
+          $set: { status: "expired" },
         }
       );
 
@@ -542,4 +583,4 @@ export const updateAppointmentExpiredStatus = async () => {
   } catch (error: any) {
     console.error("Error updating expired appointments:", error.message);
   }
-}
+};

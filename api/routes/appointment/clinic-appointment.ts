@@ -1,20 +1,13 @@
 import { Router } from "express";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 // import {
-//   addClinic,
-//   getDoctorClinics,
-//   updateClinic,
-//   deleteClinic,
 //   getDoctorClinicAvailability,
-//   bookClinicAppointment,
 //   confirmClinicAppointment,
 //   cancelClinicAppointment,
-//   getPatientClinicAppointments,
-//   getDoctorClinicAppointments,
 //   getAppointmentOTP,
 //   validateVisitOTP,
 // } from "../../controller/appointment/clinic-appointment";
-import { updateClinicDetails, bookClinicAppointment } from "../../controller/appointment/clinic-appointment";
+import { updateClinicDetails, bookClinicAppointment, getPatientClinicAppointments, getDoctorClinicAppointments } from "../../controller/appointment/clinic-appointment";
 import { RequestHandler } from "express";
 
 const router = Router();
@@ -26,19 +19,6 @@ router.patch(
   checkRole("doctor") as RequestHandler,
   updateClinicDetails as RequestHandler
 );
-
-// router
-//   .route("/doctor/clinic/:clinicId")
-//   .put(
-//     verifyToken as RequestHandler,
-//     checkRole("doctor") as RequestHandler,
-//     updateClinic as RequestHandler
-//   )
-//   .delete(
-//     verifyToken as RequestHandler,
-//     checkRole("doctor") as RequestHandler,
-//     deleteClinic as RequestHandler
-//   );
 
 // Patient clinic appointment booking routes
 // router
@@ -54,22 +34,22 @@ router
   );
 
 // Patient clinic appointments
-// router
-//   .route("/appointment/clinic/patient")
-//   .get(
-//     verifyToken as RequestHandler,
-//     checkRole("patient") as RequestHandler,
-//     getPatientClinicAppointments as RequestHandler
-//   );
+router
+  .route("/appointment/clinic/patient")
+  .get(
+    verifyToken as RequestHandler,
+    checkRole("patient") as RequestHandler,
+    getPatientClinicAppointments as RequestHandler
+  );
 
 // Doctor clinic appointments
-// router
-//   .route("/appointment/clinic/doctor")
-//   .get(
-//     verifyToken as RequestHandler,
-//     checkRole("doctor") as RequestHandler,
-//     getDoctorClinicAppointments as RequestHandler
-//   );
+router
+  .route("/appointment/clinic/doctor")
+  .get(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    getDoctorClinicAppointments as RequestHandler
+  );
 
 // Confirm appointment (Doctor only)
 // router
