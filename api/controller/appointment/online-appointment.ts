@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
+import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
 import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
@@ -202,10 +203,14 @@ export const getDoctorAppointments = async (
       })
       .sort({ createdAt: -1 }); // Sort by most recent created first
 
+    // Find all clinic appointments for this doctor
+    const clinicAppointments = await ClinicAppointment.find({ doctorId: doctor._id })
+
     res.status(200).json({
       success: true,
       onlineAppointment: onlineAppointments,
       emergencyAppointment: emergencyAppointments,
+      clinicAppointment: clinicAppointments,
       message: "Doctor appointments retrieved successfully",
     });
   } catch (error: any) {
@@ -273,10 +278,14 @@ export const getPatientAppointments = async (
       })
       .sort({ createdAt: -1 }); // Sort by most recent created first
 
+    // Find all clinic appointments for this patient
+    const clinicAppointments = await ClinicAppointment.find({ patientId: patient._id})
+
     res.status(200).json({
       success: true,
       onlineAppointment: onlineAppointments,
       emergencyAppointment: emergencyAppointments,
+      clinicAppointment: clinicAppointments,
       message: "Patient appointments retrieved successfully",
     });
   } catch (error: any) {

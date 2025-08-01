@@ -428,10 +428,27 @@ export const clinicSchema = z.object({
   ),
   isActive: z.boolean().default(true),
 });
-
 export const clinicUpdateRequestSchema = z.object({
   clinics: z.array(clinicSchema),
   isActive: z.boolean(),
 });
-
 export const clinicPatchRequestSchema = clinicUpdateRequestSchema.partial();
+
+// clinic appointment book schema
+export const clinicAppointmentBookSchema = z.object({
+  doctorId: z.string(),
+  clinicId: z.string(),
+  slot: z.object({
+    day: z.string(),
+    duration: z.union([
+      z.literal(15),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+    ]),
+    time: z.object({
+      start: z.string(),
+      end: z.string()
+    })
+  })
+})
