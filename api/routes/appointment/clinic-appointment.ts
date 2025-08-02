@@ -7,7 +7,7 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 //   getAppointmentOTP,
 //   validateVisitOTP,
 // } from "../../controller/appointment/clinic-appointment";
-import { updateClinicDetails, bookClinicAppointment, getPatientClinicAppointments, getDoctorClinicAppointments } from "../../controller/appointment/clinic-appointment";
+import { updateClinicDetails, bookClinicAppointment, getPatientClinicAppointments, getDoctorClinicAppointments, confirmClinicAppointment } from "../../controller/appointment/clinic-appointment";
 import { RequestHandler } from "express";
 
 const router = Router();
@@ -52,13 +52,13 @@ router
   );
 
 // Confirm appointment (Doctor only)
-// router
-//   .route("/appointment/clinic/:appointmentId/confirm")
-//   .put(
-//     verifyToken as RequestHandler,
-//     checkRole("doctor") as RequestHandler,
-//     confirmClinicAppointment as RequestHandler
-//   );
+router
+  .route("/appointment/clinic/:appointmentId/confirm")
+  .put(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    confirmClinicAppointment as RequestHandler
+  );
 
 // Cancel appointment (Doctor only)
 // router
