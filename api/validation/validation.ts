@@ -452,3 +452,9 @@ export const clinicAppointmentBookSchema = z.object({
     })
   })
 })
+
+// otp validation schema
+export const otpValidationSchema = z.object({
+   appointmentId: z.string(),
+   otp: z.string()
+})
