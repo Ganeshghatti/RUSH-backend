@@ -42,6 +42,7 @@ app.use(
       "https://rushdr.com",
       "https://www.rushdr.com",
       "http://localhost",
+      "https://localhost",
       "capacitor://localhost"
     ],
     credentials: true,
