@@ -21,6 +21,7 @@ const homeVisitAppointmentSchema = new Schema(
       duration: {
         type: Number,
         required: true,
+        enum: [15, 30, 45, 60],
       },
       time: {
         start: {
@@ -46,35 +47,41 @@ const homeVisitAppointmentSchema = new Schema(
         coordinates: { type: [Number], required: true },
       },
     },
-    history: {
-      title: {
-        type: String,
-      },
-    },
     status: {
       type: String,
-      enum: ["pending", "accepted", "rejected", "completed", "expired"],
+      enum: [
+        "pending",
+        "doctor_accepted",
+        "patient_confirmed",
+        "completed",
+        "cancelled",
+        "expired",
+      ],
       default: "pending",
     },
+    pricing: {
+      fixedCost: { type: Number, required: true },
+      travelCost: { type: Number, default: 0 }, // Doctor adds this after accepting
+      totalCost: { type: Number }, // fixedCost + travelCost
+    },
     otp: {
-      code: String,
-      generatedAt: Date,
-      expiresAt: Date,
+      code: { type: String },
+      generatedAt: { type: Date },
+      expiresAt: { type: Date },
       attempts: { type: Number, default: 0 },
       maxAttempts: { type: Number, default: 3 },
       isUsed: { type: Boolean, default: false },
     },
     paymentDetails: {
-      fixedPrice: { type: Number, required: true },
-      travelCost: { type: Number, required: true },
-      total: { type: Number, required: true },
-      walletFrozen: { type: Boolean, default: false },
+      amount: { type: Number },
+      walletDeducted: { type: Number },
       paymentStatus: {
         type: String,
         enum: ["pending", "frozen", "completed", "failed"],
         default: "pending",
       },
     },
+    doctorDistance: { type: Number }, // Distance in KM
     doctorIp: String,
     patientIp: String,
     doctorGeo: {
@@ -91,6 +98,10 @@ const homeVisitAppointmentSchema = new Schema(
   }
 );
 
+// Index for efficient queries
+homeVisitAppointmentSchema.index({ doctorId: 1, "slot.day": 1 });
+homeVisitAppointmentSchema.index({ patientId: 1, "slot.day": 1 });
+homeVisitAppointmentSchema.index({ status: 1 });
 homeVisitAppointmentSchema.index({ doctorGeo: "2dsphere" });
 homeVisitAppointmentSchema.index({ patientGeo: "2dsphere" });
 

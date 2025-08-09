@@ -1,59 +1,71 @@
 import { Router } from "express";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
+import { RequestHandler } from "express";
 import {
   bookHomeVisitAppointment,
-  updateHomeVisitAppointmentStatus,
-  getDoctorHomeVisitAppointmentByDate,
+  acceptHomeVisitRequest,
+  confirmHomeVisitAppointment,
   completeHomeVisitAppointment,
+  cancelHomeVisitAppointment,
+  getDoctorHomeVisitAppointmentByDate,
   updateHomeVisitConfig,
 } from "../../controller/appointment/homevisit-appointment";
-import { RequestHandler } from "express";
 
 const router = Router();
 
-// Route for patients to book home visit appointments
-router
-  .route("/appointment/homevisit/book")
-  .post(
-    verifyToken as RequestHandler,
-    checkRole("patient") as RequestHandler,
-    bookHomeVisitAppointment as RequestHandler
-  );
+// Patient: book (Step 1)
+router.post(
+  "/appointment/homevisit/book",
+  verifyToken as RequestHandler,
+  checkRole("patient") as RequestHandler,
+  bookHomeVisitAppointment as RequestHandler
+);
 
-// Route for doctors to get home visit appointments by specific date
-router
-  .route("/appointment/homevisit/doctor/by-date")
-  .post(
-    verifyToken as RequestHandler,
-    checkRole("doctor") as RequestHandler,
-    getDoctorHomeVisitAppointmentByDate as RequestHandler
-  );
+// Doctor: accept + add travel cost (Step 2)
+router.put(
+  "/appointment/homevisit/:appointmentId/accept",
+  verifyToken as RequestHandler,
+  checkRole("doctor") as RequestHandler,
+  acceptHomeVisitRequest as RequestHandler
+);
 
-// Route for doctors to update appointment status (accept/reject)
-router
-  .route("/appointment/homevisit/:appointmentId/status")
-  .put(
-    verifyToken as RequestHandler,
-    checkRole("doctor") as RequestHandler,
-    updateHomeVisitAppointmentStatus as RequestHandler
-  );
+// Patient: confirm + freeze payment (Step 3)
+router.put(
+  "/appointment/homevisit/:appointmentId/confirm",
+  verifyToken as RequestHandler,
+  checkRole("patient") as RequestHandler,
+  confirmHomeVisitAppointment as RequestHandler
+);
 
-// Route for doctors to complete appointment with OTP validation
-router
-  .route("/appointment/homevisit/:appointmentId/complete")
-  .put(
-    verifyToken as RequestHandler,
-    checkRole("doctor") as RequestHandler,
-    completeHomeVisitAppointment as RequestHandler
-  );
+// Doctor: complete with OTP (Step 4)
+router.put(
+  "/appointment/homevisit/:appointmentId/complete",
+  verifyToken as RequestHandler,
+  checkRole("doctor") as RequestHandler,
+  completeHomeVisitAppointment as RequestHandler
+);
 
-// Route for doctors to update home visit configuration
-router
-  .route("/doctor/homevisit/config")
-  .put(
-    verifyToken as RequestHandler,
-    checkRole("doctor") as RequestHandler,
-    updateHomeVisitConfig as RequestHandler
-  );
+// Patient or Doctor: cancel
+router.put(
+  "/appointment/homevisit/:appointmentId/cancel",
+  verifyToken as RequestHandler,
+  cancelHomeVisitAppointment as RequestHandler
+);
+
+// Doctor: appointments by date
+router.post(
+  "/appointment/homevisit/doctor/by-date",
+  verifyToken as RequestHandler,
+  checkRole("doctor") as RequestHandler,
+  getDoctorHomeVisitAppointmentByDate as RequestHandler
+);
+
+// Doctor: update home visit configuration
+router.put(
+  "/appointment/homevisit/config",
+  verifyToken as RequestHandler,
+  checkRole("doctor") as RequestHandler,
+  updateHomeVisitConfig as RequestHandler
+);
 
 export default router;

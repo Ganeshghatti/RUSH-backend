@@ -1,72 +1,99 @@
 import { Request, Response } from "express";
 import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
 import Doctor from "../../models/user/doctor-model";
-import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
-import { generateOTP } from "../../utils/otp-utils";
+import {
+  generateOTP,
+  isOTPExpired,
+  getOTPExpirationTime,
+  isMaxAttemptsReached,
+} from "../../utils/otp-utils";
+import {
+  homeVisitAppointmentBookSchema,
+  homeVisitAppointmentAcceptSchema,
+  homeVisitAppointmentCompleteSchema,
+  homeVisitAppointmentCancelSchema,
+  homeVisitConfigUpdateSchema,
+} from "../../validation/validation";
 
-// Book appointment by patient
+// NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
+// Removing local AuthRequest avoids duplicated type drift.
+
+// Calculate distance between two coordinates (Haversine formula)
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371; // Radius of the Earth in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // Distance in km
+  return Math.round(distance * 100) / 100; // Round to 2 decimal places
+};
+
+// Common population helper
+const populateAppointment = (id: any) =>
+  HomeVisitAppointment.findById(id)
+    .populate({
+      path: "patientId",
+      select: "firstName lastName countryCode gender email profilePic",
+    })
+    .populate({
+      path: "doctorId",
+      select: "qualifications specialization userId homeVisit",
+      populate: {
+        path: "userId",
+        select: "firstName lastName countryCode gender email profilePic",
+      },
+    });
+
+// Extract client IP (basic; respects x-forwarded-for first entry)
+const getClientIp = (req: Request): string | undefined => {
+  const fwd = (req.headers["x-forwarded-for"] as string) || "";
+  if (fwd) return fwd.split(",")[0].trim();
+  return req.ip || (req.socket && req.socket.remoteAddress) || undefined;
+};
+
+// Step 1: Patient creates home visit request with fixed cost only
 export const bookHomeVisitAppointment = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const { doctorId, slot, patientAddress } = req.body;
-    const patientId = req.user.id;
-
-    // Validate required fields
-    if (!doctorId || !slot || !patientAddress) {
+    // Validate request body against schema (mirrors clinic & other controllers pattern)
+    const parsed = homeVisitAppointmentBookSchema.safeParse(req.body);
+    if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message:
-          "Doctor ID, slot information, and patient address are required",
+        message: "Validation error",
+        errors: parsed.error.errors,
       });
       return;
     }
 
-    if (!slot.day || !slot.duration || !slot.time) {
-      res.status(400).json({
+    const { doctorId, slot, patientAddress } = parsed.data;
+    const patientId = (req as any).user?.id;
+
+    if (!patientId) {
+      res.status(401).json({
         success: false,
-        message: "Slot day, duration, and time are required",
+        message: "User not authenticated",
       });
       return;
     }
 
-    if (!slot.time.start || !slot.time.end) {
-      res.status(400).json({
-        success: false,
-        message: "Slot start time and end time are required",
-      });
-      return;
-    }
+    // (Field presence/shape already enforced by Zod schema)
 
-    if (
-      !patientAddress.line1 ||
-      !patientAddress.locality ||
-      !patientAddress.city ||
-      !patientAddress.pincode
-    ) {
-      res.status(400).json({
-        success: false,
-        message: "Patient address (line1, locality, city, pincode) is required",
-      });
-      return;
-    }
-
-    if (
-      !patientAddress.location ||
-      !patientAddress.location.coordinates ||
-      patientAddress.location.coordinates.length !== 2
-    ) {
-      res.status(400).json({
-        success: false,
-        message:
-          "Patient address location coordinates [longitude, latitude] are required",
-      });
-      return;
-    }
-
-    // Check if doctor exists
+    // Check if doctor exists and has home visit enabled
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       res.status(404).json({
@@ -76,7 +103,6 @@ export const bookHomeVisitAppointment = async (
       return;
     }
 
-    // Check if doctor has home visit enabled
     if (!doctor.homeVisit || !doctor.homeVisit.isActive) {
       res.status(400).json({
         success: false,
@@ -95,17 +121,27 @@ export const bookHomeVisitAppointment = async (
       return;
     }
 
-    // Calculate total price
-    const fixedPrice = doctor.homeVisit?.fixedPrice || 0;
-    const travelCost = doctor.homeVisit?.travelCost || 0;
-    const total = fixedPrice + travelCost;
-
-    if (patient.wallet < total) {
+    // Get fixed cost from doctor's home visit configuration
+    const fixedCost = doctor.homeVisit?.fixedPrice || 0;
+    if (fixedCost <= 0) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "Doctor has not set home visit pricing",
       });
       return;
+    }
+
+    // Calculate distance between doctor and patient
+    let doctorDistance = 0;
+    if (doctor.homeVisit?.location && doctor.homeVisit.location.coordinates) {
+      const [doctorLon, doctorLat] = doctor.homeVisit.location.coordinates;
+      const [patientLon, patientLat] = patientAddress.location.coordinates;
+      doctorDistance = calculateDistance(
+        doctorLat,
+        doctorLon,
+        patientLat,
+        patientLon
+      );
     }
 
     // Check if the slot is already booked
@@ -114,7 +150,7 @@ export const bookHomeVisitAppointment = async (
       "slot.day": new Date(slot.day),
       "slot.time.start": new Date(slot.time.start),
       "slot.time.end": new Date(slot.time.end),
-      status: { $in: ["pending", "accepted"] },
+      status: { $in: ["pending", "doctor_accepted", "patient_confirmed"] },
     });
 
     if (existingAppointment) {
@@ -131,11 +167,11 @@ export const bookHomeVisitAppointment = async (
       req.connection.remoteAddress ||
       (req.headers["x-forwarded-for"] as string);
     const patientGeo = {
-      type: "Point",
+      type: "Point" as const,
       coordinates: patientAddress.location.coordinates,
     };
 
-    // Create new appointment
+    // Create new appointment with only fixed cost
     const newAppointment = new HomeVisitAppointment({
       doctorId,
       patientId,
@@ -160,22 +196,25 @@ export const bookHomeVisitAppointment = async (
           coordinates: patientAddress.location.coordinates,
         },
       },
-      history: slot.history ? { title: slot.history.title } : undefined,
       status: "pending",
+      pricing: {
+        fixedCost,
+        travelCost: 0,
+        totalCost: fixedCost,
+      },
       paymentDetails: {
-        fixedPrice,
-        travelCost,
-        total,
-        walletFrozen: false,
+        amount: fixedCost,
+        walletDeducted: 0,
         paymentStatus: "pending",
       },
+      doctorDistance,
       patientIp,
       patientGeo,
     });
 
     await newAppointment.save();
 
-    // Populate the response with detailed patient and doctor information
+    // Populate the response
     const populatedAppointment = await HomeVisitAppointment.findById(
       newAppointment._id
     )
@@ -195,173 +234,48 @@ export const bookHomeVisitAppointment = async (
     res.status(201).json({
       success: true,
       data: populatedAppointment,
-      message: "Home visit appointment booked successfully",
+      message: "Home visit request created successfully",
     });
   } catch (error: any) {
     console.error("Error booking home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error booking appointment",
+      message: "Error creating home visit request",
       error: error.message,
     });
   }
 };
 
-// Update appointment status by doctor
-export const updateHomeVisitAppointmentStatus = async (
+// Step 2: Doctor accepts request and adds travel cost
+export const acceptHomeVisitRequest = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { appointmentId } = req.params;
-    const { status } = req.body;
-    const doctorId = req.user.id; // Assuming the logged-in user is a doctor
-
-    // Validate status
-    if (!status || !["pending", "accepted", "rejected"].includes(status)) {
+    const parsed = homeVisitAppointmentAcceptSchema.safeParse(req.body);
+    if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Valid status (pending, accepted, rejected) is required",
+        message: "Validation error",
+        errors: parsed.error.errors,
       });
       return;
     }
+    const { travelCost } = parsed.data;
+    const doctorId = (req as any).user?.id;
+
+    if (!doctorId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
+
+    // (travelCost validated by schema)
 
     const doctor = await Doctor.findOne({ userId: doctorId });
-
-    if (!doctor) {
-      res.status(404).json({
-        success: false,
-        message: "Doctor not found",
-      });
-      return;
-    }
-
-    // Find the appointment and verify it belongs to this doctor
-    const appointment = await HomeVisitAppointment.findOne({
-      _id: appointmentId,
-      doctorId: doctor._id,
-    });
-
-    if (!appointment) {
-      res.status(404).json({
-        success: false,
-        message:
-          "Appointment not found or you don't have permission to modify it",
-      });
-      return;
-    }
-
-    // 💰 Only on 'accepted' status: handle wallet freezing and OTP generation
-    if (status === "accepted") {
-      const patient = await User.findById(appointment.patientId);
-      if (!patient) {
-        res.status(404).json({
-          success: false,
-          message: "Patient not found",
-        });
-        return;
-      }
-
-      const total = appointment.paymentDetails?.total || 0;
-
-      if (patient.wallet < total) {
-        res.status(400).json({
-          success: false,
-          message: "Patient has insufficient wallet balance",
-        });
-        return;
-      }
-
-      // 💳 Freeze amount in patient's wallet
-      patient.wallet -= total;
-      if (appointment.paymentDetails) {
-        appointment.paymentDetails.walletFrozen = true;
-        appointment.paymentDetails.paymentStatus = "frozen";
-      }
-      await patient.save();
-
-      // 🔐 Generate OTP
-      const otpCode = generateOTP();
-      appointment.otp = {
-        code: otpCode,
-        generatedAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-        attempts: 0,
-        maxAttempts: 3,
-        isUsed: false,
-      };
-
-      // Get doctor IP and geolocation
-      const doctorIp =
-        req.ip ||
-        req.connection.remoteAddress ||
-        (req.headers["x-forwarded-for"] as string);
-      // For doctor geolocation, you might want to use their current location or clinic location
-      appointment.doctorIp = doctorIp;
-      if (doctor.homeVisit?.location && doctor.homeVisit.location.coordinates) {
-        appointment.doctorGeo = {
-          type: "Point",
-          coordinates: doctor.homeVisit.location.coordinates,
-        };
-      }
-    }
-
-    // ✅ Update status
-    appointment.status = status;
-    await appointment.save();
-
-    // Populate the response with detailed patient and doctor information
-    const updatedAppointment = await HomeVisitAppointment.findById(
-      appointment._id
-    )
-      .populate({
-        path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId homeVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      });
-
-    res.status(200).json({
-      success: true,
-      data: updatedAppointment,
-      message: `Home visit appointment status updated to ${status} successfully`,
-    });
-  } catch (error: any) {
-    console.error("Error updating home visit appointment status:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error updating appointment status",
-      error: error.message,
-    });
-  }
-};
-
-// Complete appointment with OTP validation
-export const completeHomeVisitAppointment = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const { appointmentId } = req.params;
-    const { otp } = req.body;
-    const doctorId = req.user.id;
-
-    if (!otp) {
-      res.status(400).json({
-        success: false,
-        message: "OTP is required",
-      });
-      return;
-    }
-
-    const doctor = await Doctor.findOne({ userId: doctorId });
-
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -374,13 +288,234 @@ export const completeHomeVisitAppointment = async (
     const appointment = await HomeVisitAppointment.findOne({
       _id: appointmentId,
       doctorId: doctor._id,
-      status: "accepted",
+      status: "pending",
     });
 
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or not in accepted status",
+        message: "Appointment not found or not in pending status",
+      });
+      return;
+    }
+
+    // Update appointment with travel cost
+    if (!appointment.pricing || !appointment.paymentDetails) {
+      res.status(500).json({
+        success: false,
+        message: "Appointment pricing or payment details not found",
+      });
+      return;
+    }
+
+    const totalCost = appointment.pricing.fixedCost + travelCost;
+
+    appointment.status = "doctor_accepted";
+    appointment.pricing.travelCost = travelCost;
+    appointment.pricing.totalCost = totalCost;
+    appointment.paymentDetails.amount = totalCost;
+
+    // Get doctor IP and geolocation
+    appointment.doctorIp = getClientIp(req);
+
+    if (doctor.homeVisit?.location && doctor.homeVisit.location.coordinates) {
+      appointment.doctorGeo = {
+        type: "Point",
+        coordinates: doctor.homeVisit.location.coordinates,
+      };
+    }
+
+    await appointment.save();
+
+    // Populate the response
+    const updatedAppointment = await populateAppointment(appointment._id);
+
+    res.status(200).json({
+      success: true,
+      data: updatedAppointment,
+      message: "Home visit request accepted with travel cost added",
+    });
+  } catch (error: any) {
+    console.error("Error accepting home visit request:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error accepting request",
+      error: error.message,
+    });
+  }
+};
+
+// Step 3: Patient confirms and pays total cost (frozen in wallet)
+export const confirmHomeVisitAppointment = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { appointmentId } = req.params;
+    // No body fields to validate here besides param; schema for confirm not needed (retained symmetry)
+    const patientId = (req as any).user?.id;
+
+    if (!patientId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
+
+    // Find the appointment
+    const appointment = await HomeVisitAppointment.findOne({
+      _id: appointmentId,
+      patientId,
+      status: "doctor_accepted",
+    });
+
+    if (!appointment) {
+      res.status(404).json({
+        success: false,
+        message: "Appointment not found or not in correct status",
+      });
+      return;
+    }
+
+    // Check patient wallet balance
+    const patient = await User.findById(patientId);
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+      return;
+    }
+
+    const totalCost = appointment.pricing?.totalCost || 0;
+
+    // Check available balance (considering frozen amount)
+    const availableBalance = (patient as any).getAvailableBalance
+      ? (patient as any).getAvailableBalance()
+      : patient.wallet - ((patient as any).frozenAmount || 0);
+
+    if (availableBalance < totalCost) {
+      res.status(400).json({
+        success: false,
+        message: "Insufficient wallet balance",
+        data: {
+          required: totalCost,
+          available: availableBalance,
+          totalWallet: patient.wallet,
+          frozenAmount: (patient as any).frozenAmount || 0,
+        },
+      });
+      return;
+    }
+
+    // Check pricing and payment details exist
+    if (!appointment.pricing || !appointment.paymentDetails) {
+      res.status(500).json({
+        success: false,
+        message: "Appointment pricing or payment details not found",
+      });
+      return;
+    }
+
+    // Freeze amount in wallet
+    patient.wallet -= totalCost;
+    (patient as any).frozenAmount =
+      ((patient as any).frozenAmount || 0) + totalCost;
+    await patient.save();
+
+    // Generate OTP
+    const otpCode = generateOTP();
+    const otpExpiration = getOTPExpirationTime();
+
+    // Update appointment
+    appointment.status = "patient_confirmed";
+    appointment.paymentDetails.walletDeducted = totalCost;
+    appointment.paymentDetails.paymentStatus = "frozen";
+    appointment.otp = {
+      code: otpCode,
+      generatedAt: new Date(),
+      expiresAt: otpExpiration,
+      attempts: 0,
+      maxAttempts: 3,
+      isUsed: false,
+    };
+
+    await appointment.save();
+
+    // Populate the response
+    const confirmedAppointment = await populateAppointment(appointment._id);
+
+    res.status(200).json({
+      success: true,
+      data: confirmedAppointment,
+      message: "Home visit appointment confirmed and payment frozen",
+    });
+  } catch (error: any) {
+    console.error("Error confirming home visit appointment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error confirming appointment",
+      error: error.message,
+    });
+  }
+};
+
+// Step 4: Doctor completes appointment with OTP validation
+export const completeHomeVisitAppointment = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { appointmentId } = req.params;
+    const parsed = homeVisitAppointmentCompleteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+    const { otp } = parsed.data;
+    const doctorId = (req as any).user?.id;
+
+    if (!doctorId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
+
+    if (!otp) {
+      res.status(400).json({
+        success: false,
+        message: "OTP is required",
+      });
+      return;
+    }
+
+    const doctor = await Doctor.findOne({ userId: doctorId });
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "Doctor not found",
+      });
+      return;
+    }
+
+    // Find the appointment
+    const appointment = await HomeVisitAppointment.findOne({
+      _id: appointmentId,
+      doctorId: doctor._id,
+      status: "patient_confirmed",
+    });
+
+    if (!appointment) {
+      res.status(404).json({
+        success: false,
+        message: "Appointment not found or not in confirmed status",
       });
       return;
     }
@@ -394,7 +529,7 @@ export const completeHomeVisitAppointment = async (
       return;
     }
 
-    if (appointment.otp.expiresAt && new Date() > appointment.otp.expiresAt) {
+    if (isOTPExpired(appointment.otp.expiresAt!)) {
       res.status(400).json({
         success: false,
         message: "OTP has expired",
@@ -402,7 +537,12 @@ export const completeHomeVisitAppointment = async (
       return;
     }
 
-    if (appointment.otp.attempts >= appointment.otp.maxAttempts) {
+    if (
+      isMaxAttemptsReached(
+        appointment.otp.attempts,
+        appointment.otp.maxAttempts
+      )
+    ) {
       res.status(400).json({
         success: false,
         message: "Maximum OTP attempts exceeded",
@@ -417,6 +557,8 @@ export const completeHomeVisitAppointment = async (
       res.status(400).json({
         success: false,
         message: "Invalid OTP",
+        attemptsRemaining:
+          appointment.otp.maxAttempts - appointment.otp.attempts,
       });
       return;
     }
@@ -424,27 +566,26 @@ export const completeHomeVisitAppointment = async (
     // OTP is valid, complete the appointment
     appointment.status = "completed";
     appointment.otp.isUsed = true;
+
     if (appointment.paymentDetails) {
       appointment.paymentDetails.paymentStatus = "completed";
     }
     await appointment.save();
 
+    // Update patient's frozen amount
+    const patient = await User.findById(appointment.patientId);
+    if (patient && appointment.paymentDetails) {
+      const frozenAmount = (patient as any).frozenAmount || 0;
+      const appointmentAmount = appointment.paymentDetails.walletDeducted || 0;
+      (patient as any).frozenAmount = Math.max(
+        0,
+        frozenAmount - appointmentAmount
+      );
+      await patient.save();
+    }
+
     // Populate the response
-    const completedAppointment = await HomeVisitAppointment.findById(
-      appointment._id
-    )
-      .populate({
-        path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId homeVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      });
+    const completedAppointment = await populateAppointment(appointment._id);
 
     res.status(200).json({
       success: true,
@@ -461,6 +602,108 @@ export const completeHomeVisitAppointment = async (
   }
 };
 
+// Cancel appointment (by patient or doctor)
+export const cancelHomeVisitAppointment = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { appointmentId } = req.params;
+    const parsed = homeVisitAppointmentCancelSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+    // reason currently unused (no persistence field) – intentionally ignored to avoid lint warning
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
+
+    // Find the appointment
+    const appointment = await HomeVisitAppointment.findById(appointmentId);
+    if (!appointment) {
+      res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+      return;
+    }
+
+    // Check if user is patient or doctor of this appointment
+    const doctor = await Doctor.findOne({ userId });
+    const isDoctor =
+      doctor && doctor._id.toString() === appointment.doctorId.toString();
+    const isPatient = appointment.patientId.toString() === userId;
+
+    if (!isDoctor && !isPatient) {
+      res.status(403).json({
+        success: false,
+        message: "Not authorized to cancel this appointment",
+      });
+      return;
+    }
+
+    // Check if appointment can be cancelled
+    if (
+      appointment.status === "completed" ||
+      appointment.status === "cancelled"
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Cannot cancel completed or already cancelled appointment",
+      });
+      return;
+    }
+
+    // Refund frozen amount if payment was frozen
+    if (appointment.paymentDetails?.paymentStatus === "frozen") {
+      const patient = await User.findById(appointment.patientId);
+      if (patient && appointment.paymentDetails) {
+        const refundAmount = appointment.paymentDetails.walletDeducted || 0;
+        patient.wallet += refundAmount;
+        (patient as any).frozenAmount = Math.max(
+          0,
+          ((patient as any).frozenAmount || 0) - refundAmount
+        );
+        await patient.save();
+      }
+    }
+
+    // Update appointment status
+    appointment.status = "cancelled";
+    if (appointment.paymentDetails) {
+      appointment.paymentDetails.paymentStatus = "failed";
+    }
+    await appointment.save();
+
+    // Populate the response
+    const cancelledAppointment = await populateAppointment(appointment._id);
+
+    res.status(200).json({
+      success: true,
+      data: cancelledAppointment,
+      message: "Home visit appointment cancelled successfully",
+    });
+  } catch (error: any) {
+    console.error("Error cancelling home visit appointment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error cancelling appointment",
+      error: error.message,
+    });
+  }
+};
+
 // Get doctor appointments by date
 export const getDoctorHomeVisitAppointmentByDate = async (
   req: Request,
@@ -468,7 +711,15 @@ export const getDoctorHomeVisitAppointmentByDate = async (
 ): Promise<void> => {
   try {
     const { date } = req.body;
-    const doctorId = req.user.id;
+    const doctorId = (req as any).user?.id;
+
+    if (!doctorId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
 
     if (!date) {
       res.status(400).json({
@@ -479,7 +730,6 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     }
 
     const doctor = await Doctor.findOne({ userId: doctorId });
-
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -540,12 +790,27 @@ export const updateHomeVisitConfig = async (
   res: Response
 ): Promise<void> => {
   try {
-    const doctorId = req.user.id;
-    const { isActive, fixedPrice, travelCost, availability, location } =
-      req.body;
+    const doctorId = (req as any).user?.id;
+    const parsed = homeVisitConfigUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+    const { isActive, fixedPrice, availability, location } = parsed.data;
+
+    if (!doctorId) {
+      res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
+      return;
+    }
 
     const doctor = await Doctor.findOne({ userId: doctorId });
-
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -561,11 +826,9 @@ export const updateHomeVisitConfig = async (
     if (fixedPrice !== undefined && doctor.homeVisit) {
       doctor.homeVisit.fixedPrice = fixedPrice;
     }
-    if (travelCost !== undefined && doctor.homeVisit) {
-      doctor.homeVisit.travelCost = travelCost;
-    }
     if (availability && doctor.homeVisit) {
-      doctor.homeVisit.availability = availability;
+      // Cast because Mongoose DocumentArray typing may differ from plain parsed array
+      (doctor.homeVisit as any).availability = availability as any;
     }
     if (location && location.coordinates && doctor.homeVisit) {
       doctor.homeVisit.location = {
@@ -602,19 +865,21 @@ export const updateHomeVisitAppointmentExpiredStatus =
 
       // Find appointments that should be expired
       const expiredAppointments = await HomeVisitAppointment.find({
-        status: { $in: ["pending", "accepted"] },
+        status: { $in: ["pending", "doctor_accepted", "patient_confirmed"] },
         "slot.time.end": { $lt: now },
       });
 
       for (const appointment of expiredAppointments) {
         // If payment was frozen and appointment is being expired, refund the patient
-        if (
-          appointment.paymentDetails?.walletFrozen &&
-          appointment.paymentDetails?.paymentStatus === "frozen"
-        ) {
+        if (appointment.paymentDetails?.paymentStatus === "frozen") {
           const patient = await User.findById(appointment.patientId);
           if (patient && appointment.paymentDetails) {
-            patient.wallet += appointment.paymentDetails.total;
+            const refundAmount = appointment.paymentDetails.walletDeducted || 0;
+            patient.wallet += refundAmount;
+            (patient as any).frozenAmount = Math.max(
+              0,
+              ((patient as any).frozenAmount || 0) - refundAmount
+            );
             await patient.save();
           }
         }

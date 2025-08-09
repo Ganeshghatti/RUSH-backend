@@ -526,11 +526,12 @@ export const homeVisitConfigUpdateSchema = z.object({
     .optional(),
 });
 
-export const homeVisitAppointmentStatusUpdateSchema = z.object({
-  status: z.enum(["pending", "accepted", "rejected"], {
-    required_error: "Status is required",
-    invalid_type_error: "Status must be pending, accepted, or rejected",
-  }),
+export const homeVisitAppointmentAcceptSchema = z.object({
+  travelCost: z.number().min(0, "Travel cost must be non-negative"),
+});
+
+export const homeVisitAppointmentCancelSchema = z.object({
+  reason: z.string().optional(),
 });
 
 export const homeVisitAppointmentCompleteSchema = z.object({
