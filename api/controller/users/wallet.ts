@@ -1,6 +1,7 @@
-import { razorpayConfig } from './../../config/razorpay';
+import { razorpayConfig } from "./../../config/razorpay";
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
+import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
 import mongoose from "mongoose";
 import path from "path";
 import crypto from "crypto";
@@ -59,7 +60,7 @@ export const updateWallet = async (
           email: user.email,
           contact: user.phone,
           countryCode: user.countryCode || "+91",
-        }
+        },
       },
     });
   } catch (error) {
@@ -72,16 +73,13 @@ export const updateWallet = async (
   }
 };
 
-export const verifyPaymentWallet = async (
-  req: Request,
-  res: Response
-) => {
+export const verifyPaymentWallet = async (req: Request, res: Response) => {
   try {
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      wallet
+      wallet,
     } = req.body;
 
     const userId = req.user.id;
@@ -188,30 +186,47 @@ export const deductWallet = async (
       return;
     }
 
-    // Check if user has sufficient balance
-    const currentBalance = user.wallet || 0;
+    // Compute frozen obligations from home visit appointments (do not use user.frozenAmount)
+    const frozenAgg = await HomeVisitAppointment.aggregate([
+      {
+        $match: {
+          patientId: new mongoose.Types.ObjectId(id),
+          status: "patient_confirmed",
+          "paymentDetails.paymentStatus": "frozen",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ["$pricing.totalCost", 0] } },
+        },
+      },
+    ]);
+    const frozenFromAppointments = frozenAgg?.[0]?.total || 0;
+    const availableBalance = (user.wallet || 0) - frozenFromAppointments;
 
-    if (currentBalance < amount) {
+    if (availableBalance < amount) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message:
+          "Insufficient available balance. Some amount is frozen in other appointments.",
         data: {
-          currentBalance,
+          currentBalance: user.wallet || 0,
+          availableBalance,
+          frozenFromAppointments,
         },
       });
       return;
     }
 
     // Deduct amount from wallet
-    user.wallet = currentBalance - amount;
+    user.wallet = (user.wallet || 0) - amount;
     await user.save();
 
     res.status(200).json({
       success: true,
       message: "Amount deducted from wallet successfully",
-      data: {
-        currentBalance: user.wallet,
-      },
+      data: { currentBalance: user.wallet },
     });
   } catch (error) {
     console.error("Error deducting from wallet:", error);

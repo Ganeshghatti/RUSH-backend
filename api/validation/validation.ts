@@ -494,7 +494,6 @@ export const homeVisitAppointmentBookSchema = z.object({
 export const homeVisitConfigUpdateSchema = z.object({
   isActive: z.boolean().optional(),
   fixedPrice: z.number().min(0, "Fixed price must be non-negative").optional(),
-  travelCost: z.number().min(0, "Travel cost must be non-negative").optional(),
   availability: z
     .array(
       z.object({

@@ -1,13 +1,9 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
 import Doctor from "../../models/user/doctor-model";
 import User from "../../models/user/user-model";
-import {
-  generateOTP,
-  isOTPExpired,
-  getOTPExpirationTime,
-  isMaxAttemptsReached,
-} from "../../utils/otp-utils";
+import { generateOTP, isMaxAttemptsReached } from "../../utils/otp-utils";
 import {
   homeVisitAppointmentBookSchema,
   homeVisitAppointmentAcceptSchema,
@@ -19,26 +15,7 @@ import {
 // NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
 // Removing local AuthRequest avoids duplicated type drift.
 
-// Calculate distance between two coordinates (Haversine formula)
-const calculateDistance = (
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number => {
-  const R = 6371; // Radius of the Earth in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c; // Distance in km
-  return Math.round(distance * 100) / 100; // Round to 2 decimal places
-};
+// Distance, doctor geolocation are not required for home visit logic anymore
 
 // Common population helper
 const populateAppointment = (id: any) =>
@@ -61,6 +38,26 @@ const getClientIp = (req: Request): string | undefined => {
   const fwd = (req.headers["x-forwarded-for"] as string) || "";
   if (fwd) return fwd.split(",")[0].trim();
   return req.ip || (req.socket && req.socket.remoteAddress) || undefined;
+};
+
+// Helper: compute total amount frozen in other home visit appointments for a patient
+const getFrozenHomeVisitAmount = async (patientId: any): Promise<number> => {
+  const frozen = await HomeVisitAppointment.aggregate([
+    {
+      $match: {
+        patientId: new mongoose.Types.ObjectId(patientId),
+        status: "patient_confirmed",
+        "paymentDetails.paymentStatus": "frozen",
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: { $ifNull: ["$pricing.totalCost", 0] } },
+      },
+    },
+  ]);
+  return frozen?.[0]?.total || 0;
 };
 
 // Step 1: Patient creates home visit request with fixed cost only
@@ -131,18 +128,7 @@ export const bookHomeVisitAppointment = async (
       return;
     }
 
-    // Calculate distance between doctor and patient
-    let doctorDistance = 0;
-    if (doctor.homeVisit?.location && doctor.homeVisit.location.coordinates) {
-      const [doctorLon, doctorLat] = doctor.homeVisit.location.coordinates;
-      const [patientLon, patientLat] = patientAddress.location.coordinates;
-      doctorDistance = calculateDistance(
-        doctorLat,
-        doctorLon,
-        patientLat,
-        patientLon
-      );
-    }
+    // Distance not used anymore
 
     // Check if the slot is already booked
     const existingAppointment = await HomeVisitAppointment.findOne({
@@ -161,7 +147,7 @@ export const bookHomeVisitAppointment = async (
       return;
     }
 
-    // Get patient IP and geolocation
+    // Get patient IP (keep only patient IP and patient location for potential logistics)
     const patientIp =
       req.ip ||
       req.connection.remoteAddress ||
@@ -207,7 +193,6 @@ export const bookHomeVisitAppointment = async (
         walletDeducted: 0,
         paymentStatus: "pending",
       },
-      doctorDistance,
       patientIp,
       patientGeo,
     });
@@ -315,15 +300,8 @@ export const acceptHomeVisitRequest = async (
     appointment.pricing.totalCost = totalCost;
     appointment.paymentDetails.amount = totalCost;
 
-    // Get doctor IP and geolocation
+    // Get doctor IP only (no geolocation persisted for doctor)
     appointment.doctorIp = getClientIp(req);
-
-    if (doctor.homeVisit?.location && doctor.homeVisit.location.coordinates) {
-      appointment.doctorGeo = {
-        type: "Point",
-        coordinates: doctor.homeVisit.location.coordinates,
-      };
-    }
 
     await appointment.save();
 
@@ -389,11 +367,8 @@ export const confirmHomeVisitAppointment = async (
     }
 
     const totalCost = appointment.pricing?.totalCost || 0;
-
-    // Check available balance (considering frozen amount)
-    const availableBalance = (patient as any).getAvailableBalance
-      ? (patient as any).getAvailableBalance()
-      : patient.wallet - ((patient as any).frozenAmount || 0);
+    const frozenAmount = await getFrozenHomeVisitAmount(patientId);
+    const availableBalance = (patient.wallet || 0) - frozenAmount;
 
     if (availableBalance < totalCost) {
       res.status(400).json({
@@ -403,7 +378,6 @@ export const confirmHomeVisitAppointment = async (
           required: totalCost,
           available: availableBalance,
           totalWallet: patient.wallet,
-          frozenAmount: (patient as any).frozenAmount || 0,
         },
       });
       return;
@@ -418,24 +392,19 @@ export const confirmHomeVisitAppointment = async (
       return;
     }
 
-    // Freeze amount in wallet
-    patient.wallet -= totalCost;
-    (patient as any).frozenAmount =
-      ((patient as any).frozenAmount || 0) + totalCost;
-    await patient.save();
+    // Mark amount as frozen logically only; do not deduct wallet or increment frozen in DB
+    // We'll enforce frozen checks at spend-time and not expose it in models/UI.
 
     // Generate OTP
     const otpCode = generateOTP();
-    const otpExpiration = getOTPExpirationTime();
 
     // Update appointment
     appointment.status = "patient_confirmed";
-    appointment.paymentDetails.walletDeducted = totalCost;
+    appointment.paymentDetails.walletDeducted = 0; // no deduction yet
     appointment.paymentDetails.paymentStatus = "frozen";
     appointment.otp = {
       code: otpCode,
       generatedAt: new Date(),
-      expiresAt: otpExpiration,
       attempts: 0,
       maxAttempts: 3,
       isUsed: false,
@@ -529,13 +498,7 @@ export const completeHomeVisitAppointment = async (
       return;
     }
 
-    if (isOTPExpired(appointment.otp.expiresAt!)) {
-      res.status(400).json({
-        success: false,
-        message: "OTP has expired",
-      });
-      return;
-    }
+    // No OTP expiry check; OTP is permanent for this appointment
 
     if (
       isMaxAttemptsReached(
@@ -569,18 +532,31 @@ export const completeHomeVisitAppointment = async (
 
     if (appointment.paymentDetails) {
       appointment.paymentDetails.paymentStatus = "completed";
+      appointment.paymentDetails.walletDeducted =
+        appointment.pricing?.totalCost || 0;
     }
     await appointment.save();
 
-    // Update patient's frozen amount
+    // Perform actual wallet deduction at completion time
     const patient = await User.findById(appointment.patientId);
     if (patient && appointment.paymentDetails) {
-      const frozenAmount = (patient as any).frozenAmount || 0;
-      const appointmentAmount = appointment.paymentDetails.walletDeducted || 0;
-      (patient as any).frozenAmount = Math.max(
-        0,
-        frozenAmount - appointmentAmount
-      );
+      const amountToDeduct = appointment.paymentDetails.walletDeducted || 0;
+      if ((patient.wallet || 0) < amountToDeduct) {
+        // If insufficient at completion, mark failed state and revert appointment to doctor_accepted
+        appointment.status = "doctor_accepted";
+        appointment.paymentDetails.paymentStatus = "pending";
+        appointment.paymentDetails.walletDeducted = 0;
+        appointment.otp.isUsed = false;
+        await appointment.save();
+        res.status(400).json({
+          success: false,
+          message:
+            "Insufficient wallet at completion. Please ensure funds are available.",
+        });
+        return;
+      }
+
+      patient.wallet = (patient.wallet || 0) - amountToDeduct;
       await patient.save();
     }
 
@@ -665,24 +641,13 @@ export const cancelHomeVisitAppointment = async (
       return;
     }
 
-    // Refund frozen amount if payment was frozen
-    if (appointment.paymentDetails?.paymentStatus === "frozen") {
-      const patient = await User.findById(appointment.patientId);
-      if (patient && appointment.paymentDetails) {
-        const refundAmount = appointment.paymentDetails.walletDeducted || 0;
-        patient.wallet += refundAmount;
-        (patient as any).frozenAmount = Math.max(
-          0,
-          ((patient as any).frozenAmount || 0) - refundAmount
-        );
-        await patient.save();
-      }
-    }
+    // No refund handling required since we didn't deduct wallet on confirm
 
     // Update appointment status
     appointment.status = "cancelled";
     if (appointment.paymentDetails) {
       appointment.paymentDetails.paymentStatus = "failed";
+      appointment.paymentDetails.walletDeducted = 0;
     }
     await appointment.save();
 
@@ -870,23 +835,10 @@ export const updateHomeVisitAppointmentExpiredStatus =
       });
 
       for (const appointment of expiredAppointments) {
-        // If payment was frozen and appointment is being expired, refund the patient
-        if (appointment.paymentDetails?.paymentStatus === "frozen") {
-          const patient = await User.findById(appointment.patientId);
-          if (patient && appointment.paymentDetails) {
-            const refundAmount = appointment.paymentDetails.walletDeducted || 0;
-            patient.wallet += refundAmount;
-            (patient as any).frozenAmount = Math.max(
-              0,
-              ((patient as any).frozenAmount || 0) - refundAmount
-            );
-            await patient.save();
-          }
-        }
-
         appointment.status = "expired";
         if (appointment.paymentDetails) {
           appointment.paymentDetails.paymentStatus = "failed";
+          appointment.paymentDetails.walletDeducted = 0;
         }
         await appointment.save();
       }

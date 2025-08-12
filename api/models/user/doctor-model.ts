@@ -127,7 +127,6 @@ const doctorSchema = new Schema({
   homeVisit: {
     isActive: { type: Boolean, default: false },
     fixedPrice: { type: Number, default: 0 },
-    travelCost: { type: Number, default: 0 },
     availability: [
       {
         day: {

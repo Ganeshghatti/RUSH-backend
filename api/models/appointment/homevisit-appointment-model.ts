@@ -67,7 +67,6 @@ const homeVisitAppointmentSchema = new Schema(
     otp: {
       code: { type: String },
       generatedAt: { type: Date },
-      expiresAt: { type: Date },
       attempts: { type: Number, default: 0 },
       maxAttempts: { type: Number, default: 3 },
       isUsed: { type: Boolean, default: false },
@@ -81,13 +80,8 @@ const homeVisitAppointmentSchema = new Schema(
         default: "pending",
       },
     },
-    doctorDistance: { type: Number }, // Distance in KM
     doctorIp: String,
     patientIp: String,
-    doctorGeo: {
-      type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: [Number],
-    },
     patientGeo: {
       type: { type: String, enum: ["Point"], default: "Point" },
       coordinates: [Number],
@@ -102,7 +96,6 @@ const homeVisitAppointmentSchema = new Schema(
 homeVisitAppointmentSchema.index({ doctorId: 1, "slot.day": 1 });
 homeVisitAppointmentSchema.index({ patientId: 1, "slot.day": 1 });
 homeVisitAppointmentSchema.index({ status: 1 });
-homeVisitAppointmentSchema.index({ doctorGeo: "2dsphere" });
 homeVisitAppointmentSchema.index({ patientGeo: "2dsphere" });
 
 const HomeVisitAppointment = mongoose.model(
