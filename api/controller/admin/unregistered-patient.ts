@@ -7,34 +7,33 @@ export const addUnregisteredPatient = async (
   res: Response
 ): Promise<void> => {
   try {
-    if (!req.file) {
+    const patientsData = req.body;
+    
+    if (!Array.isArray(patientsData) || patientsData.length === 0) {
       res.status(400).json({
         success: false,
-        message: "No file uploaded",
+        message: "No patient data provided or empty array",
       });
       return;
     }
 
-    const workbook = XLSX.readFile(req.file.path);
-    const sheetName = workbook.SheetNames[0];
-    const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    const patients = patientsData
+      .map((row: any) => ({
+        name: (row.name || row.Name || "").trim() || null,
+        phone: (row.phone || row.Phone || "").trim() || null,
+        email: (row.email || row.Email || "").trim().toLowerCase() || null,
+        gender: row.gender || row.Gender || null,
+        disease: row.disease || row.Disease || null,
+      }))
+      .filter((patient) => patient.name && patient.email && patient.phone);
 
-    if (!sheetData || sheetData.length === 0) {
+    if (patients.length === 0) {
       res.status(400).json({
         success: false,
-        message: "Uploaded sheet is empty",
+        message: "No valid patient records with required fields found",
       });
       return;
     }
-
-    const patients = sheetData.map((row: any) => ({
-      name: row.name || row.Name || null,
-      phone: row.phone || row.Phone || null,
-      email: row.email || row.Email || null,
-      gender: row.gender || row.Gender || null,
-      disease: row.disease || row.Disease || null,
-    }))
-    .filter(patient => patient.name && patient.email && patient.phone);
 
     await UnregisteredPatient.insertMany(patients);
 
@@ -43,10 +42,10 @@ export const addUnregisteredPatient = async (
       message: `${patients.length} unregistered patients added successfully`,
     });
   } catch (err) {
-    console.error("Error uploading unregistered patients:", err);
+    console.error("Error adding unregistered patients:", err);
     res.status(500).json({
       success: false,
-      message: "Failed to upload unregistered patients",
+      message: "Failed to add unregistered patients",
     });
   }
 };
