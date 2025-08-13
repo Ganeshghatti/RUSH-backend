@@ -17,13 +17,49 @@ const unregisteredPatientSchema = new Schema(
       type: String,
       required: true,
       trim: true,
-      lowercase: true,
     },
     gender: {
       type: String,
-      enum: ["Male", "Female", "Other"],
+      trim: true,
       default: null,
     },
+    age: {
+      type: Number,
+      default: null
+    },
+
+    // Location details
+    address: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    locality: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    pincode: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    city: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    state: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: "India",
+    },
+
     disease: {
       type: String,
       default: null,
