@@ -9,11 +9,10 @@ export const getAllDoctors = async (
 ): Promise<void> => {
   try {
     // Find all users who are doctors and populate their doctor data (excluding password)
-    const users = await User.find({ roles: "doctor" })
-      .populate({
-        path: 'roleRefs.doctor',
-        select: '-password'
-      });
+    const users = await User.find({ roles: "doctor" }).populate({
+      path: "roleRefs.doctor",
+      select: "-password",
+    });
 
     if (!users || users.length === 0) {
       res.status(404).json({
@@ -25,7 +24,7 @@ export const getAllDoctors = async (
 
     // Generate signed URLs for all users
     const usersWithSignedUrls = await Promise.all(
-      users.map(user => generateSignedUrlsForUser(user))
+      users.map((user) => generateSignedUrlsForUser(user))
     );
 
     res.status(200).json({
@@ -48,11 +47,10 @@ export const getAllPatients = async (
 ): Promise<void> => {
   try {
     // Find all users who are patients and populate their patient data (excluding password)
-    const users = await User.find({ roles: "patient" })
-      .populate({
-        path: 'roleRefs.patient',
-        select: '-password'
-      });
+    const users = await User.find({ roles: "patient" }).populate({
+      path: "roleRefs.patient",
+      select: "-password",
+    });
 
     if (!users || users.length === 0) {
       res.status(404).json({
@@ -63,23 +61,31 @@ export const getAllPatients = async (
     }
 
     // Filter out users where patient role ref failed to populate and generate signed URLs for basic user data only
-    const validUsers = users.filter(user => user.roleRefs?.patient && typeof user.roleRefs.patient === 'object');
-    
+    const validUsers = users.filter(
+      (user) =>
+        user.roleRefs?.patient && typeof user.roleRefs.patient === "object"
+    );
+
     const usersWithSignedUrls = await Promise.all(
       validUsers.map(async (user) => {
         // Create a clone and only process basic user fields to avoid the signed URL error
         const clone = JSON.parse(JSON.stringify(user));
-        
+
         // Only handle profile picture for now
         if (clone?.profilePic) {
           try {
-            const { GetSignedUrl } = await import("../../utils/aws_s3/upload-media");
+            const { GetSignedUrl } = await import(
+              "../../utils/aws_s3/upload-media"
+            );
             clone.profilePic = await GetSignedUrl(clone.profilePic);
           } catch (error) {
-            console.warn("Could not generate signed URL for profile pic:", error);
+            console.warn(
+              "Could not generate signed URL for profile pic:",
+              error
+            );
           }
         }
-        
+
         return clone;
       })
     );
@@ -118,9 +124,9 @@ export const updateDoctorStatus = async (
       doctorId,
       {
         $set: { status },
-        $push: { message: { message, date: new Date() } }
+        $push: { message: { message, date: new Date() } },
       },
-      { new: true, select: '-password' }
+      { new: true, select: "-password" }
     );
 
     if (!updatedDoctor) {

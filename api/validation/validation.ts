@@ -133,28 +133,7 @@ export const doctorUpdateSchema = z
   })
   .strict();
 
-// Complete profile update validation schema
-export const updateProfileSchema = z
-  .object({
-    user: userUpdateSchema.optional(),
-    doctor: doctorUpdateSchema.optional(),
-  })
-  .refine((data) => data.user || data.doctor, {
-    message:
-      "Either user profile data or doctor profile data must be provided for update",
-  });
-
-// Emergency appointment validation schema
-export const createEmergencyAppointmentSchema = z
-  .object({
-    title: z.string().min(1, "Title is required").trim(),
-    description: z.string().trim().optional(),
-    media: z.array(z.string()).optional(),
-    location: z.string().min(1, "Location is required").trim().optional(),
-    contactNumber: z.string().optional(),
-    name: z.string().trim().optional(),
-  })
-  .strict();
+// Home visit appointment validation schemas
 
 // Health metrics validation schema
 export const addHealthMetricsSchema = z
