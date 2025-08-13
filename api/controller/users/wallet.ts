@@ -1,4 +1,4 @@
-import { razorpayConfig } from './../../config/razorpay';
+import { razorpayConfig } from "./../../config/razorpay";
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
 import mongoose from "mongoose";
@@ -59,7 +59,7 @@ export const updateWallet = async (
           email: user.email,
           contact: user.phone,
           countryCode: user.countryCode || "+91",
-        }
+        },
       },
     });
   } catch (error) {
@@ -72,16 +72,13 @@ export const updateWallet = async (
   }
 };
 
-export const verifyPaymentWallet = async (
-  req: Request,
-  res: Response
-) => {
+export const verifyPaymentWallet = async (req: Request, res: Response) => {
   try {
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      wallet
+      wallet,
     } = req.body;
 
     const userId = req.user.id;

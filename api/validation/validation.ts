@@ -133,28 +133,7 @@ export const doctorUpdateSchema = z
   })
   .strict();
 
-// Complete profile update validation schema
-export const updateProfileSchema = z
-  .object({
-    user: userUpdateSchema.optional(),
-    doctor: doctorUpdateSchema.optional(),
-  })
-  .refine((data) => data.user || data.doctor, {
-    message:
-      "Either user profile data or doctor profile data must be provided for update",
-  });
-
-// Emergency appointment validation schema
-export const createEmergencyAppointmentSchema = z
-  .object({
-    title: z.string().min(1, "Title is required").trim(),
-    description: z.string().trim().optional(),
-    media: z.array(z.string()).optional(),
-    location: z.string().min(1, "Location is required").trim().optional(),
-    contactNumber: z.string().optional(),
-    name: z.string().trim().optional(),
-  })
-  .strict();
+// Home visit appointment validation schemas
 
 // Health metrics validation schema
 export const addHealthMetricsSchema = z
@@ -448,13 +427,91 @@ export const clinicAppointmentBookSchema = z.object({
     ]),
     time: z.object({
       start: z.string(),
-      end: z.string()
-    })
-  })
-})
+      end: z.string(),
+    }),
+  }),
+});
 
-// otp validation schema
-export const otpValidationSchema = z.object({
-   appointmentId: z.string(),
-   otp: z.string()
-})
+// Home visit appointment validation schemas
+export const homeVisitAppointmentBookSchema = z.object({
+  doctorId: z.string().min(1, "Doctor ID is required"),
+  slot: z.object({
+    day: z.string().min(1, "Day is required"),
+    duration: z.union([
+      z.literal(15),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+    ]),
+    time: z.object({
+      start: z.string().min(1, "Start time is required"),
+      end: z.string().min(1, "End time is required"),
+    }),
+    history: z
+      .object({
+        title: z.string().optional(),
+      })
+      .optional(),
+  }),
+  patientAddress: z.object({
+    line1: z.string().min(1, "Address line 1 is required"),
+    line2: z.string().optional(),
+    landmark: z.string().optional(),
+    locality: z.string().min(1, "Locality is required"),
+    city: z.string().min(1, "City is required"),
+    pincode: z.string().min(1, "Pincode is required"),
+    country: z.string().default("India"),
+    location: z.object({
+      type: z.literal("Point").default("Point"),
+      coordinates: z
+        .array(z.number())
+        .length(2, "Coordinates must be [longitude, latitude]"),
+    }),
+  }),
+});
+
+export const homeVisitConfigUpdateSchema = z.object({
+  isActive: z.boolean().optional(),
+  fixedPrice: z.number().min(0, "Fixed price must be non-negative").optional(),
+  availability: z
+    .array(
+      z.object({
+        day: z.enum([
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ]),
+        duration: z.array(
+          z.object({
+            start: z.string(),
+            end: z.string(),
+          })
+        ),
+      })
+    )
+    .optional(),
+  location: z
+    .object({
+      type: z.literal("Point").default("Point"),
+      coordinates: z
+        .array(z.number())
+        .length(2, "Coordinates must be [longitude, latitude]"),
+    })
+    .optional(),
+});
+
+export const homeVisitAppointmentAcceptSchema = z.object({
+  travelCost: z.number().min(0, "Travel cost must be non-negative"),
+});
+
+export const homeVisitAppointmentCancelSchema = z.object({
+  reason: z.string().optional(),
+});
+
+export const homeVisitAppointmentCompleteSchema = z.object({
+  otp: z.string().min(1, "OTP is required"),
+});
