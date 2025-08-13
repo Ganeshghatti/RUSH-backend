@@ -1,7 +1,6 @@
 import { razorpayConfig } from "./../../config/razorpay";
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
-import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
 import mongoose from "mongoose";
 import path from "path";
 import crypto from "crypto";
@@ -186,47 +185,30 @@ export const deductWallet = async (
       return;
     }
 
-    // Compute frozen obligations from home visit appointments (do not use user.frozenAmount)
-    const frozenAgg = await HomeVisitAppointment.aggregate([
-      {
-        $match: {
-          patientId: new mongoose.Types.ObjectId(id),
-          status: "patient_confirmed",
-          "paymentDetails.paymentStatus": "frozen",
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: { $ifNull: ["$pricing.totalCost", 0] } },
-        },
-      },
-    ]);
-    const frozenFromAppointments = frozenAgg?.[0]?.total || 0;
-    const availableBalance = (user.wallet || 0) - frozenFromAppointments;
+    // Check if user has sufficient balance
+    const currentBalance = user.wallet || 0;
 
-    if (availableBalance < amount) {
+    if (currentBalance < amount) {
       res.status(400).json({
         success: false,
-        message:
-          "Insufficient available balance. Some amount is frozen in other appointments.",
+        message: "Insufficient wallet balance",
         data: {
-          currentBalance: user.wallet || 0,
-          availableBalance,
-          frozenFromAppointments,
+          currentBalance,
         },
       });
       return;
     }
 
     // Deduct amount from wallet
-    user.wallet = (user.wallet || 0) - amount;
+    user.wallet = currentBalance - amount;
     await user.save();
 
     res.status(200).json({
       success: true,
       message: "Amount deducted from wallet successfully",
-      data: { currentBalance: user.wallet },
+      data: {
+        currentBalance: user.wallet,
+      },
     });
   } catch (error) {
     console.error("Error deducting from wallet:", error);
