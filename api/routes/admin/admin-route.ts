@@ -1,7 +1,7 @@
 import { getAllDoctors, updateDoctorStatus, updateDocumentVerificationStatus, getAllPatients } from './../../controller/admin/admin';
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { Router } from "express";
-import { addUnregisteredPatient } from '../../controller/admin/unregistered-patient';
+import { addUnregisteredPatient, getUnregisteredPatient } from '../../controller/admin/unregistered-patient';
 
 const router = Router();
 
@@ -11,5 +11,6 @@ router.route("/admin/doctor/verification/:doctorId").put(verifyToken, checkRole(
 router.route("/admin/user/verification/:userId").put(verifyToken, checkRole("admin"), updateDocumentVerificationStatus);
 router.route("/admin/addpatient").post(verifyToken, checkRole("admin"), addUnregisteredPatient)
 /***router.post("/admin/addpatient", verifyToken, checkRole("admin"), addUnregisteredPatient)***/
+router.route("/admin/getpatient").get(verifyToken, checkRole("admin"), getUnregisteredPatient)
 
 export default router;
