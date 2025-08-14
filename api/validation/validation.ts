@@ -133,7 +133,28 @@ export const doctorUpdateSchema = z
   })
   .strict();
 
-// Home visit appointment validation schemas
+// Complete profile update validation schema
+export const updateProfileSchema = z
+  .object({
+    user: userUpdateSchema.optional(),
+    doctor: doctorUpdateSchema.optional(),
+  })
+  .refine((data) => data.user || data.doctor, {
+    message:
+      "Either user profile data or doctor profile data must be provided for update",
+  });
+
+// Emergency appointment validation schema
+export const createEmergencyAppointmentSchema = z
+  .object({
+    title: z.string().min(1, "Title is required").trim(),
+    description: z.string().trim().optional(),
+    media: z.array(z.string()).optional(),
+    location: z.string().min(1, "Location is required").trim().optional(),
+    contactNumber: z.string().optional(),
+    name: z.string().trim().optional(),
+  })
+  .strict();
 
 // Health metrics validation schema
 export const addHealthMetricsSchema = z
@@ -427,10 +448,16 @@ export const clinicAppointmentBookSchema = z.object({
     ]),
     time: z.object({
       start: z.string(),
-      end: z.string(),
-    }),
-  }),
-});
+      end: z.string()
+    })
+  })
+})
+
+// otp validation schema
+export const otpValidationSchema = z.object({
+   appointmentId: z.string(),
+   otp: z.string()
+})
 
 // Home visit appointment validation schemas
 export const homeVisitAppointmentBookSchema = z.object({
