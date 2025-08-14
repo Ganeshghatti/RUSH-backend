@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
+import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
 import Doctor from "../../models/user/doctor-model";
@@ -228,11 +229,30 @@ export const getDoctorAppointments = async (
 
     console.log("Clinic appointments for doctor", clinicAppointments);
 
+    // Find all home visit appointments for this doctor
+    const homeVisitAppointments = await HomeVisitAppointment.find({
+      doctorId: doctor._id,
+    })
+      .populate({
+        path: "patientId",
+        select: "firstName lastName countryCode gender email profilePic",
+      })
+      .populate({
+        path: "doctorId",
+        select: "qualifications specialization userId homeVisit",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
+      .sort({ "slot.day": -1, "slot.time.start": -1 });
+
     res.status(200).json({
       success: true,
       onlineAppointment: onlineAppointments,
       emergencyAppointment: emergencyAppointments,
       clinicAppointment: clinicAppointments,
+      homevisitAppointment: homeVisitAppointments,
       message: "Doctor appointments retrieved successfully",
     });
   } catch (error: any) {
@@ -320,11 +340,30 @@ export const getPatientAppointments = async (
       .sort({ "slot.day": -1 });
     console.log("Clinic appointments for patient", clinicAppointments);
 
+    // Find all home visit appointments for this patient
+    const homeVisitAppointments = await HomeVisitAppointment.find({
+      patientId: userId,
+    })
+      .populate({
+        path: "patientId",
+        select: "firstName lastName countryCode gender email profilePic",
+      })
+      .populate({
+        path: "doctorId",
+        select: "qualifications specialization userId homeVisit",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
+      .sort({ "slot.day": -1, "slot.time.start": -1 });
+
     res.status(200).json({
       success: true,
       onlineAppointment: onlineAppointments,
       emergencyAppointment: emergencyAppointments,
       clinicAppointment: clinicAppointments,
+      homevisitAppointment: homeVisitAppointments,
       message: "Patient appointments retrieved successfully",
     });
   } catch (error: any) {
