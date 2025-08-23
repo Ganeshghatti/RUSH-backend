@@ -367,4 +367,28 @@ export const acceptEmergencyAppointment = async (
   }
 };
 
+// Update expired clinic appointments - for cron job
+export const updateEmergencyAppointmentExpiredStatus = async (): Promise<void> => {
+  try {
+    const now = new Date();
+
+    // Find appointments that should be expired (end time has passed and status is still pending/confirmed)
+    const expiredAppointments = await EmergencyAppointment.updateMany(
+      {
+        "createdAt": { $lt: now },
+        status: { $in: ["pending", "confirmed"] },
+      },
+      {
+        $set: { status: "expired" },
+      }
+    );
+
+    console.log(
+      `Updated ${expiredAppointments.modifiedCount} expired clinic appointments`
+    );
+  } catch (error) {
+    console.error("Error updating expired clinic appointments:", error);
+  }
+}
+
 

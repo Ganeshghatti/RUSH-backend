@@ -111,9 +111,10 @@ app.listen(PORT, () => {
 
 // Cron job to update expired appointments
 // Runs once every 24 hours at midnight to check for expired appointments
-cron.schedule("0 0 * * *", async () => {
-  console.log("Running cron job to update expired appointments...");
-  await updateAppointmentExpiredStatus();
-  await updateClinicAppointmentExpiredStatus();
-  await updateHomeVisitAppointmentExpiredStatus();
-});
+
+// cron.schedule("0 0 * * *", async () => {
+//   console.log("Running cron job to update expired appointments...");
+//   await updateAppointmentExpiredStatus();
+//   await updateClinicAppointmentExpiredStatus();
+//   await updateHomeVisitAppointmentExpiredStatus();
+// });
