@@ -596,6 +596,7 @@ export const getAllPatients = async (
   }
 };
 
+// script for cron job
 export const updateAppointmentExpiredStatus = async () => {
   try {
     const now = new Date();
