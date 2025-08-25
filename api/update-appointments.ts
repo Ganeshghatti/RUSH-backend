@@ -1,5 +1,3 @@
-// file: /api/mark-appointments.ts
-
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import connectDB from "./config/db";
 
@@ -10,10 +8,7 @@ import { updateEmergencyAppointmentExpiredStatus } from "./controller/appointmen
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    // Connect to DB (safe to call multiple times in serverless)
     await connectDB();
-
-    // Run all updaters in parallel for better performance
     await Promise.all([
       updateAppointmentExpiredStatus(),
       updateClinicAppointmentExpiredStatus(),
