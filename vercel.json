@@ -19,7 +19,7 @@
   "crons": [
     {
       "path": "/api/update-appointments",
-      "schedule": "30 3* * *"
+      "schedule": "30 15 * * *"
     }
   ]
 } 
