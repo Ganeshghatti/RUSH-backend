@@ -8,6 +8,10 @@
   ],
   "routes": [
     {
+      "src": "/api/update-appointments",
+      "dest": "api/update-appointments.ts"
+    },
+    {
       "src": "/(.*)",
       "dest": "api/index.ts"
     }
@@ -15,7 +19,7 @@
   "crons": [
     {
       "path": "/api/update-appointments",
-      "schedule": "30 14 * * *"
+      "schedule": "30 15 * * *"
     }
   ]
 } 
