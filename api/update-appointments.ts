@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import connectDB from "./config/db";
 
 import { updateAppointmentExpiredStatus } from "./controller/appointment/online-appointment";
 import { updateClinicAppointmentExpiredStatus } from "./controller/appointment/clinic-appointment";
@@ -8,7 +7,6 @@ import { updateEmergencyAppointmentExpiredStatus } from "./controller/appointmen
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    await connectDB();
     await Promise.all([
       updateAppointmentExpiredStatus(),
       updateClinicAppointmentExpiredStatus(),
