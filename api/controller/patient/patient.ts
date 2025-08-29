@@ -16,6 +16,7 @@ import {
   updateHealthMetricsSchema,
 } from "../../validation/validation";
 import { HealthMetrics } from "../../models/health-metrics-model";
+import { updateProfileSchema } from "../../validation/validation";
 
 export const getPatientById = async (
   req: Request,
@@ -352,6 +353,89 @@ export const getPatientDashboard = async (
       message: "Failed to get patient dashboard data",
       error: (error as Error).message,
     });
+  }
+};
+
+export const updateBankDetail = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user.id;
+
+    const { bankDetails } = req.body;
+    if (!bankDetails || Object.keys(bankDetails).length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "No bank details provided",
+      });
+      return;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: { bankDetails } }, // replace bankDetails object
+      { new: true, runValidators: true, select: "-password" }
+    );
+
+    if (!updatedUser) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Bank details updated successfully",
+      data: updatedUser.bankDetails, // return just bankDetails
+    });
+  } catch (error: any) {
+    console.error("Error updating bank details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating bank details",
+      error: error.message,
+    });
+  }
+};
+
+export const updatePersonalInfo = async (
+  req: Request,
+  res: Response):
+  Promise<void> => {
+  try {
+    const userId = req.user.id;
+
+    const { firstName, lastName, email, phone } = req.body;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        firstName,
+        lastName,
+        email,
+        phone,
+      },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!updatedUser) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    res.json({
+      message: "Personal info updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Error updating personal info:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
