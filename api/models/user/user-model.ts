@@ -31,6 +31,9 @@ const userSchema = new Schema({
   dob: { type: Date },
   wallet: { type: Number, default: 0 },
   frozenAmount: { type: Number, default: 0 }, // Amount frozen for pending appointments
+  // Razorpay fields
+  rzpayContactId: { type: String },      // stores Razorpay contact_id
+  rzpayFundAccountId: { type: String },  // stores Razorpay fund_account_id
   address: {
     line1: { type: String },
     line2: { type: String },

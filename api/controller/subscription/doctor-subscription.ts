@@ -11,12 +11,28 @@ export const createSubscription = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { price, name, description, features, isActive, duration } = req.body;
+    const { price, name, description, features, isActive, duration, 
+      platformFee, operationalExpense } = req.body;
 
     if (price < 0) {
       res.status(400).json({
         success: false,
         message: "Price must be a non-negative number (0 or greater)",
+      });
+      return;
+    }
+
+    if (platformFee < 0) {
+      res.status(400).json({
+        success: false,
+        message: "Platform fee must be a non-negative number (0 or greater)",
+      });
+      return;
+    }
+    if (operationalExpense < 0 || operationalExpense > 100) {
+      res.status(400).json({
+        success: false,
+        message: "Operational expense must be between 0 and 100 (percentage)",
       });
       return;
     }
@@ -59,6 +75,8 @@ export const createSubscription = async (
       isActive: isActive,
       duration,
       qrCodeImage: signedUrl,
+      platformFee: parseFloat(platformFee).toFixed(2),
+      operationalExpense: parseFloat(operationalExpense).toFixed(2),
     });
 
     res.status(201).json({
