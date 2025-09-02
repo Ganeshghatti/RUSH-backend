@@ -1,4 +1,5 @@
 import { razorpayConfig } from "./../../config/razorpay";
+import { razorpayAxios } from "../../config/razorpayX";
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
 import mongoose from "mongoose";
@@ -51,7 +52,7 @@ export const updateWallet = async (
 
     res.status(200).json({
       success: true,
-      message: "Wallet updated successfully",
+      message: "Order created successfully",
       data: {
         order,
         prefill: {
@@ -63,7 +64,7 @@ export const updateWallet = async (
       },
     });
   } catch (error) {
-    console.error("Error updating wallet:", error);
+    console.error("Error creating order:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update wallet",
@@ -141,6 +142,7 @@ export const verifyPaymentWallet = async (req: Request, res: Response) => {
   }
 };
 
+// controller to derduct.
 export const deductWallet = async (
   req: Request,
   res: Response
@@ -174,7 +176,7 @@ export const deductWallet = async (
       return;
     }
 
-    // Find user
+    // Find user from DB
     const user = await User.findById(id);
 
     if (!user) {
@@ -199,17 +201,68 @@ export const deductWallet = async (
       return;
     }
 
-    // Deduct amount from wallet
-    user.wallet = currentBalance - amount;
-    await user.save();
+    // step 1 - Check if RazorPay contact_id exists
+    if (!user.rzpayContactId) {
+      const contact = await razorpayAxios.post("/contacts", {
+        name: user.firstName + " " + user.lastName,
+        email: user.email,
+        contact: user.phone,
+        type: "user"
+      });
+      user.rzpayContactId = contact.data.id;
+      await user.save();
+    }
 
-    res.status(200).json({
-      success: true,
-      message: "Amount deducted from wallet successfully",
-      data: {
-        currentBalance: user.wallet,
-      },
+    // step 2 - Check if Razorpay Fund accountid
+    if (!user.rzpayFundAccountId) {
+      if (!user.bankDetails || !user.bankDetails.accountNumber || !user.bankDetails.ifscCode || 
+        !user.bankDetails.accountName) {
+          res.status(400).json({
+            success: false,
+            message: "Bank details are missing. Please update your bank details before withdrawing.",
+          });
+       return
+      }
+
+      const fundRes = await razorpayAxios.post("/fund_accounts", {
+        contact_id: user.rzpayContactId,
+        account_type: "bank_account",
+         bank_account: {
+          name: user.bankDetails.accountName,
+          ifsc: user.bankDetails.ifscCode,
+          account_number: user.bankDetails.accountNumber,
+        },
+      })
+      user.rzpayFundAccountId = fundRes.data.id;
+      await user.save();
+    }
+
+    // step 3 - Initiate Payout
+    const payoutRes = await razorpayAxios.post("/payouts", {
+      account_number: process.env.RAZORPAYX_VIRTUAL_ACC!,
+      fund_account_id: user.rzpayFundAccountId,
+      amount: amount * 100, 
+      currency: "INR",
+      mode: "IMPS",
+      purpose: "payout",
+      queue_if_low_balance: true,
+      reference_id: `wd_${user._id}_${Date.now()}`,
+      narration: "Wallet Withdrawal",
     });
+
+    // we have to setup web hook because inital response of razorpay will be initated.
+
+    // Deduct amount from wallet
+    // user.wallet = currentBalance - amount;
+    // await user.save();
+
+    // res.status(200).json({
+    //   success: true,
+    //   message: "Amount deducted from wallet successfully",
+    //   data: {
+    //     currentBalance: user.wallet,
+    //   },
+    // });
   } catch (error) {
     console.error("Error deducting from wallet:", error);
     res.status(500).json({
