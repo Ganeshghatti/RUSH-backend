@@ -12,7 +12,7 @@ export const createSubscription = async (
 ): Promise<void> => {
   try {
     const { price, name, description, features, isActive, duration, 
-      platformFee, operationalExpense } = req.body;
+      platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit } = req.body;
 
     if (price < 0) {
       res.status(400).json({
@@ -22,17 +22,10 @@ export const createSubscription = async (
       return;
     }
 
-    if (platformFee < 0) {
+    if (platformFeeOnline < 0 || platformFeeClinic < 0 || platformFeeEmergency < 0 || platformFeeHomeVisit < 0) {
       res.status(400).json({
         success: false,
         message: "Platform fee must be a non-negative number (0 or greater)",
-      });
-      return;
-    }
-    if (operationalExpense < 0 || operationalExpense > 100) {
-      res.status(400).json({
-        success: false,
-        message: "Operational expense must be between 0 and 100 (percentage)",
       });
       return;
     }
@@ -75,8 +68,14 @@ export const createSubscription = async (
       isActive: isActive,
       duration,
       qrCodeImage: signedUrl,
-      platformFee: parseFloat(platformFee).toFixed(2),
-      operationalExpense: parseFloat(operationalExpense).toFixed(2),
+      platformFeeOnline: Number(parseFloat(platformFeeOnline).toFixed(2)),
+      opsExpenseOnline: Number(parseFloat(opsExpenseOnline).toFixed(2)),
+      platformFeeClinic: Number(parseFloat(platformFeeClinic).toFixed(2)),
+      opsExpenseClinic: Number(parseFloat(opsExpenseClinic).toFixed(2)),
+      platformFeeHomeVisit: Number(parseFloat(platformFeeHomeVisit).toFixed(2)),
+      opsExpenseHomeVisit: Number(parseFloat(opsExpenseHomeVisit).toFixed(2)),
+      platformFeeEmergency: Number(parseFloat(platformFeeEmergency).toFixed(2)),
+      opsExpenseEmergency: Number(parseFloat(opsExpenseEmergency).toFixed(2)),
     });
 
     res.status(201).json({

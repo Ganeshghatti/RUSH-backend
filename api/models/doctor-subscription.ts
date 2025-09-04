@@ -33,11 +33,41 @@ const DoctorSubscriptionSchema = new Schema(
       enum: ["1 month", "3 months", "1 year", "2 years", "20 years", "15 years", "10 years", "5 years", "40 years", "lifetime"],
     },
 
-     platformFee: {
+    platformFeeOnline: {
       type: Number,
       min: [0, "Platform fee must be a positive number"],
     },
-    operationalExpense: {
+    opsExpenseOnline: {
+      type: Number,
+      min: [0, "Operational expense must be at least 0%"],
+      max: [100, "Operational expense cannot exceed 100%"],
+    },
+
+    platformFeeClinic: {
+      type: Number,
+      min: [0, "Platform fee must be a positive number"],
+    },
+    opsExpenseClinic: {
+      type: Number,
+      min: [0, "Operational expense must be at least 0%"],
+      max: [100, "Operational expense cannot exceed 100%"],
+    },
+
+    platformFeeHomeVisit: {
+      type: Number,
+      min: [0, "Platform fee must be a positive number"],
+    },
+    opsExpenseHomeVisit: {
+      type: Number,
+      min: [0, "Operational expense must be at least 0%"],
+      max: [100, "Operational expense cannot exceed 100%"],
+    },
+
+    platformFeeEmergency: {
+      type: Number,
+      min: [0, "Platform fee must be a positive number"],
+    },
+    opsExpenseEmergency: {
       type: Number,
       min: [0, "Operational expense must be at least 0%"],
       max: [100, "Operational expense cannot exceed 100%"],
