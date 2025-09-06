@@ -11,6 +11,7 @@ import {
   homeVisitAppointmentCancelSchema,
   homeVisitConfigUpdateSchema,
 } from "../../validation/validation";
+import DoctorSubscription from "../../models/doctor-subscription";
 
 // NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
 // Removing local AuthRequest avoids duplicated type drift.
@@ -558,6 +559,48 @@ export const completeHomeVisitAppointment = async (
 
       patient.wallet = (patient.wallet || 0) - amountToDeduct;
       await patient.save();
+
+      // get the current subscription
+      const now = new Date();
+      const activeSub = doctor.subscriptions.find(
+        (sub) => !sub.endDate || sub.endDate > now
+      );
+
+      if (!activeSub) {
+        res.status(400).json({
+                success: false,
+                message: "Doctor has no active subscription",
+        });
+        return;
+      }
+      
+      const subscription = await DoctorSubscription.findById(
+        activeSub.SubscriptionId
+      );
+      if (!subscription) {
+        res.status(404).json({
+          success: false,
+          message: "Subscription not found",
+        });
+        return;
+      }
+      
+      let platformFee = subscription.platformFeeOnline || 0;
+      let opsExpense = subscription.opsExpenseOnline || 0;
+      let doctorEarning = amountToDeduct - platformFee - (amountToDeduct * opsExpense) / 100;
+      if (doctorEarning < 0) doctorEarning = 0;
+
+      const doctorUser = await User.findById(doctor.userId);
+      if (!doctorUser) {
+        res.status(404).json({ success: false, message: "Doctor user not found" });
+        return;
+      }
+
+      doctorUser.wallet = (doctorUser.wallet || 0) + doctorEarning;
+      await doctorUser.save();
+
+      doctor.earnings += doctorEarning;
+      await doctor.save();
     }
 
     // Populate the response

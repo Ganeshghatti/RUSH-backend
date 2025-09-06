@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middleware/auth-middleware");
+const wallet_1 = require("../../controller/users/wallet");
+const router = (0, express_1.Router)();
+router.route("/add/wallet").put(auth_middleware_1.verifyToken, wallet_1.updateWallet);
+router.route("/verify/payment").post(auth_middleware_1.verifyToken, wallet_1.verifyPaymentWallet);
+router.route("/deduct/wallet").put(auth_middleware_1.verifyToken, wallet_1.deductWallet);
+exports.default = router;

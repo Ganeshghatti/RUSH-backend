@@ -6,6 +6,7 @@ import User from "../../models/user/user-model";
 import { createEmergencyAppointmentSchema } from "../../validation/validation";
 import twilio from "twilio";
 import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
+import DoctorSubscription from "../../models/doctor-subscription";
 
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -323,6 +324,48 @@ export const acceptEmergencyAppointment = async (
     // Deduct amount from patient's wallet
     user.wallet -= 2500;
     await user.save();
+
+    // get the current subscription
+    const now = new Date();
+    const activeSub = doctor.subscriptions.find(
+        (sub) => !sub.endDate || sub.endDate > now
+    );
+    if (!activeSub) {
+        res.status(400).json({
+          success: false,
+          message: "Doctor has no active subscription",
+        });
+        return;
+    }
+
+    const subscription = await DoctorSubscription.findById(
+      activeSub.SubscriptionId
+    );
+    if (!subscription) {
+      res.status(404).json({
+          success: false,
+          message: "Subscription not found",
+      });
+      return;
+    }
+
+    let platformFee = subscription.platformFeeOnline || 0;
+    let opsExpense = subscription.opsExpenseOnline || 0
+    let doctorEarning = 2500 - platformFee - (2500 * opsExpense) / 100;
+
+    if (doctorEarning < 0) doctorEarning = 0;
+
+    const doctorUser = await User.findById(userId)
+    if (!doctorUser) {
+        res.status(404).json({ success: false, message: "Doctor user not found" });
+        return;
+    }
+    doctorUser.wallet = (doctorUser.wallet || 0) + doctorEarning;
+    await doctorUser.save();
+
+    doctor.earnings += doctorEarning;
+    await doctor.save();
+
 
     // Update the emergency appointment with doctor info
     emergencyAppointment.doctorId = doctor._id;
