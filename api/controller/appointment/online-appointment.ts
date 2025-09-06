@@ -6,6 +6,7 @@ import ClinicAppointment from "../../models/appointment/clinic-appointment-model
 import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
+import DoctorSubscription from "../../models/doctor-subscription";
 
 // Book appointment by patient
 export const bookOnlineAppointment = async (
@@ -420,7 +421,7 @@ export const updateAppointmentStatus = async (
       return;
     }
 
-    // 💰 Only on 'accepted' status: handle wallet deduction
+    // Only on 'accepted' status: handle wallet deduction
     if (status === "accepted") {
       const patient = await User.findById(appointment.patientId);
       if (!patient) {
@@ -431,7 +432,7 @@ export const updateAppointmentStatus = async (
         return;
       }
 
-      // 🧠 Find matched price for the slot duration
+      // Find matched price for the slot duration
       const matched = doctor?.onlineAppointment?.duration.find(
         (d: any) => d.minute === appointment?.slot?.duration
       );
@@ -454,12 +455,53 @@ export const updateAppointmentStatus = async (
         return;
       }
 
-      // 💳 Deduct amount and save patient
+      // Deduct amount and save patient
       patient.wallet -= price;
       await patient.save();
+
+      // get the current subsc
+      const now = new Date();
+      const activeSub = doctor.subscriptions.find(
+        (sub) => !sub.endDate || sub.endDate > now
+      );
+
+      if (!activeSub) {
+        res.status(400).json({
+          success: false,
+          message: "Doctor has no active subscription",
+        });
+        return;
+      }
+
+      const subscription = await DoctorSubscription.findById(
+        activeSub.SubscriptionId
+      );
+      if (!subscription) {
+        res.status(404).json({
+          success: false,
+          message: "Subscription not found",
+        });
+        return;
+      }
+
+      let platformFee = subscription.platformFeeOnline || 0;
+      let opsExpense = subscription.opsExpenseOnline || 0
+      let doctorEarning = price - platformFee - (price * opsExpense) / 100;
+
+      if (doctorEarning < 0) doctorEarning = 0;
+
+      const doctorUser = await User.findById(doctor.userId);
+      if (!doctorUser) {
+        res.status(404).json({ success: false, message: "Doctor user not found" });
+        return;
+      }
+
+      doctorUser.wallet = (doctorUser.wallet || 0) + doctorEarning;
+      await doctorUser.save();
+
     }
 
-    // ✅ Update status
+    // Update status
     appointment.status = status;
     await appointment.save();
 

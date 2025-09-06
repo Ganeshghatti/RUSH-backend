@@ -98,7 +98,9 @@ export const updateSubscription = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { isActive, name, description, features } = req.body;
+    const { isActive, name, description, features, price,
+      platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency
+     } = req.body;
 
     // Build update object with only provided fields
     const updateData: any = {};
@@ -161,6 +163,29 @@ export const updateSubscription = async (
       }
       
       updateData.features = features.map((feature: string) => feature.trim());
+    }
+
+    //add fee
+    updateData.platformFeeOnline = platformFeeOnline;
+    updateData.opsExpenseOnline = opsExpenseOnline;
+    updateData.platformFeeClinic = platformFeeClinic;
+    updateData.opsExpenseClinic = opsExpenseClinic;
+    updateData.platformFeeHomeVisit = platformFeeHomeVisit;
+    updateData.opsExpenseHomeVisit = opsExpenseHomeVisit;
+    updateData.platformFeeEmergency = platformFeeEmergency;
+    updateData.opsExpenseEmergency = opsExpenseEmergency;
+
+
+    // validate and add price if provided
+    if (price !== undefined) {
+      if (typeof price !== "number") {
+        res.status(400).json({
+          success: false,
+          message: "Price field must be a number",
+        });
+        return;
+      }
+      updateData.price = price;
     }
 
     // Check if at least one field is provided for update
