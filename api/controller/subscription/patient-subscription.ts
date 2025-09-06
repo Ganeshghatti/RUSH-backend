@@ -186,6 +186,7 @@ export const getSubscriptions = async (
   res: Response
 ): Promise<void> => {
   try {
+    console.log("hereeeeeeee");
     const subscriptions = await PatientSubscription.find();
 
     console.log("subs",subscriptions);
