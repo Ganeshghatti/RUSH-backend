@@ -188,12 +188,10 @@ export const getSubscriptions = async (
   try {
     const subscriptions = await PatientSubscription.find({});
 
-    const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(subscriptions);
-
     res.status(200).json({
       success: true,
       message: "Subscriptions fetched successfully",
-      data: subscriptionsWithSignedUrls,
+      data: subscriptions,
     });
   } catch (error) {
     console.error("Error fetching subscriptions:", error);
