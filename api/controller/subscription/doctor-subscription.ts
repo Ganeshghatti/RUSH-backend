@@ -232,14 +232,6 @@ export const getSubscriptions = async (
   try {
     const subscriptions = await DoctorSubscription.find({});
 
-    if (!subscriptions || subscriptions.length === 0) {
-      res.status(404).json({
-        success: false,
-        message: "No subscriptions found",
-      });
-      return;
-    }
-
     const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(subscriptions);
 
     res.status(200).json({

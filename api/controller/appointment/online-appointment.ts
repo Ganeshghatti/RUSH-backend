@@ -459,7 +459,7 @@ export const updateAppointmentStatus = async (
       patient.wallet -= price;
       await patient.save();
 
-      // get the current subsc
+      // get the current subscription
       const now = new Date();
       const activeSub = doctor.subscriptions.find(
         (sub) => !sub.endDate || sub.endDate > now
@@ -499,6 +499,8 @@ export const updateAppointmentStatus = async (
       doctorUser.wallet = (doctorUser.wallet || 0) + doctorEarning;
       await doctorUser.save();
 
+      doctor.earnings += doctorEarning;
+      await doctor.save();
     }
 
     // Update status

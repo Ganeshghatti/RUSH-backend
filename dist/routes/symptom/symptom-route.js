@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const symptom_1 = require("../../controller/symptom/symptom");
+const search_1 = require("../../controller/doctor/search");
+const router = (0, express_1.Router)();
+router.route("/symptoms/search").get(symptom_1.searchSymptoms);
+router.route("/specialists").get(symptom_1.getAllUniqueSpecialist);
+router.route("/search/doctor").get(search_1.searchDoctor);
+exports.default = router;
