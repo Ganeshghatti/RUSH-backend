@@ -24,7 +24,7 @@ router
 
 router
   .route("/subscription")
-  .get(getSubscriptions);
+  .get(verifyToken, checkRole("admin"), getSubscriptions);
 
 // router
 //   .route("/subscription/purchase/:patientId")
