@@ -323,12 +323,21 @@ export const getPatientDashboard = async (
 
     // If no condition-based recommendations, get general recommended doctors
     if (recommendedDoctors.length === 0) {
+      const now = new Date();
       recommendedDoctors = await Doctor.find({
-        status: "approved", // Only show approved doctors
-        subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
+        status: "approved",
+        subscriptions: {
+          $elemMatch: {
+            endDate: { $gt: now }
+          }
+        }
       })
-        .populate("userId", "firstName lastName profilePic")
-        .select("userId specialization experience onlineAppointment")
+        .populate({
+          path: "userId",
+          match: { isDocumentVerified: true },
+          select: "firstName lastName profilePic"
+        })
+        .select("userId specialization experience onlineAppointment homeVisit clinicVisit")
         .limit(10);
     }
 
