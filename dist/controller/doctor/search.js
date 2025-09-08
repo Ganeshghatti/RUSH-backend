@@ -22,7 +22,7 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         const parsedLimit = Number(limit);
         const queryRegex = query ? new RegExp(String(query), 'i') : null;
         // Step 1: Build filters
-        const userFilter = { roles: 'doctor' };
+        const userFilter = { roles: 'doctor', isDocumentVerified: true };
         if (queryRegex)
             userFilter.firstName = { $regex: queryRegex };
         if (gender)
@@ -32,9 +32,14 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             .lean();
         const matchedUserIds = matchedUsers.map(user => user._id);
         // Step 2: Doctor filter for matched userIds
+        const now = new Date();
         const doctorFilter = {
-            status: "approved", // Only show approved doctors
-            subscriptions: { $exists: true, $not: { $size: 0 } } // Only show doctors with at least one subscription
+            status: "approved",
+            subscriptions: {
+                $elemMatch: {
+                    endDate: { $gt: now }
+                }
+            }
         };
         if (matchedUserIds.length > 0) {
             doctorFilter.userId = { $in: matchedUserIds };
@@ -54,8 +59,12 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             : [];
         // Step 3: Doctor filter for specialization match
         const specializationFilter = {
-            status: "approved", // Only show approved doctors
-            subscriptions: { $exists: true, $not: { $size: 0 } } // Only show doctors with at least one subscription
+            status: "approved",
+            subscriptions: {
+                $elemMatch: {
+                    endDate: { $gt: now }
+                }
+            }
         };
         if (queryRegex) {
             specializationFilter.specialization = { $regex: queryRegex };
@@ -82,12 +91,17 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         let finalDoctors = combinedDoctors;
         if (finalDoctors.length === 0 && !query && !gender && !appointment) {
             finalDoctors = yield doctor_model_1.default.find({
-                status: "approved", // Only show approved doctors
-                subscriptions: { $exists: true, $not: { $size: 0 } } // Only show doctors with at least one subscription
+                status: "approved",
+                subscriptions: {
+                    $elemMatch: {
+                        endDate: { $gt: now }
+                    }
+                }
             })
                 .select('-password')
                 .populate({
                 path: 'userId',
+                match: { isDocumentVerified: true },
                 select: 'firstName lastName email phone profilePic gender'
             })
                 .limit(parsedLimit);

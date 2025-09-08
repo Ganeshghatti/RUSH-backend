@@ -167,11 +167,10 @@ exports.updateSubscription = updateSubscription;
 const getSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const subscriptions = yield patient_subscription_1.default.find({});
-        const subscriptionsWithSignedUrls = yield (0, signed_url_1.generateSignedUrlsForSubscriptions)(subscriptions);
         res.status(200).json({
             success: true,
             message: "Subscriptions fetched successfully",
-            data: subscriptionsWithSignedUrls,
+            data: subscriptions,
         });
     }
     catch (error) {
