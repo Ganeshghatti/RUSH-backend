@@ -279,11 +279,11 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
             })
                 .populate({
                 path: "userId",
-                match: { isDocumentVerified: true },
-                select: "firstName lastName profilePic"
+                select: "firstName lastName profilePic isDocumentVerified",
             })
                 .select("userId specialization experience onlineAppointment homeVisit clinicVisit")
                 .limit(10);
+            recommendedDoctors = recommendedDoctors.filter(doctor => doctor.userId && doctor.userId.isDocumentVerified);
         }
         // Process recommended doctors to add signed URLs
         const processedDoctors = yield Promise.all(recommendedDoctors.map((doctor) => (0, signed_url_1.generateSignedUrlsForDoctor)(doctor)));
