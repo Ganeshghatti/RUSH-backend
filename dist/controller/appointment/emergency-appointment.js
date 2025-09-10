@@ -278,7 +278,8 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         }
         // Create Twilio room for emergency consultation
         const roomName = `emergency_${id}`;
-        const room = yield client.video.rooms.create({
+        console.log("Creating Twilio room with name:", roomName);
+        const room = yield client.video.v1.rooms.create({
             uniqueName: roomName,
             type: "group",
             maxParticipants: 2,

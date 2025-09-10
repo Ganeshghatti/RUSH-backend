@@ -315,7 +315,8 @@ export const acceptEmergencyAppointment = async (
 
     // Create Twilio room for emergency consultation
     const roomName = `emergency_${id}`;
-    const room = await client.video.rooms.create({
+    console.log("Creating Twilio room with name:", roomName);
+    const room = await client.video.v1.rooms.create({
       uniqueName: roomName,
       type: "group",
       maxParticipants: 2,
