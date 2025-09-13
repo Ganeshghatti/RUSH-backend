@@ -14,7 +14,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deductWallet = exports.verifyPaymentWallet = exports.updateWallet = void 0;
 const razorpay_1 = require("./../../config/razorpay");
-const razorpayX_1 = require("../../config/razorpayX");
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const crypto_1 = __importDefault(require("crypto"));
@@ -52,6 +51,15 @@ const updateWallet = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             receipt: "receipt_" + Math.random().toString(36).substring(7),
         };
         const order = yield razorpay_1.razorpayConfig.orders.create(options);
+        const transaction = {
+            type: "credit",
+            orderId: order.id,
+            status: "pending",
+            amount: wallet,
+            date: Date.now(),
+        };
+        user.transaction_history.push(transaction);
+        yield user.save();
         res.status(200).json({
             success: true,
             message: "Order created successfully",
@@ -106,13 +114,14 @@ const verifyPaymentWallet = (req, res) => __awaiter(void 0, void 0, void 0, func
                 });
                 return;
             }
-            user.wallet = (user.wallet || 0) + wallet;
+            user.wallet = user.wallet + wallet;
+            const transactionIndex = user.transaction_history.findIndex((t) => t.orderId === razorpay_order_id);
+            if (transactionIndex !== -1) {
+                user.transaction_history[transactionIndex].status = "completed";
+                user.transaction_history[transactionIndex].referenceId =
+                    razorpay_payment_id;
+            }
             yield user.save();
-            res.status(200).json({
-                success: true,
-                message: "Payment verified successfully",
-                data: user,
-            });
             res.status(200).json({
                 success: true,
                 message: "Payment verified successfully",
@@ -137,7 +146,7 @@ exports.verifyPaymentWallet = verifyPaymentWallet;
 const deductWallet = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.user;
-        const { amount } = req.body;
+        const { amount, bankDetails } = req.body;
         // Validate input
         if (typeof amount !== "number") {
             res.status(400).json({
@@ -169,6 +178,15 @@ const deductWallet = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             return;
         }
+        // Check for existing pending debit transaction
+        const hasPendingDebit = user.transaction_history.some((t) => t.type === "debit" && t.status === "pending");
+        if (hasPendingDebit) {
+            res.status(400).json({
+                success: false,
+                message: "A pending debit transaction already exists. Please wait for it to be processed.",
+            });
+            return;
+        }
         // Check if user has sufficient balance
         const currentBalance = user.wallet || 0;
         if (currentBalance < amount) {
@@ -181,62 +199,54 @@ const deductWallet = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             return;
         }
-        // step 1 - Check if RazorPay contact_id exists
-        if (!user.rzpayContactId) {
-            const contact = yield razorpayX_1.razorpayAxios.post("/contacts", {
-                name: user.firstName + " " + user.lastName,
-                email: user.email,
-                contact: user.phone,
-                type: "user"
+        if (!bankDetails) {
+            res.status(400).json({
+                success: false,
+                message: "bankDetails are required for debit request",
             });
-            user.rzpayContactId = contact.data.id;
-            yield user.save();
+            return;
         }
-        // step 2 - Check if Razorpay Fund accountid
-        if (!user.rzpayFundAccountId) {
-            if (!user.bankDetails || !user.bankDetails.accountNumber || !user.bankDetails.ifscCode ||
-                !user.bankDetails.accountName) {
-                res.status(400).json({
-                    success: false,
-                    message: "Bank details are missing. Please update your bank details before withdrawing.",
-                });
-                return;
-            }
-            const fundRes = yield razorpayX_1.razorpayAxios.post("/fund_accounts", {
-                contact_id: user.rzpayContactId,
-                account_type: "bank_account",
-                bank_account: {
-                    name: user.bankDetails.accountName,
-                    ifsc: user.bankDetails.ifscCode,
-                    account_number: user.bankDetails.accountNumber,
-                },
+        // Validate: at least UPI or all required bank fields must be present
+        const hasUpi = typeof bankDetails.upiId === "string" && bankDetails.upiId.trim() !== "";
+        const hasBank = [
+            bankDetails.accountNumber,
+            bankDetails.ifscCode,
+            bankDetails.bankName,
+            bankDetails.accountName,
+        ].every((v) => typeof v === "string" && v.trim() !== "");
+        if (!hasUpi && !hasBank) {
+            res.status(400).json({
+                success: false,
+                message: "Provide at least a valid UPI ID or all required bank account details (accountNumber, ifscCode, bankName, accountName)",
             });
-            user.rzpayFundAccountId = fundRes.data.id;
-            yield user.save();
+            return;
         }
-        // step 3 - Initiate Payout
-        const payoutRes = yield razorpayX_1.razorpayAxios.post("/payouts", {
-            account_number: process.env.RAZORPAYX_VIRTUAL_ACC,
-            fund_account_id: user.rzpayFundAccountId,
-            amount: amount * 100,
-            currency: "INR",
-            mode: "IMPS",
-            purpose: "payout",
-            queue_if_low_balance: true,
-            reference_id: `wd_${user._id}_${Date.now()}`,
-            narration: "Wallet Withdrawal",
+        // Store both if provided, or only the one(s) present
+        const bankDetailsSnapshot = {};
+        if (hasUpi)
+            bankDetailsSnapshot.upiId = bankDetails.upiId;
+        if (hasBank) {
+            bankDetailsSnapshot.accountNumber = bankDetails.accountNumber;
+            bankDetailsSnapshot.ifscCode = bankDetails.ifscCode;
+            bankDetailsSnapshot.bankName = bankDetails.bankName;
+            bankDetailsSnapshot.accountName = bankDetails.accountName;
+        }
+        const transaction = {
+            type: "debit",
+            amount: amount,
+            status: "pending",
+            date: Date.now(),
+            bankDetailsSnapshot,
+        };
+        user.transaction_history.push(transaction);
+        yield user.save();
+        res.status(200).json({
+            success: true,
+            message: "Debit request created. Awaiting admin approval.",
+            data: {
+                currentBalance: user.wallet,
+            },
         });
-        // we have to setup web hook because inital response of razorpay will be initated.
-        // Deduct amount from wallet
-        // user.wallet = currentBalance - amount;
-        // await user.save();
-        // res.status(200).json({
-        //   success: true,
-        //   message: "Amount deducted from wallet successfully",
-        //   data: {
-        //     currentBalance: user.wallet,
-        //   },
-        // });
     }
     catch (error) {
         console.error("Error deducting from wallet:", error);
