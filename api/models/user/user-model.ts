@@ -1,3 +1,4 @@
+import { stat } from "fs";
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
@@ -31,9 +32,38 @@ const userSchema = new Schema({
   dob: { type: Date },
   wallet: { type: Number, default: 0 },
   frozenAmount: { type: Number, default: 0 }, // Amount frozen for pending appointments
+  transaction_history: [
+    {
+      type: {
+        type: String,
+        enum: ["credit", "debit"],
+        required: true,
+      },
+      status: {
+        type: String,
+        enum: ["pending", "completed", "failed"],
+        default: "pending",
+      },
+      amount: { type: Number, required: true },
+      date: { type: Date, default: Date.now },
+      description: { type: String },
+      transactionId: { type: String },
+      referenceId: { type: String },
+      orderId: { type: String },
+      // Store a snapshot of bank details used for this transaction
+      bankDetailsSnapshot: {
+        accountName: { type: String },
+        accountNumber: { type: String },
+        ifscCode: { type: String },
+        bankName: { type: String },
+        bankAddress: { type: String },
+        upiId: { type: String },
+      },
+    },
+  ],
   // Razorpay fields
-  rzpayContactId: { type: String },      // stores Razorpay contact_id
-  rzpayFundAccountId: { type: String },  // stores Razorpay fund_account_id
+  rzpayContactId: { type: String }, // stores Razorpay contact_id
+  rzpayFundAccountId: { type: String }, // stores Razorpay fund_account_id
   address: {
     line1: { type: String },
     line2: { type: String },
