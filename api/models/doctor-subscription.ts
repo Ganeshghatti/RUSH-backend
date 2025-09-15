@@ -30,7 +30,18 @@ const DoctorSubscriptionSchema = new Schema(
     duration: {
       type: String,
       required: [true, "Subscription duration is required"],
-      enum: ["1 month", "3 months", "1 year", "2 years", "20 years", "15 years", "10 years", "5 years", "40 years", "lifetime"],
+      enum: [
+        "1 month",
+        "3 months",
+        "1 year",
+        "2 years",
+        "20 years",
+        "15 years",
+        "10 years",
+        "5 years",
+        "40 years",
+        "lifetime",
+      ],
     },
 
     platformFeeOnline: {
@@ -78,6 +89,9 @@ const DoctorSubscriptionSchema = new Schema(
   }
 );
 
-const DoctorSubscription = mongoose.model("DoctorSubscription", DoctorSubscriptionSchema);
+const DoctorSubscription = mongoose.model(
+  "DoctorSubscription",
+  DoctorSubscriptionSchema
+);
 
 export default DoctorSubscription;

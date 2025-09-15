@@ -3,6 +3,7 @@ const { Schema } = mongoose;
 
 const resetPasswordSchema = new Schema({
   email: { type: String, required: true },
+  role: { type: String, required: true },
   token: { type: String, required: true },
   createdAt: {
     type: Date,

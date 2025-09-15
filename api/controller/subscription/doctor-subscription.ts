@@ -12,7 +12,7 @@ export const createSubscription = async (
 ): Promise<void> => {
   try {
     const { price, name, description, features, isActive, duration, 
-      platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit } = req.body;
+      platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type } = req.body;
 
     if (price < 0) {
       res.status(400).json({
