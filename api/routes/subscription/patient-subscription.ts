@@ -11,6 +11,7 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 // } from "../../controller/patient/patient";
 import { Router } from "express";
 import { upload } from "../media/media-routes";
+import { subscribePatient, verifyPaymentSubscription } from "../../controller/patient/patient";
 
 const router = Router();
 
@@ -26,13 +27,13 @@ router
   .route("/subscription")
   .get(verifyToken, checkRole("admin"), getSubscriptions);
 
-// router
-//   .route("/subscription/purchase/:patientId")
-//   .post(verifyToken, upload.single("paymentImage"), subscribePatient);
+router
+  .route("/subscription/purchase/:patientId")
+  .post(verifyToken, upload.single("paymentImage"), subscribePatient);
 
-// router
-//   .route("/subscription/verify-payment")
-//   .post(verifyToken, verifyPaymentSubscription);
+router
+  .route("/subscription/verify-payment")
+  .post(verifyToken, verifyPaymentSubscription);
 
 router.route("/subscription/active").get(getActiveSubscriptions);
 

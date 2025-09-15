@@ -415,7 +415,7 @@ export const subscribeDoctor = async (
       res.status(400).json({
         success: false,
         message:
-          "Missing required fields: JSON data and payment image are required",
+          "Missing required fields: JSON data is required",
       });
       return;
     }
@@ -493,7 +493,7 @@ export const subscribeDoctor = async (
 
     res.status(200).json({
       success: true,
-      message: "Doctor subscribed successfully",
+      message: "Doctor subscription initiated successfully",
       data: {
         order,
         prefill: {

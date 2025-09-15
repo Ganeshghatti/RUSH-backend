@@ -5,6 +5,8 @@ import Patient from "../../models/user/patient-model";
 import Doctor from "../../models/user/doctor-model";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
+import PatientSubscription from "../../models/patient-subscription";
+import { razorpayConfig } from "../../config/razorpay";
 import {
   generateSignedUrlsForDoctor,
   generateSignedUrlsForUser,
@@ -17,6 +19,256 @@ import {
 } from "../../validation/validation";
 import { HealthMetrics } from "../../models/health-metrics-model";
 import { updateProfileSchema } from "../../validation/validation";
+import crypto from "crypto";
+
+export const subscribePatient = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    // Check for required form data
+    if (!req.body.data) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields: JSON data is required",
+      });
+      return;
+    }
+
+    // Parse JSON data from form
+    let formData;
+    try {
+      formData = JSON.parse(req.body.data);
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid JSON data format",
+      });
+      return;
+    }
+
+    const { subscriptionId } = formData;
+    const { patientId } = req.params;
+
+    if (!patientId || !subscriptionId) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields: patientId, subscriptionId, or paymentDetails.upiId",
+      });
+      return;
+    }
+
+    // Find patient
+    const patient: any = await Patient.findOne({ userId: patientId }).populate({
+      path: "userId",
+      select: "firstName lastName email phone countryCode",
+    });
+
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+      return;
+    }
+
+    console.log("patient on subscribe: ", patient);
+
+    // Find subscription
+    const subscription = await PatientSubscription.findById(subscriptionId);
+    if (!subscription) {
+      res.status(404).json({
+        success: false,
+        message: "Subscription plan not found",
+      });
+      return;
+    }
+
+    if (!subscription.isActive) {
+      res.status(400).json({
+        success: false,
+        message: "Subscription plan is not active",
+      });
+      return;
+    }
+
+    console.log("subscription active:", subscription);
+
+    // convert to amount to integer
+    const options = {
+      amount: Math.round(subscription.price * 100),
+      currency: "INR",
+      receipt: "receipt_" + Math.random().toString(36).substring(7),
+    };
+
+    const order = await razorpayConfig.orders.create(options);
+
+    console.log("order created: ", order);
+
+    res.status(200).json({
+      success: true,
+      message: "Patient subscribed successfully",
+      data: {
+        order,
+        prefill: {
+          name: patient.userId.firstName + " " + patient.userId.lastName,
+          email: patient.userId.email,
+          contact: patient.userId.phone,
+          countryCode: patient.userId.countryCode || "+91",
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error in subscribing patient:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to subscribe patient",
+      error: error,
+    });
+  }
+};
+
+export const verifyPaymentSubscription = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      subscriptionId,
+    } = req.body;
+
+    const userId = req.user.id;
+
+    if (
+      !razorpay_order_id ||
+      !razorpay_payment_id ||
+      !razorpay_signature ||
+      !subscriptionId ||
+      !userId
+    ) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, userId",
+      });
+      return;
+    }
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSign = crypto
+      .createHmac("sha256", process.env.RAZ_KEY_SECRET || "")
+      .update(sign.toString())
+      .digest("hex");
+    if (razorpay_signature === expectedSign) {
+      // Payment is verified
+      const patient: any = await Patient.findOne({ userId: userId });
+
+      if (!patient) {
+        res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+        return;
+      }
+
+      const subscription = await PatientSubscription.findById(subscriptionId);
+      if (!subscription) {
+        res.status(404).json({
+          success: false,
+          message: "Subscription plan not found",
+        });
+        return;
+      }
+
+      if (!subscription.isActive) {
+        res.status(400).json({
+          success: false,
+          message: "Subscription plan is not active",
+        });
+        return;
+      }
+
+      const startDate = new Date();
+      let endDate: Date | undefined;
+
+      switch (subscription.duration) {
+        case "1 month":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 1);
+          break;
+        case "3 months":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 3);
+          break;
+        case "1 year":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 1);
+          break;
+        case "2 years":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 24);
+          break;
+        case "20 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 20);
+          break;
+        case "15 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 15);
+          break;
+        case "10 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 10);
+          break;
+        case "5 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 5);
+          break;
+        case "40 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 40);
+          break;
+        case "lifetime":
+          endDate = undefined; // No end date for lifetime
+          break;
+        default:
+          res.status(400).json({
+            success: false,
+            message: "Invalid subscription duration",
+          });
+          return;
+      }
+
+      const newSubscription = {
+        startDate: new Date(),
+        endDate,
+        SubscriptionId: subscription._id,
+      };
+
+      patient.subscriptions.push(newSubscription);
+
+      await patient.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Payment verified successfully",
+        data: patient,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "Invalid payment signature",
+      });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+};
+
 
 export const getPatientById = async (
   req: Request,
