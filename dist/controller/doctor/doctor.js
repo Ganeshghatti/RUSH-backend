@@ -308,7 +308,7 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!req.body.data) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields: JSON data and payment image are required",
+                message: "Missing required fields: JSON data is required",
             });
             return;
         }
@@ -373,7 +373,7 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         console.log("order created: ", order);
         res.status(200).json({
             success: true,
-            message: "Doctor subscribed successfully",
+            message: "Doctor subscription initiated successfully",
             data: {
                 order,
                 prefill: {
