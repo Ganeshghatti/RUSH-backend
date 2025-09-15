@@ -21,7 +21,7 @@ const delete_media_1 = require("../../utils/aws_s3/delete-media");
 const signed_url_1 = require("../../utils/signed-url");
 const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit } = req.body;
+        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type } = req.body;
         if (price < 0) {
             res.status(400).json({
                 success: false,

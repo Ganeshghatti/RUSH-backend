@@ -7,6 +7,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const { Schema } = mongoose_1.default;
 const resetPasswordSchema = new Schema({
     email: { type: String, required: true },
+    role: { type: String, required: true },
     token: { type: String, required: true },
     createdAt: {
         type: Date,
