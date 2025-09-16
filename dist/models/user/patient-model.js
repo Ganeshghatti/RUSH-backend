@@ -14,6 +14,23 @@ const patientSchema = new Schema({
         provider: { type: String },
         image: { type: String },
     },
+    subscriptions: [
+        {
+            startDate: { type: Date, required: true, default: Date.now },
+            endDate: { type: Date },
+            // paymentDetails: {
+            //   upiId: { type: String },
+            //   paymentImage: { type: String },
+            // },
+            SubscriptionId: {
+                type: Schema.Types.ObjectId,
+                ref: "PatientSubscription",
+                required: true,
+            },
+            razorpay_order_id: { type: String },
+            razorpay_payment_id: { type: String },
+        },
+    ],
     healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrics" },
 });
 const Patient = mongoose_1.default.model("Patient", patientSchema);

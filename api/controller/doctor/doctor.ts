@@ -630,6 +630,8 @@ export const verifyPaymentSubscription = async (
       const newSubscription = {
         startDate: new Date(),
         endDate,
+        razorpay_order_id,
+        razorpay_payment_id,
         SubscriptionId: subscription._id,
       };
 
