@@ -51,6 +51,12 @@ const DoctorSubscriptionSchema = new mongoose_1.Schema({
         type: String,
         required: [true, "QR code image is required for subscription"],
     },
+    doctor_type: {
+        type: String,
+    },
+    doctor_type_description: {
+        type: String,
+    },
     features: [
         {
             type: String,

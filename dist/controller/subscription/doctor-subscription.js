@@ -65,6 +65,7 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             isActive: isActive,
             duration,
             qrCodeImage: signedUrl,
+            doctor_type,
             platformFeeOnline: Number(parseFloat(platformFeeOnline).toFixed(2)),
             opsExpenseOnline: Number(parseFloat(opsExpenseOnline).toFixed(2)),
             platformFeeClinic: Number(parseFloat(platformFeeClinic).toFixed(2)),
