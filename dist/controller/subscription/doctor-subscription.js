@@ -21,7 +21,7 @@ const delete_media_1 = require("../../utils/aws_s3/delete-media");
 const signed_url_1 = require("../../utils/signed-url");
 const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type } = req.body;
+        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description } = req.body;
         if (price < 0) {
             res.status(400).json({
                 success: false,
@@ -66,6 +66,7 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             duration,
             qrCodeImage: signedUrl,
             doctor_type,
+            doctor_type_description,
             platformFeeOnline: Number(parseFloat(platformFeeOnline).toFixed(2)),
             opsExpenseOnline: Number(parseFloat(opsExpenseOnline).toFixed(2)),
             platformFeeClinic: Number(parseFloat(platformFeeClinic).toFixed(2)),
