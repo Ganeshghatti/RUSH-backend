@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.processDebitRequest = exports.getPendingDebitRequests = void 0;
+exports.getTransactionsByDate = exports.processDebitRequest = exports.getPendingDebitRequests = void 0;
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 // GET: List all pending debit requests
@@ -137,3 +137,66 @@ const processDebitRequest = (req, res) => __awaiter(void 0, void 0, void 0, func
     }
 });
 exports.processDebitRequest = processDebitRequest;
+const getTransactionsByDate = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            res.status(400).json({
+                success: false,
+                message: "Date query parameter is required (YYYY-MM-DD)",
+            });
+            return;
+        }
+        // Parse date and get start/end of day
+        const start = new Date(date);
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        // Find users with transactions on that date
+        const users = yield user_model_1.default.find({
+            transaction_history: {
+                $elemMatch: {
+                    date: { $gte: start, $lte: end }
+                }
+            }
+        })
+            .select("-password")
+            .populate({
+            path: "roleRefs.doctor",
+            select: "-password"
+        })
+            .populate({
+            path: "roleRefs.patient",
+            select: "-password"
+        })
+            .populate({
+            path: "roleRefs.admin",
+            select: "-password"
+        });
+        // Flatten transactions for the date
+        const transactions = [];
+        users.forEach((user) => {
+            user.transaction_history.forEach((txn) => {
+                if (txn.date >= start && txn.date <= end) {
+                    transactions.push({
+                        user: Object.assign(Object.assign({}, user.toObject()), { password: undefined }),
+                        transaction: txn,
+                    });
+                }
+            });
+        });
+        res.status(200).json({
+            success: true,
+            data: transactions,
+        });
+        return;
+    }
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch transactions for date",
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return;
+    }
+});
+exports.getTransactionsByDate = getTransactionsByDate;

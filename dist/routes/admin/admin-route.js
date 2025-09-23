@@ -15,4 +15,5 @@ router.route("/admin/addpatient").post(auth_middleware_1.verifyToken, (0, auth_m
 router.route("/admin/getpatient").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), unregistered_patient_1.getUnregisteredPatient);
 router.route("/admin/debit/requests").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.getPendingDebitRequests);
 router.route("/admin/debit/process").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.processDebitRequest);
+router.route("/admin/transactions").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.getTransactionsByDate);
 exports.default = router;
