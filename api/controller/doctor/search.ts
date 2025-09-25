@@ -1,139 +1,154 @@
 import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
-import User from "../../models/user/user-model";
+import mongoose from "mongoose";
 
-export const searchDoctor = async (req: Request, res: Response): Promise<void> => {
+export const searchDoctor = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
-    const { query, limit = 10, gender, appointment } = req.query;
+    const {
+      userId,
+      query,
+      limit = 10,
+      gender,
+      appointmentType,
+      specialization,
+    } = req.query;
 
     const parsedLimit = Number(limit);
-    const queryRegex = query ? new RegExp(String(query), 'i') : null;
+    const loggedInUserId = (req as any).userId;
 
-    // Step 1: Build filters
-    const userFilter: any = { roles: 'doctor', isDocumentVerified: true };
-    if (queryRegex) userFilter.firstName = { $regex: queryRegex };
-    if (gender) userFilter.gender = gender;
+    // Parse appointments into an array
+    const appointmentTypes = appointmentType
+      ? String(appointmentType)
+          .split(",")
+          .map((t) => t.trim().toLowerCase().replace(/\s+/g, ""))
+      : [];
 
-    const matchedUsers = await User.find(userFilter)
-      .select('_id')
-      .lean();
-
-    const matchedUserIds = matchedUsers.map(user => user._id);
-
-    // Step 2: Doctor filter for matched userIds
+    // ***** Step 1 : Only getting approved doctors & have active subscriptions ***** \\
     const now = new Date();
     const doctorFilter: any = {
       status: "approved",
       subscriptions: {
         $elemMatch: {
-          endDate: { $gt: now }
-        }
-      }
+          endDate: { $gt: now },
+        },
+      },
     };
-    if (matchedUserIds.length > 0) {
-      doctorFilter.userId = { $in: matchedUserIds };
-    }
-    if (appointment === "online") {
-      doctorFilter["onlineAppointment.isActive"] = true;
+
+    if (loggedInUserId) {
+      doctorFilter.userId = {
+        $ne: new mongoose.Types.ObjectId(loggedInUserId),
+      };
     }
 
-    const doctorsByName = matchedUserIds.length > 0
-      ? await Doctor.find(doctorFilter)
-          .select('-password')
-          .populate({
-            path: 'userId',
-            match: gender ? { gender } : undefined, // Apply gender match at populate level
-            select: 'firstName lastName email phone profilePic gender'
-          })
-          .limit(parsedLimit)
-      : [];
-
-    // Step 3: Doctor filter for specialization match
-    const specializationFilter: any = {
-      status: "approved",
-      subscriptions: {
-        $elemMatch: {
-          endDate: { $gt: now }
-        }
+    // ***** Step 2 : Appointment type filter ***** \\
+    if (appointmentTypes.length > 0) {
+      doctorFilter.$or = [];
+      if (appointmentTypes.includes("online")) {
+        doctorFilter.$or.push({ "onlineAppointment.isActive": true });
       }
-    };
-    if (queryRegex) {
-      specializationFilter.specialization = { $regex: queryRegex };
-    }
-    if (appointment === "online") {
-      specializationFilter["onlineAppointment.isActive"] = true;
-    }
-
-    const doctorsBySpecialization = await Doctor.find(specializationFilter)
-      .select('-password')
-      .populate({
-        path: 'userId',
-        match: gender ? { gender } : undefined,
-        select: 'firstName lastName email phone profilePic gender'
-      })
-      .limit(parsedLimit);
-
-    // Step 4: Combine and deduplicate
-    const combinedDoctors = [...doctorsBySpecialization];
-    doctorsByName.forEach(doc => {
-      if (!combinedDoctors.some(d => d._id.toString() === doc._id.toString())) {
-        combinedDoctors.push(doc);
+      if (appointmentTypes.includes("clinicvisit")) {
+        doctorFilter.$or.push({ "clinicVisit.isActive": true });
       }
-    });
+      if (appointmentTypes.includes("homevisit")) {
+        doctorFilter.$or.push({ "homeVisit.isActive": true });
+      }
+      if (appointmentTypes.includes("emergencycall")) {
+        doctorFilter.$or.push({ "emergencyCall.isActive": true });
+      }
+    }
 
-    // Step 5: Fallback if empty
-    let finalDoctors = combinedDoctors;
-    if (finalDoctors.length === 0 && !query && !gender && !appointment) {
-      finalDoctors = await Doctor.find({
-        status: "approved",
-        subscriptions: {
-          $elemMatch: {
-            endDate: { $gt: now }
-          }
-        }
-      })
-        .select('-password')
+    // ***** Step 3 : Specialization ****** \\
+    if (specialization) {
+      doctorFilter.specialization = { $regex: specialization, $options: "i" };
+    }
+
+    let doctorsBySpecialization: any[] = [];
+    if (query && !specialization) {
+      console.log("HIIIIIIIII");
+      const queryRegex = new RegExp(String(query), "i");
+
+      const filter: any = { ...doctorFilter };
+      if (!specialization) {
+        console.log("test");
+        filter.specialization = { $regex: queryRegex };
+      }
+      doctorsBySpecialization = await Doctor.find(filter)
+        .select("-password")
         .populate({
-          path: 'userId',
-          match: { isDocumentVerified: true },
-          select: 'firstName lastName email phone profilePic gender'
+          path: "userId",
+          match: { isDocumentVerified: true, ...(gender ? { gender } : {}) },
+          select: "firstName lastName email phone profilePic gender",
         })
         .limit(parsedLimit);
     }
-
-    // Step 6: Format output
-    const doctorsWithSignedUrls = await Promise.all(
-      finalDoctors
-        .filter(doctor => doctor.userId) // Remove doctors with null user (gender mismatch)
-        .slice(0, parsedLimit)
-        .map(async (doctor) => {
-          const doctorObj = doctor.toObject();
-          const processed = await generateSignedUrlsForDoctor(doctorObj);
-
-          const user = doctorObj.userId as any;
-          return {
-            ...processed,
-            name: `${user.firstName} ${user.lastName}`,
-            email: user.email,
-            phone: user.phone,
-            profilePic: user.profilePic,
-            gender: user.gender
-          };
+    // Step 4: If no specialization match, search by name
+    let finalDoctors: any[] = doctorsBySpecialization.filter(
+      (doc) => doc.userId
+    );
+    if (finalDoctors.length === 0 && query) {
+      console.log("HELLOOOOO ", query);
+      const queryRegex = new RegExp(String(query), "i");
+      const doctorsByName = await Doctor.find(doctorFilter)
+        .select("-password")
+        .populate({
+          path: "userId",
+          match: {
+            isDocumentVerified: true,
+            ...(gender ? { gender } : {}),
+            $or: [{ firstName: queryRegex }, { lastName: queryRegex }],
+          },
+          select: "firstName lastName email phone profilePic gender",
         })
+        .limit(parsedLimit);
+
+      finalDoctors = doctorsByName.filter((doc) => doc.userId);
+    }
+    if (!query) {
+      console.log("Filter with query ", doctorFilter);
+      finalDoctors = await Doctor.find(doctorFilter)
+        .select("-password")
+        .populate({
+          path: "userId",
+          match: { isDocumentVerified: true, ...(gender ? { gender } : {}) },
+          select: "firstName lastName email phone profilePic gender",
+        })
+        .limit(parsedLimit);
+
+      finalDoctors = finalDoctors.filter((doc) => doc.userId);
+    }
+
+    // Step 6: Format response
+    const doctorsWithSignedUrls = await Promise.all(
+      finalDoctors.map(async (doctor) => {
+        const doctorObj = doctor.toObject();
+        const processed = await generateSignedUrlsForDoctor(doctorObj);
+
+        const user = doctorObj.userId as any;
+        return {
+          ...processed,
+          name: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          phone: user.phone,
+          profilePic: user.profilePic,
+          gender: user.gender,
+        };
+      })
     );
 
     res.status(200).json({
       success: true,
       data: doctorsWithSignedUrls,
-      message: "Doctors fetched successfully"
+      message: "Doctors fetched successfully",
     });
-
   } catch (error: any) {
     console.error("Error while searching doctors:", error);
     res.status(500).json({
       success: false,
-      message: "Error while searching doctors"
+      message: "Error while searching doctors",
     });
   }
 };
