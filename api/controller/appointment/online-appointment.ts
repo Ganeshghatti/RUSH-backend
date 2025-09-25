@@ -169,8 +169,28 @@ export const getDoctorAppointments = async (
       return;
     }
 
+    const now = new Date();
+
+    // Helper function to update appointment statuses
+    const updateStatuses = async (appointments: any[], Model: any) => {
+      const updates = appointments.map(async (appt) => {
+        const endDate = new Date(appt.slot?.time?.end); // assuming slot.time.end exists
+        if (endDate && endDate < now) {
+          if (appt.status === "pending") {
+            appt.status = "expired";
+            await Model.updateOne({ _id: appt._id }, { status: "cancelled" });
+          } else if (appt.status === "accepted") {
+            appt.status = "completed";
+            await Model.updateOne({ _id: appt._id }, { status: "completed" });
+          }
+        }
+        return appt;
+      });
+      return Promise.all(updates);
+    };
+
     // Find all online appointments for this doctor
-    const onlineAppointments = await OnlineAppointment.find({
+    let onlineAppointments = await OnlineAppointment.find({
       doctorId: doctor._id,
     })
       .populate({
@@ -187,8 +207,13 @@ export const getDoctorAppointments = async (
       })
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
+    onlineAppointments = await updateStatuses(
+      onlineAppointments,
+      OnlineAppointment
+    );
+
     // Find all emergency appointments for this doctor
-    const emergencyAppointments = await EmergencyAppointment.find({
+    let emergencyAppointments = await EmergencyAppointment.find({
       doctorId: doctor._id,
     })
       .populate({
@@ -210,8 +235,13 @@ export const getDoctorAppointments = async (
       })
       .sort({ createdAt: -1 }); // Sort by most recent created first
 
+    emergencyAppointments = await updateStatuses(
+      emergencyAppointments,
+      EmergencyAppointment
+    );
+
     // Find all clinic appointments for this doctor
-    const clinicAppointments = await ClinicAppointment.find({
+    let clinicAppointments = await ClinicAppointment.find({
       doctorId: doctor._id,
     })
       .populate({
@@ -228,10 +258,15 @@ export const getDoctorAppointments = async (
       })
       .sort({ "slot.day": -1 });
 
+    clinicAppointments = await updateStatuses(
+      clinicAppointments,
+      ClinicAppointment
+    );
+
     console.log("Clinic appointments for doctor", clinicAppointments);
 
     // Find all home visit appointments for this doctor
-    const homeVisitAppointments = await HomeVisitAppointment.find({
+    let homeVisitAppointments = await HomeVisitAppointment.find({
       doctorId: doctor._id,
     })
       .populate({
@@ -247,6 +282,11 @@ export const getDoctorAppointments = async (
         },
       })
       .sort({ "slot.day": -1, "slot.time.start": -1 });
+
+    homeVisitAppointments = await updateStatuses(
+      homeVisitAppointments,
+      HomeVisitAppointment
+    );
 
     res.status(200).json({
       success: true,
@@ -285,8 +325,28 @@ export const getPatientAppointments = async (
       return;
     }
 
+    const now = new Date();
+
+    // Helper function to update appointment statuses
+    const updateStatuses = async (appointments: any[], Model: any) => {
+      const updates = appointments.map(async (appt) => {
+        const endDate = new Date(appt.slot?.time?.end); // assuming slot.time.end exists
+        if (endDate && endDate < now) {
+          if (appt.status === "pending") {
+            appt.status = "expired";
+            await Model.updateOne({ _id: appt._id }, { status: "cancelled" });
+          } else if (appt.status === "accepted") {
+            appt.status = "completed";
+            await Model.updateOne({ _id: appt._id }, { status: "completed" });
+          }
+        }
+        return appt;
+      });
+      return Promise.all(updates);
+    };
+
     // Find all online appointments for this patient (patientId references User)
-    const onlineAppointments = await OnlineAppointment.find({
+    let onlineAppointments = await OnlineAppointment.find({
       patientId: userId,
     })
       .populate({
@@ -303,8 +363,13 @@ export const getPatientAppointments = async (
       })
       .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
 
+    onlineAppointments = await updateStatuses(
+      onlineAppointments,
+      OnlineAppointment
+    );
+
     // Find all emergency appointments for this patient (patientId references Patient)
-    const emergencyAppointments = await EmergencyAppointment.find({
+    let emergencyAppointments = await EmergencyAppointment.find({
       patientId: patient._id,
     })
       .populate({
@@ -326,8 +391,13 @@ export const getPatientAppointments = async (
       })
       .sort({ createdAt: -1 }); // Sort by most recent created first
 
+    emergencyAppointments = await updateStatuses(
+      emergencyAppointments,
+      EmergencyAppointment
+    );
+
     // Find all clinic appointments for this patient
-    const clinicAppointments = await ClinicAppointment.find({
+    let clinicAppointments = await ClinicAppointment.find({
       patientId: userId,
     })
       .populate("doctorId", "userId specialization clinicVisit")
@@ -339,10 +409,15 @@ export const getPatientAppointments = async (
         },
       })
       .sort({ "slot.day": -1 });
+
+    clinicAppointments = await updateStatuses(
+      clinicAppointments,
+      ClinicAppointment
+    );
     console.log("Clinic appointments for patient", clinicAppointments);
 
     // Find all home visit appointments for this patient
-    const homeVisitAppointments = await HomeVisitAppointment.find({
+    let homeVisitAppointments = await HomeVisitAppointment.find({
       patientId: userId,
     })
       .populate({
@@ -358,6 +433,11 @@ export const getPatientAppointments = async (
         },
       })
       .sort({ "slot.day": -1, "slot.time.start": -1 });
+
+    homeVisitAppointments = await updateStatuses(
+      homeVisitAppointments,
+      HomeVisitAppointment
+    );
 
     res.status(200).json({
       success: true,
@@ -485,14 +565,16 @@ export const updateAppointmentStatus = async (
       }
 
       let platformFee = subscription.platformFeeOnline || 0;
-      let opsExpense = subscription.opsExpenseOnline || 0
+      let opsExpense = subscription.opsExpenseOnline || 0;
       let doctorEarning = price - platformFee - (price * opsExpense) / 100;
 
       if (doctorEarning < 0) doctorEarning = 0;
 
       const doctorUser = await User.findById(doctor.userId);
       if (!doctorUser) {
-        res.status(404).json({ success: false, message: "Doctor user not found" });
+        res
+          .status(404)
+          .json({ success: false, message: "Doctor user not found" });
         return;
       }
 

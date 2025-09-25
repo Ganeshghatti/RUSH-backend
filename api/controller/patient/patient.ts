@@ -424,7 +424,6 @@ export const getPatientDashboard = async (
 ): Promise<void> => {
   try {
     const userId = req.user.id;
-
     const patient = await Patient.findOne({ userId }).populate(
       "userId",
       "firstName lastName profilePic"
@@ -550,31 +549,6 @@ export const getPatientDashboard = async (
 
     // Get recommended doctors based on patient's health conditions
     let recommendedDoctors: any[] = [];
-
-    // if (patient.healthMetrics && patient.healthMetrics.length > 0) {
-    //   // Get latest health metrics
-    //   const latestHealthMetrics = patient.healthMetrics[patient.healthMetrics.length - 1];
-
-    //   if (latestHealthMetrics.conditions && latestHealthMetrics.conditions.length > 0) {
-    //     // Find doctors whose specialization matches patient's conditions
-    //     const patientConditions = latestHealthMetrics.conditions.map(condition =>
-    //       new RegExp(condition, 'i') // Case insensitive matching
-    //     );
-
-    //     recommendedDoctors = await Doctor.find({
-    //       status: "approved",  // Only show approved doctors
-    //       subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
-    //       $or: [
-    //         { specialization: { $in: patientConditions } },
-    //         { "registration.specialization": { $in: patientConditions } }
-    //       ]
-    //     })
-    //     .populate('userId', 'firstName lastName profilePic')
-    //     .select('userId specialization experience onlineAppointment')
-    //     .limit(10);
-    //   }
-    // }
-
     // If no condition-based recommendations, get general recommended doctors
     if (recommendedDoctors.length === 0) {
       const now = new Date();
@@ -584,7 +558,8 @@ export const getPatientDashboard = async (
           $elemMatch: {
             endDate: { $gt: now }
           }
-        }
+        },
+        userId: { $ne: userId },
       })
         .populate({
           path: "userId",
@@ -595,6 +570,7 @@ export const getPatientDashboard = async (
 
       recommendedDoctors = recommendedDoctors.filter(doctor => doctor.userId && doctor.userId.isDocumentVerified);
     }
+    console.log("Recommended Doctors ",recommendedDoctors)
 
     // Process recommended doctors to add signed URLs
     const processedDoctors = await Promise.all(

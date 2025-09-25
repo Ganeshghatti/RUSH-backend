@@ -56,7 +56,7 @@ export const createSubscription = async (
       features: features || [],
       isActive: isActive,
       duration,
-      qrCodeImage: signedUrl,
+      // qrCodeImage: signedUrl,
     });
 
     res.status(201).json({
