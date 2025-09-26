@@ -367,7 +367,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const { email, password, role } = req.body;
 
     if (role === "admin") {
-      if (email === "urushdr@gmail.com" && password === "admin") {
+      if (email === "urushdr@gmail.com" && password === "BulletBike$$$") {
 
         const user = await User.findOne({ email });
 
