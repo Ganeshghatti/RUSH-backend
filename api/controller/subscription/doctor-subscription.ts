@@ -135,7 +135,7 @@ export const createSubscription = async (
       features: features || [],
       isActive: isActive,
       duration,
-      qrCodeImage: signedUrl,
+      // qrCodeImage: signedUrl,
       doctor_type,
       doctor_type_description,
       platformFeeOnline,
@@ -431,24 +431,25 @@ export const deleteSubscription = async (
     }
 
     // Extract QR code image URL to delete from S3
-    const qrCodeUrl = subscription.qrCodeImage;
-
+    // const qrCodeUrl = subscription.qrCodeImage;
+    
     // Delete the subscription from database
     await DoctorSubscription.findByIdAndDelete(id);
 
     // Extract the key from the URL for S3 deletion
-    if (qrCodeUrl) {
-      try {
-        const urlParts = qrCodeUrl.split("/");
-        const key = urlParts.slice(3).join("/");
-
-        if (key) {
-          await DeleteMediaFromS3({ key });
-        }
-      } catch (error) {
-        console.error("Error deleting QR code image from S3:", error);
-      }
-    }
+    
+    // if (qrCodeUrl) {
+    //   try {
+    //     const urlParts = qrCodeUrl.split('/');
+    //     const key = urlParts.slice(3).join('/');
+        
+    //     if (key) {
+    //       await DeleteMediaFromS3({ key });
+    //     }
+    //   } catch (error) {
+    //     console.error("Error deleting QR code image from S3:", error);
+    //   }
+    // }
 
     res.status(200).json({
       success: true,

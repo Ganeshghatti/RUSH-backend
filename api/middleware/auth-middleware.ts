@@ -121,3 +121,21 @@ export const checkRole = (role: string) => {
     }
   };
 };
+
+export const authOptional = (req: Request, res: Response, next: NextFunction) => {
+  console.log("authOptional triggered"); 
+  const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
+  if (!token) return next(); 
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      return next();
+    }
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    (req as any).userId = decoded.id;
+  } catch (err) {
+    console.error("JWT decode failed:", err);
+  }
+
+  next();
+};
