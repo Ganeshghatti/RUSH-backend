@@ -4,15 +4,51 @@ import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
 import QRCode from "qrcode";
 import Doctor from "../../models/user/doctor-model";
 import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
-import { generateSignedUrlsForSubscriptions, generateSignedUrlsForSubscription } from "../../utils/signed-url";
+import {
+  generateSignedUrlsForSubscriptions,
+  generateSignedUrlsForSubscription,
+} from "../../utils/signed-url";
+
+// Validate online fee object (min15, min30, min60)
+function validateOnlineFee(fee: any, label: string): string | null {
+  const slots = ["min15", "min30", "min60"];
+  for (const slot of slots) {
+    if (
+      !fee ||
+      typeof fee[slot] !== "object" ||
+      !["Number", "Percentage"].includes(fee[slot]?.type) ||
+      typeof fee[slot]?.figure !== "number" ||
+      fee[slot].figure < 0
+    ) {
+      return `${label}.${slot} must be an object with type ('Number' or 'Percentage') and a non-negative figure`;
+    }
+  }
+  return null;
+}
 
 export const createSubscription = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const { price, name, description, features, isActive, duration, 
-      platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description } = req.body;
+    const {
+      price,
+      name,
+      description,
+      features,
+      isActive,
+      duration,
+      platformFeeOnline,
+      opsExpenseOnline,
+      platformFeeClinic,
+      opsExpenseClinic,
+      platformFeeEmergency,
+      opsExpenseEmergency,
+      platformFeeHomeVisit,
+      opsExpenseHomeVisit,
+      doctor_type,
+      doctor_type_description,
+    } = req.body;
 
     if (price < 0) {
       res.status(400).json({
@@ -22,12 +58,44 @@ export const createSubscription = async (
       return;
     }
 
-    if (platformFeeOnline < 0 || platformFeeClinic < 0 || platformFeeEmergency < 0 || platformFeeHomeVisit < 0) {
+    // Validate platformFeeOnline and opsExpenseOnline (min15, min30, min60)
+    const pfOnlineErr = validateOnlineFee(
+      platformFeeOnline,
+      "platformFeeOnline"
+    );
+    const oeOnlineErr = validateOnlineFee(opsExpenseOnline, "opsExpenseOnline");
+    if (pfOnlineErr || oeOnlineErr) {
       res.status(400).json({
         success: false,
-        message: "Platform fee must be a non-negative number (0 or greater)",
+        message: pfOnlineErr || oeOnlineErr,
       });
       return;
+    }
+
+    // Validate other fee objects (clinic, homevisit, emergency)
+    const feeFields = [
+      platformFeeClinic,
+      opsExpenseClinic,
+      platformFeeHomeVisit,
+      opsExpenseHomeVisit,
+      platformFeeEmergency,
+      opsExpenseEmergency,
+    ];
+    for (const fee of feeFields) {
+      if (
+        !fee ||
+        typeof fee !== "object" ||
+        !["Number", "Percentage"].includes(fee.type) ||
+        typeof fee.figure !== "number" ||
+        fee.figure < 0
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            "All platform/ops fees (except online) must be objects with type ('Number' or 'Percentage') and a non-negative figure",
+        });
+        return;
+      }
     }
 
     // Validate required fields
@@ -70,14 +138,14 @@ export const createSubscription = async (
       // qrCodeImage: signedUrl,
       doctor_type,
       doctor_type_description,
-      platformFeeOnline: Number(parseFloat(platformFeeOnline).toFixed(2)),
-      opsExpenseOnline: Number(parseFloat(opsExpenseOnline).toFixed(2)),
-      platformFeeClinic: Number(parseFloat(platformFeeClinic).toFixed(2)),
-      opsExpenseClinic: Number(parseFloat(opsExpenseClinic).toFixed(2)),
-      platformFeeHomeVisit: Number(parseFloat(platformFeeHomeVisit).toFixed(2)),
-      opsExpenseHomeVisit: Number(parseFloat(opsExpenseHomeVisit).toFixed(2)),
-      platformFeeEmergency: Number(parseFloat(platformFeeEmergency).toFixed(2)),
-      opsExpenseEmergency: Number(parseFloat(opsExpenseEmergency).toFixed(2)),
+      platformFeeOnline,
+      opsExpenseOnline,
+      platformFeeClinic,
+      opsExpenseClinic,
+      platformFeeHomeVisit,
+      opsExpenseHomeVisit,
+      platformFeeEmergency,
+      opsExpenseEmergency,
     });
 
     res.status(201).json({
@@ -100,9 +168,21 @@ export const updateSubscription = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { isActive, name, description, features, price,
-      platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency
-     } = req.body;
+    const {
+      isActive,
+      name,
+      description,
+      features,
+      price,
+      platformFeeOnline,
+      opsExpenseOnline,
+      platformFeeClinic,
+      opsExpenseClinic,
+      platformFeeHomeVisit,
+      opsExpenseHomeVisit,
+      platformFeeEmergency,
+      opsExpenseEmergency,
+    } = req.body;
 
     // Build update object with only provided fields
     const updateData: any = {};
@@ -152,7 +232,7 @@ export const updateSubscription = async (
         });
         return;
       }
-      
+
       // Validate each feature is a string
       for (const feature of features) {
         if (typeof feature !== "string" || feature.trim() === "") {
@@ -163,20 +243,53 @@ export const updateSubscription = async (
           return;
         }
       }
-      
+
       updateData.features = features.map((feature: string) => feature.trim());
     }
 
     //add fee
-    updateData.platformFeeOnline = platformFeeOnline;
-    updateData.opsExpenseOnline = opsExpenseOnline;
-    updateData.platformFeeClinic = platformFeeClinic;
-    updateData.opsExpenseClinic = opsExpenseClinic;
-    updateData.platformFeeHomeVisit = platformFeeHomeVisit;
-    updateData.opsExpenseHomeVisit = opsExpenseHomeVisit;
-    updateData.platformFeeEmergency = platformFeeEmergency;
-    updateData.opsExpenseEmergency = opsExpenseEmergency;
-
+    // Validate and add fee fields if provided
+    const feeUpdateFields = [
+      "platformFeeOnline",
+      "opsExpenseOnline",
+      "platformFeeClinic",
+      "opsExpenseClinic",
+      "platformFeeHomeVisit",
+      "opsExpenseHomeVisit",
+      "platformFeeEmergency",
+      "opsExpenseEmergency",
+    ];
+    for (const field of feeUpdateFields) {
+      if (req.body[field] !== undefined) {
+        if (field === "platformFeeOnline" || field === "opsExpenseOnline") {
+          const err = validateOnlineFee(req.body[field], field);
+          if (err) {
+            res.status(400).json({
+              success: false,
+              message: err,
+            });
+            return;
+          }
+          updateData[field] = req.body[field];
+        } else {
+          const fee = req.body[field];
+          if (
+            !fee ||
+            typeof fee !== "object" ||
+            !["Number", "Percentage"].includes(fee.type) ||
+            typeof fee.figure !== "number" ||
+            fee.figure < 0
+          ) {
+            res.status(400).json({
+              success: false,
+              message: `Field ${field} must be an object with type ('Number' or 'Percentage') and a non-negative figure`,
+            });
+            return;
+          }
+          updateData[field] = fee;
+        }
+      }
+    }
 
     // validate and add price if provided
     if (price !== undefined) {
@@ -194,7 +307,8 @@ export const updateSubscription = async (
     if (Object.keys(updateData).length === 0) {
       res.status(400).json({
         success: false,
-        message: "At least one field (isActive, name, description, or features) must be provided for update",
+        message:
+          "At least one field (isActive, name, description, or features) must be provided for update",
       });
       return;
     }
@@ -234,7 +348,8 @@ export const getSubscriptions = async (
   try {
     const subscriptions = await DoctorSubscription.find({});
 
-    const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(subscriptions);
+    const subscriptionsWithSignedUrls =
+      await generateSignedUrlsForSubscriptions(subscriptions);
 
     res.status(200).json({
       success: true,
@@ -268,7 +383,8 @@ export const getActiveSubscriptions = async (
     }
 
     // Generate signed URLs for all active subscriptions
-    const subscriptionsWithSignedUrls = await generateSignedUrlsForSubscriptions(activeSubscriptions);
+    const subscriptionsWithSignedUrls =
+      await generateSignedUrlsForSubscriptions(activeSubscriptions);
 
     res.status(200).json({
       success: true,
@@ -301,13 +417,14 @@ export const deleteSubscription = async (
     }
 
     const doctorsUsingSubscription = await Doctor.find({
-      "subscriptions.SubscriptionId": id
+      "subscriptions.SubscriptionId": id,
     });
 
     if (doctorsUsingSubscription.length > 0) {
       res.status(400).json({
         success: false,
-        message: "Cannot delete this subscription as it is currently used by one or more doctors",
+        message:
+          "Cannot delete this subscription as it is currently used by one or more doctors",
         doctorCount: doctorsUsingSubscription.length,
       });
       return;
@@ -318,8 +435,9 @@ export const deleteSubscription = async (
     
     // Delete the subscription from database
     await DoctorSubscription.findByIdAndDelete(id);
-    
+
     // Extract the key from the URL for S3 deletion
+    
     // if (qrCodeUrl) {
     //   try {
     //     const urlParts = qrCodeUrl.split('/');

@@ -2,7 +2,7 @@ import { getAllDoctors, updateDoctorStatus, updateDocumentVerificationStatus, ge
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { Router } from "express";
 import { addUnregisteredPatient, getUnregisteredPatient } from '../../controller/admin/unregistered-patient';
-import { getPendingDebitRequests, processDebitRequest } from '../../controller/admin/transaction';
+import { getPendingDebitRequests, processDebitRequest, getTransactionsByDate  } from '../../controller/admin/transaction';
 
 const router = Router();
 
@@ -16,5 +16,6 @@ router.route("/admin/getpatient").get(verifyToken, checkRole("admin"), getUnregi
 
 router.route("/admin/debit/requests").get(verifyToken, checkRole("admin"), getPendingDebitRequests);
 router.route("/admin/debit/process").put(verifyToken, checkRole("admin"), processDebitRequest);
+router.route("/admin/transactions").get(verifyToken, checkRole("admin"), getTransactionsByDate);
 
 export default router;

@@ -633,6 +633,7 @@ export const verifyPaymentSubscription = async (
         razorpay_order_id,
         razorpay_payment_id,
         SubscriptionId: subscription._id,
+        amount_paid: subscription.price,
       };
 
       doctor.subscriptions.push(newSubscription);

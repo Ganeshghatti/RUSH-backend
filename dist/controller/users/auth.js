@@ -360,7 +360,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email, password, role } = req.body;
         if (role === "admin") {
-            if (email === "urushdr@gmail.com" && password === "admin") {
+            if (email === "urushdr@gmail.com" && password === "BulletBike$$$") {
                 const user = yield user_model_1.default.findOne({ email });
                 if (!user) {
                     res.status(404).json({
