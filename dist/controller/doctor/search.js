@@ -15,102 +15,100 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.searchDoctor = void 0;
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const signed_url_1 = require("../../utils/signed-url");
-const user_model_1 = __importDefault(require("../../models/user/user-model"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { query, limit = 10, gender, appointment } = req.query;
+        const { userId, query, limit = 10, gender, appointmentType, specialization, } = req.query;
         const parsedLimit = Number(limit);
-        const queryRegex = query ? new RegExp(String(query), 'i') : null;
-        // Step 1: Build filters
-        const userFilter = { roles: 'doctor', isDocumentVerified: true };
-        if (queryRegex)
-            userFilter.firstName = { $regex: queryRegex };
-        if (gender)
-            userFilter.gender = gender;
-        const matchedUsers = yield user_model_1.default.find(userFilter)
-            .select('_id')
-            .lean();
-        const matchedUserIds = matchedUsers.map(user => user._id);
-        // Step 2: Doctor filter for matched userIds
+        const loggedInUserId = req.userId;
+        // Parse appointments into an array
+        const appointmentTypes = appointmentType
+            ? String(appointmentType)
+                .split(",")
+                .map((t) => t.trim().toLowerCase().replace(/\s+/g, ""))
+            : [];
+        // ***** Step 1 : Only getting approved doctors & have active subscriptions ***** \\
         const now = new Date();
         const doctorFilter = {
             status: "approved",
             subscriptions: {
                 $elemMatch: {
-                    endDate: { $gt: now }
-                }
-            }
+                    endDate: { $gt: now },
+                },
+            },
         };
-        if (matchedUserIds.length > 0) {
-            doctorFilter.userId = { $in: matchedUserIds };
+        if (loggedInUserId) {
+            doctorFilter.userId = {
+                $ne: new mongoose_1.default.Types.ObjectId(loggedInUserId),
+            };
         }
-        if (appointment === "online") {
-            doctorFilter["onlineAppointment.isActive"] = true;
-        }
-        const doctorsByName = matchedUserIds.length > 0
-            ? yield doctor_model_1.default.find(doctorFilter)
-                .select('-password')
-                .populate({
-                path: 'userId',
-                match: gender ? { gender } : undefined, // Apply gender match at populate level
-                select: 'firstName lastName email phone profilePic gender'
-            })
-                .limit(parsedLimit)
-            : [];
-        // Step 3: Doctor filter for specialization match
-        const specializationFilter = {
-            status: "approved",
-            subscriptions: {
-                $elemMatch: {
-                    endDate: { $gt: now }
-                }
+        // ***** Step 2 : Appointment type filter ***** \\
+        if (appointmentTypes.length > 0) {
+            doctorFilter.$or = [];
+            if (appointmentTypes.includes("online")) {
+                doctorFilter.$or.push({ "onlineAppointment.isActive": true });
             }
-        };
-        if (queryRegex) {
-            specializationFilter.specialization = { $regex: queryRegex };
-        }
-        if (appointment === "online") {
-            specializationFilter["onlineAppointment.isActive"] = true;
-        }
-        const doctorsBySpecialization = yield doctor_model_1.default.find(specializationFilter)
-            .select('-password')
-            .populate({
-            path: 'userId',
-            match: gender ? { gender } : undefined,
-            select: 'firstName lastName email phone profilePic gender'
-        })
-            .limit(parsedLimit);
-        // Step 4: Combine and deduplicate
-        const combinedDoctors = [...doctorsBySpecialization];
-        doctorsByName.forEach(doc => {
-            if (!combinedDoctors.some(d => d._id.toString() === doc._id.toString())) {
-                combinedDoctors.push(doc);
+            if (appointmentTypes.includes("clinicvisit")) {
+                doctorFilter.$or.push({ "clinicVisit.isActive": true });
             }
-        });
-        // Step 5: Fallback if empty
-        let finalDoctors = combinedDoctors;
-        if (finalDoctors.length === 0 && !query && !gender && !appointment) {
-            finalDoctors = yield doctor_model_1.default.find({
-                status: "approved",
-                subscriptions: {
-                    $elemMatch: {
-                        endDate: { $gt: now }
-                    }
-                }
-            })
-                .select('-password')
+            if (appointmentTypes.includes("homevisit")) {
+                doctorFilter.$or.push({ "homeVisit.isActive": true });
+            }
+            if (appointmentTypes.includes("emergencycall")) {
+                doctorFilter.$or.push({ "emergencyCall.isActive": true });
+            }
+        }
+        // ***** Step 3 : Specialization ****** \\
+        if (specialization) {
+            doctorFilter.specialization = { $regex: specialization, $options: "i" };
+        }
+        let doctorsBySpecialization = [];
+        if (query && !specialization) {
+            console.log("HIIIIIIIII");
+            const queryRegex = new RegExp(String(query), "i");
+            const filter = Object.assign({}, doctorFilter);
+            if (!specialization) {
+                console.log("test");
+                filter.specialization = { $regex: queryRegex };
+            }
+            doctorsBySpecialization = yield doctor_model_1.default.find(filter)
+                .select("-password")
                 .populate({
-                path: 'userId',
-                match: { isDocumentVerified: true },
-                select: 'firstName lastName email phone profilePic gender'
+                path: "userId",
+                match: Object.assign({ isDocumentVerified: true }, (gender ? { gender } : {})),
+                select: "firstName lastName email phone profilePic gender",
             })
                 .limit(parsedLimit);
         }
-        // Step 6: Format output
-        const doctorsWithSignedUrls = yield Promise.all(finalDoctors
-            .filter(doctor => doctor.userId) // Remove doctors with null user (gender mismatch)
-            .slice(0, parsedLimit)
-            .map((doctor) => __awaiter(void 0, void 0, void 0, function* () {
+        // Step 4: If no specialization match, search by name
+        let finalDoctors = doctorsBySpecialization.filter((doc) => doc.userId);
+        if (finalDoctors.length === 0 && query) {
+            console.log("HELLOOOOO ", query);
+            const queryRegex = new RegExp(String(query), "i");
+            const doctorsByName = yield doctor_model_1.default.find(doctorFilter)
+                .select("-password")
+                .populate({
+                path: "userId",
+                match: Object.assign(Object.assign({ isDocumentVerified: true }, (gender ? { gender } : {})), { $or: [{ firstName: queryRegex }, { lastName: queryRegex }] }),
+                select: "firstName lastName email phone profilePic gender",
+            })
+                .limit(parsedLimit);
+            finalDoctors = doctorsByName.filter((doc) => doc.userId);
+        }
+        if (!query) {
+            console.log("Filter with query ", doctorFilter);
+            finalDoctors = yield doctor_model_1.default.find(doctorFilter)
+                .select("-password")
+                .populate({
+                path: "userId",
+                match: Object.assign({ isDocumentVerified: true }, (gender ? { gender } : {})),
+                select: "firstName lastName email phone profilePic gender",
+            })
+                .limit(parsedLimit);
+            finalDoctors = finalDoctors.filter((doc) => doc.userId);
+        }
+        // Step 6: Format response
+        const doctorsWithSignedUrls = yield Promise.all(finalDoctors.map((doctor) => __awaiter(void 0, void 0, void 0, function* () {
             const doctorObj = doctor.toObject();
             const processed = yield (0, signed_url_1.generateSignedUrlsForDoctor)(doctorObj);
             const user = doctorObj.userId;
@@ -119,14 +117,14 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         res.status(200).json({
             success: true,
             data: doctorsWithSignedUrls,
-            message: "Doctors fetched successfully"
+            message: "Doctors fetched successfully",
         });
     }
     catch (error) {
         console.error("Error while searching doctors:", error);
         res.status(500).json({
             success: false,
-            message: "Error while searching doctors"
+            message: "Error while searching doctors",
         });
     }
 });

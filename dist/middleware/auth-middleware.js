@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkRole = exports.verifyToken = void 0;
+exports.authOptional = exports.checkRole = exports.verifyToken = void 0;
 const user_model_1 = __importDefault(require("../models/user/user-model"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 // Token verification middleware
@@ -105,3 +105,23 @@ const checkRole = (role) => {
     });
 };
 exports.checkRole = checkRole;
+const authOptional = (req, res, next) => {
+    var _a, _b;
+    console.log("authOptional triggered");
+    const token = ((_a = req.cookies) === null || _a === void 0 ? void 0 : _a.token) || ((_b = req.headers.authorization) === null || _b === void 0 ? void 0 : _b.split(" ")[1]);
+    if (!token)
+        return next();
+    try {
+        const JWT_SECRET = process.env.JWT_SECRET;
+        if (!JWT_SECRET) {
+            return next();
+        }
+        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
+        req.userId = decoded.id;
+    }
+    catch (err) {
+        console.error("JWT decode failed:", err);
+    }
+    next();
+};
+exports.authOptional = authOptional;

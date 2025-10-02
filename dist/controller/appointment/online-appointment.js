@@ -156,8 +156,28 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
+        const now = new Date();
+        // Helper function to update appointment statuses
+        const updateStatuses = (appointments, Model) => __awaiter(void 0, void 0, void 0, function* () {
+            const updates = appointments.map((appt) => __awaiter(void 0, void 0, void 0, function* () {
+                var _a, _b;
+                const endDate = new Date((_b = (_a = appt.slot) === null || _a === void 0 ? void 0 : _a.time) === null || _b === void 0 ? void 0 : _b.end); // assuming slot.time.end exists
+                if (endDate && endDate < now) {
+                    if (appt.status === "pending") {
+                        appt.status = "expired";
+                        yield Model.updateOne({ _id: appt._id }, { status: "cancelled" });
+                    }
+                    else if (appt.status === "accepted") {
+                        appt.status = "completed";
+                        yield Model.updateOne({ _id: appt._id }, { status: "completed" });
+                    }
+                }
+                return appt;
+            }));
+            return Promise.all(updates);
+        });
         // Find all online appointments for this doctor
-        const onlineAppointments = yield online_appointment_model_1.default.find({
+        let onlineAppointments = yield online_appointment_model_1.default.find({
             doctorId: doctor._id,
         })
             .populate({
@@ -173,8 +193,9 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
             },
         })
             .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
+        onlineAppointments = yield updateStatuses(onlineAppointments, online_appointment_model_1.default);
         // Find all emergency appointments for this doctor
-        const emergencyAppointments = yield emergency_appointment_model_1.default.find({
+        let emergencyAppointments = yield emergency_appointment_model_1.default.find({
             doctorId: doctor._id,
         })
             .populate({
@@ -194,8 +215,9 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
             },
         })
             .sort({ createdAt: -1 }); // Sort by most recent created first
+        emergencyAppointments = yield updateStatuses(emergencyAppointments, emergency_appointment_model_1.default);
         // Find all clinic appointments for this doctor
-        const clinicAppointments = yield clinic_appointment_model_1.default.find({
+        let clinicAppointments = yield clinic_appointment_model_1.default.find({
             doctorId: doctor._id,
         })
             .populate({
@@ -211,9 +233,10 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
             select: "firstName lastName profilePic phone",
         })
             .sort({ "slot.day": -1 });
+        clinicAppointments = yield updateStatuses(clinicAppointments, clinic_appointment_model_1.default);
         console.log("Clinic appointments for doctor", clinicAppointments);
         // Find all home visit appointments for this doctor
-        const homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
+        let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
             doctorId: doctor._id,
         })
             .populate({
@@ -229,6 +252,7 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
             },
         })
             .sort({ "slot.day": -1, "slot.time.start": -1 });
+        homeVisitAppointments = yield updateStatuses(homeVisitAppointments, homevisit_appointment_model_1.default);
         res.status(200).json({
             success: true,
             onlineAppointment: onlineAppointments,
@@ -261,8 +285,28 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
             });
             return;
         }
+        const now = new Date();
+        // Helper function to update appointment statuses
+        const updateStatuses = (appointments, Model) => __awaiter(void 0, void 0, void 0, function* () {
+            const updates = appointments.map((appt) => __awaiter(void 0, void 0, void 0, function* () {
+                var _a, _b;
+                const endDate = new Date((_b = (_a = appt.slot) === null || _a === void 0 ? void 0 : _a.time) === null || _b === void 0 ? void 0 : _b.end); // assuming slot.time.end exists
+                if (endDate && endDate < now) {
+                    if (appt.status === "pending") {
+                        appt.status = "expired";
+                        yield Model.updateOne({ _id: appt._id }, { status: "cancelled" });
+                    }
+                    else if (appt.status === "accepted") {
+                        appt.status = "completed";
+                        yield Model.updateOne({ _id: appt._id }, { status: "completed" });
+                    }
+                }
+                return appt;
+            }));
+            return Promise.all(updates);
+        });
         // Find all online appointments for this patient (patientId references User)
-        const onlineAppointments = yield online_appointment_model_1.default.find({
+        let onlineAppointments = yield online_appointment_model_1.default.find({
             patientId: userId,
         })
             .populate({
@@ -278,8 +322,9 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
             },
         })
             .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
+        onlineAppointments = yield updateStatuses(onlineAppointments, online_appointment_model_1.default);
         // Find all emergency appointments for this patient (patientId references Patient)
-        const emergencyAppointments = yield emergency_appointment_model_1.default.find({
+        let emergencyAppointments = yield emergency_appointment_model_1.default.find({
             patientId: patient._id,
         })
             .populate({
@@ -299,8 +344,9 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
             },
         })
             .sort({ createdAt: -1 }); // Sort by most recent created first
+        emergencyAppointments = yield updateStatuses(emergencyAppointments, emergency_appointment_model_1.default);
         // Find all clinic appointments for this patient
-        const clinicAppointments = yield clinic_appointment_model_1.default.find({
+        let clinicAppointments = yield clinic_appointment_model_1.default.find({
             patientId: userId,
         })
             .populate("doctorId", "userId specialization clinicVisit")
@@ -312,9 +358,10 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
             },
         })
             .sort({ "slot.day": -1 });
+        clinicAppointments = yield updateStatuses(clinicAppointments, clinic_appointment_model_1.default);
         console.log("Clinic appointments for patient", clinicAppointments);
         // Find all home visit appointments for this patient
-        const homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
+        let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
             patientId: userId,
         })
             .populate({
@@ -330,6 +377,7 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
             },
         })
             .sort({ "slot.day": -1, "slot.time.start": -1 });
+        homeVisitAppointments = yield updateStatuses(homeVisitAppointments, homevisit_appointment_model_1.default);
         res.status(200).json({
             success: true,
             onlineAppointment: onlineAppointments,
@@ -351,7 +399,7 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
 exports.getPatientAppointments = getPatientAppointments;
 // Update appointment status by doctor
 const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+    var _a, _b;
     try {
         const { appointmentId } = req.params;
         const { status } = req.body;
@@ -432,14 +480,18 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
                 });
                 return;
             }
-            let platformFee = subscription.platformFeeOnline || 0;
-            let opsExpense = subscription.opsExpenseOnline || 0;
+            // Determine slot key for fee extraction
+            let slotKey = `min${((_b = appointment === null || appointment === void 0 ? void 0 : appointment.slot) === null || _b === void 0 ? void 0 : _b.duration) || 15}`;
+            let platformFee = subscription.platformFeeOnline && subscription.platformFeeOnline[slotKey] ? subscription.platformFeeOnline[slotKey].figure : 0;
+            let opsExpense = subscription.opsExpenseOnline && subscription.opsExpenseOnline[slotKey] ? subscription.opsExpenseOnline[slotKey].figure : 0;
             let doctorEarning = price - platformFee - (price * opsExpense) / 100;
             if (doctorEarning < 0)
                 doctorEarning = 0;
             const doctorUser = yield user_model_1.default.findById(doctor.userId);
             if (!doctorUser) {
-                res.status(404).json({ success: false, message: "Doctor user not found" });
+                res
+                    .status(404)
+                    .json({ success: false, message: "Doctor user not found" });
                 return;
             }
             doctorUser.wallet = (doctorUser.wallet || 0) + doctorEarning;

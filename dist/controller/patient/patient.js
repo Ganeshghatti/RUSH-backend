@@ -220,6 +220,7 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
                 razorpay_order_id,
                 razorpay_payment_id,
                 SubscriptionId: subscription._id,
+                amount_paid: subscription.price,
             };
             patient.subscriptions.push(newSubscription);
             yield patient.save();
@@ -462,27 +463,6 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
         };
         // Get recommended doctors based on patient's health conditions
         let recommendedDoctors = [];
-        // if (patient.healthMetrics && patient.healthMetrics.length > 0) {
-        //   // Get latest health metrics
-        //   const latestHealthMetrics = patient.healthMetrics[patient.healthMetrics.length - 1];
-        //   if (latestHealthMetrics.conditions && latestHealthMetrics.conditions.length > 0) {
-        //     // Find doctors whose specialization matches patient's conditions
-        //     const patientConditions = latestHealthMetrics.conditions.map(condition =>
-        //       new RegExp(condition, 'i') // Case insensitive matching
-        //     );
-        //     recommendedDoctors = await Doctor.find({
-        //       status: "approved",  // Only show approved doctors
-        //       subscriptions: { $exists: true, $not: { $size: 0 } }, // Only show doctors with at least one subscription
-        //       $or: [
-        //         { specialization: { $in: patientConditions } },
-        //         { "registration.specialization": { $in: patientConditions } }
-        //       ]
-        //     })
-        //     .populate('userId', 'firstName lastName profilePic')
-        //     .select('userId specialization experience onlineAppointment')
-        //     .limit(10);
-        //   }
-        // }
         // If no condition-based recommendations, get general recommended doctors
         if (recommendedDoctors.length === 0) {
             const now = new Date();
@@ -492,7 +472,8 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
                     $elemMatch: {
                         endDate: { $gt: now }
                     }
-                }
+                },
+                userId: { $ne: userId },
             })
                 .populate({
                 path: "userId",
@@ -502,6 +483,7 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
                 .limit(10);
             recommendedDoctors = recommendedDoctors.filter(doctor => doctor.userId && doctor.userId.isDocumentVerified);
         }
+        console.log("Recommended Doctors ", recommendedDoctors);
         // Process recommended doctors to add signed URLs
         const processedDoctors = yield Promise.all(recommendedDoctors.map((doctor) => (0, signed_url_1.generateSignedUrlsForDoctor)(doctor)));
         res.status(200).json({

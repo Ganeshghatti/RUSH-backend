@@ -218,6 +218,7 @@ const getPatientEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, 
 });
 exports.getPatientEmergencyAppointments = getPatientEmergencyAppointments;
 const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     try {
         const { id } = req.params;
         const userId = req.user.id;
@@ -305,8 +306,9 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
             });
             return;
         }
-        let platformFee = subscription.platformFeeOnline || 0;
-        let opsExpense = subscription.opsExpenseOnline || 0;
+        // Emergency appointments use normal platformFee and opsExpense fields
+        let platformFee = ((_a = subscription.platformFeeEmergency) === null || _a === void 0 ? void 0 : _a.figure) || 0;
+        let opsExpense = ((_b = subscription.opsExpenseEmergency) === null || _b === void 0 ? void 0 : _b.figure) || 0;
         let doctorEarning = 2500 - platformFee - (2500 * opsExpense) / 100;
         if (doctorEarning < 0)
             doctorEarning = 0;

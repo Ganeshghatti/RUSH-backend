@@ -564,11 +564,12 @@ export const updateAppointmentStatus = async (
         return;
       }
 
-      let platformFee = subscription.platformFeeOnline || 0;
-      let opsExpense = subscription.opsExpenseOnline || 0;
-      let doctorEarning = price - platformFee - (price * opsExpense) / 100;
-
-      if (doctorEarning < 0) doctorEarning = 0;
+  // Determine slot key for fee extraction
+  let slotKey = `min${appointment?.slot?.duration || 15}` as 'min15' | 'min30' | 'min60';
+  let platformFee = subscription.platformFeeOnline && subscription.platformFeeOnline[slotKey] ? subscription.platformFeeOnline[slotKey]!.figure : 0;
+  let opsExpense = subscription.opsExpenseOnline && subscription.opsExpenseOnline[slotKey] ? subscription.opsExpenseOnline[slotKey]!.figure : 0;
+  let doctorEarning = price - platformFee - (price * opsExpense) / 100;
+  if (doctorEarning < 0) doctorEarning = 0;
 
       const doctorUser = await User.findById(doctor.userId);
       if (!doctorUser) {

@@ -17,11 +17,25 @@ const doctor_subscription_1 = __importDefault(require("../../models/doctor-subsc
 const upload_media_1 = require("../../utils/aws_s3/upload-media");
 const qrcode_1 = __importDefault(require("qrcode"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
-const delete_media_1 = require("../../utils/aws_s3/delete-media");
 const signed_url_1 = require("../../utils/signed-url");
+// Validate online fee object (min15, min30, min60)
+function validateOnlineFee(fee, label) {
+    var _a, _b;
+    const slots = ["min15", "min30", "min60"];
+    for (const slot of slots) {
+        if (!fee ||
+            typeof fee[slot] !== "object" ||
+            !["Number", "Percentage"].includes((_a = fee[slot]) === null || _a === void 0 ? void 0 : _a.type) ||
+            typeof ((_b = fee[slot]) === null || _b === void 0 ? void 0 : _b.figure) !== "number" ||
+            fee[slot].figure < 0) {
+            return `${label}.${slot} must be an object with type ('Number' or 'Percentage') and a non-negative figure`;
+        }
+    }
+    return null;
+}
 const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description } = req.body;
+        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description, } = req.body;
         if (price < 0) {
             res.status(400).json({
                 success: false,
@@ -29,12 +43,37 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             });
             return;
         }
-        if (platformFeeOnline < 0 || platformFeeClinic < 0 || platformFeeEmergency < 0 || platformFeeHomeVisit < 0) {
+        // Validate platformFeeOnline and opsExpenseOnline (min15, min30, min60)
+        const pfOnlineErr = validateOnlineFee(platformFeeOnline, "platformFeeOnline");
+        const oeOnlineErr = validateOnlineFee(opsExpenseOnline, "opsExpenseOnline");
+        if (pfOnlineErr || oeOnlineErr) {
             res.status(400).json({
                 success: false,
-                message: "Platform fee must be a non-negative number (0 or greater)",
+                message: pfOnlineErr || oeOnlineErr,
             });
             return;
+        }
+        // Validate other fee objects (clinic, homevisit, emergency)
+        const feeFields = [
+            platformFeeClinic,
+            opsExpenseClinic,
+            platformFeeHomeVisit,
+            opsExpenseHomeVisit,
+            platformFeeEmergency,
+            opsExpenseEmergency,
+        ];
+        for (const fee of feeFields) {
+            if (!fee ||
+                typeof fee !== "object" ||
+                !["Number", "Percentage"].includes(fee.type) ||
+                typeof fee.figure !== "number" ||
+                fee.figure < 0) {
+                res.status(400).json({
+                    success: false,
+                    message: "All platform/ops fees (except online) must be objects with type ('Number' or 'Percentage') and a non-negative figure",
+                });
+                return;
+            }
         }
         // Validate required fields
         if (!name || !description || !duration) {
@@ -64,17 +103,17 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             features: features || [],
             isActive: isActive,
             duration,
-            qrCodeImage: signedUrl,
+            // qrCodeImage: signedUrl,
             doctor_type,
             doctor_type_description,
-            platformFeeOnline: Number(parseFloat(platformFeeOnline).toFixed(2)),
-            opsExpenseOnline: Number(parseFloat(opsExpenseOnline).toFixed(2)),
-            platformFeeClinic: Number(parseFloat(platformFeeClinic).toFixed(2)),
-            opsExpenseClinic: Number(parseFloat(opsExpenseClinic).toFixed(2)),
-            platformFeeHomeVisit: Number(parseFloat(platformFeeHomeVisit).toFixed(2)),
-            opsExpenseHomeVisit: Number(parseFloat(opsExpenseHomeVisit).toFixed(2)),
-            platformFeeEmergency: Number(parseFloat(platformFeeEmergency).toFixed(2)),
-            opsExpenseEmergency: Number(parseFloat(opsExpenseEmergency).toFixed(2)),
+            platformFeeOnline,
+            opsExpenseOnline,
+            platformFeeClinic,
+            opsExpenseClinic,
+            platformFeeHomeVisit,
+            opsExpenseHomeVisit,
+            platformFeeEmergency,
+            opsExpenseEmergency,
         });
         res.status(201).json({
             success: true,
@@ -94,7 +133,7 @@ exports.createSubscription = createSubscription;
 const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        const { isActive, name, description, features, price, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency } = req.body;
+        const { isActive, name, description, features, price, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency, } = req.body;
         // Build update object with only provided fields
         const updateData = {};
         // Validate and add isActive if provided
@@ -152,14 +191,47 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             updateData.features = features.map((feature) => feature.trim());
         }
         //add fee
-        updateData.platformFeeOnline = platformFeeOnline;
-        updateData.opsExpenseOnline = opsExpenseOnline;
-        updateData.platformFeeClinic = platformFeeClinic;
-        updateData.opsExpenseClinic = opsExpenseClinic;
-        updateData.platformFeeHomeVisit = platformFeeHomeVisit;
-        updateData.opsExpenseHomeVisit = opsExpenseHomeVisit;
-        updateData.platformFeeEmergency = platformFeeEmergency;
-        updateData.opsExpenseEmergency = opsExpenseEmergency;
+        // Validate and add fee fields if provided
+        const feeUpdateFields = [
+            "platformFeeOnline",
+            "opsExpenseOnline",
+            "platformFeeClinic",
+            "opsExpenseClinic",
+            "platformFeeHomeVisit",
+            "opsExpenseHomeVisit",
+            "platformFeeEmergency",
+            "opsExpenseEmergency",
+        ];
+        for (const field of feeUpdateFields) {
+            if (req.body[field] !== undefined) {
+                if (field === "platformFeeOnline" || field === "opsExpenseOnline") {
+                    const err = validateOnlineFee(req.body[field], field);
+                    if (err) {
+                        res.status(400).json({
+                            success: false,
+                            message: err,
+                        });
+                        return;
+                    }
+                    updateData[field] = req.body[field];
+                }
+                else {
+                    const fee = req.body[field];
+                    if (!fee ||
+                        typeof fee !== "object" ||
+                        !["Number", "Percentage"].includes(fee.type) ||
+                        typeof fee.figure !== "number" ||
+                        fee.figure < 0) {
+                        res.status(400).json({
+                            success: false,
+                            message: `Field ${field} must be an object with type ('Number' or 'Percentage') and a non-negative figure`,
+                        });
+                        return;
+                    }
+                    updateData[field] = fee;
+                }
+            }
+        }
         // validate and add price if provided
         if (price !== undefined) {
             if (typeof price !== "number") {
@@ -262,7 +334,7 @@ const deleteSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             return;
         }
         const doctorsUsingSubscription = yield doctor_model_1.default.find({
-            "subscriptions.SubscriptionId": id
+            "subscriptions.SubscriptionId": id,
         });
         if (doctorsUsingSubscription.length > 0) {
             res.status(400).json({
@@ -273,22 +345,21 @@ const deleteSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             return;
         }
         // Extract QR code image URL to delete from S3
-        const qrCodeUrl = subscription.qrCodeImage;
+        // const qrCodeUrl = subscription.qrCodeImage;
         // Delete the subscription from database
         yield doctor_subscription_1.default.findByIdAndDelete(id);
         // Extract the key from the URL for S3 deletion
-        if (qrCodeUrl) {
-            try {
-                const urlParts = qrCodeUrl.split('/');
-                const key = urlParts.slice(3).join('/');
-                if (key) {
-                    yield (0, delete_media_1.DeleteMediaFromS3)({ key });
-                }
-            }
-            catch (error) {
-                console.error("Error deleting QR code image from S3:", error);
-            }
-        }
+        // if (qrCodeUrl) {
+        //   try {
+        //     const urlParts = qrCodeUrl.split('/');
+        //     const key = urlParts.slice(3).join('/');
+        //     if (key) {
+        //       await DeleteMediaFromS3({ key });
+        //     }
+        //   } catch (error) {
+        //     console.error("Error deleting QR code image from S3:", error);
+        //   }
+        // }
         res.status(200).json({
             success: true,
             message: "Subscription deleted successfully",

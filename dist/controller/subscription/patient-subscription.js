@@ -56,7 +56,7 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             features: features || [],
             isActive: isActive,
             duration,
-            qrCodeImage: signedUrl,
+            // qrCodeImage: signedUrl,
         });
         res.status(201).json({
             success: true,

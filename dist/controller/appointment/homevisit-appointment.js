@@ -390,7 +390,7 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
 exports.confirmHomeVisitAppointment = confirmHomeVisitAppointment;
 // Step 4: Doctor completes appointment with OTP validation
 const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c, _d;
     try {
         const { appointmentId } = req.params;
         const parsed = validation_1.homeVisitAppointmentCompleteSchema.safeParse(req.body);
@@ -511,8 +511,9 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
                 });
                 return;
             }
-            let platformFee = subscription.platformFeeOnline || 0;
-            let opsExpense = subscription.opsExpenseOnline || 0;
+            // Home visit appointments use normal platformFee and opsExpense fields
+            let platformFee = ((_c = subscription.platformFeeHomeVisit) === null || _c === void 0 ? void 0 : _c.figure) || 0;
+            let opsExpense = ((_d = subscription.opsExpenseHomeVisit) === null || _d === void 0 ? void 0 : _d.figure) || 0;
             let doctorEarning = amountToDeduct - platformFee - (amountToDeduct * opsExpense) / 100;
             if (doctorEarning < 0)
                 doctorEarning = 0;

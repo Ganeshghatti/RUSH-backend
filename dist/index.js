@@ -35,6 +35,7 @@ app.use((0, cors_1.default)({
         "https://app.rushdr.com",
         "http://localhost:5173",
         "http://localhost:3000",
+        "http://localhost:3001",
         "https://admin.rushdr.com",
         "https://rushdr.com",
         "https://www.rushdr.com",

@@ -47,10 +47,10 @@ const DoctorSubscriptionSchema = new mongoose_1.Schema({
         type: String,
         required: [true, "Subscription description is required"],
     },
-    qrCodeImage: {
-        type: String,
-        required: [true, "QR code image is required for subscription"],
-    },
+    // qrCodeImage: {
+    //   type: String,
+    //   required: [true, "QR code image is required for subscription"],
+    // },
     doctor_type: {
         type: String,
     },
@@ -82,41 +82,157 @@ const DoctorSubscriptionSchema = new mongoose_1.Schema({
             "lifetime",
         ],
     },
-    platformFeeOnline: {
+    advertisement_cost: {
         type: Number,
-        min: [0, "Platform fee must be a positive number"],
+        default: 0,
+    },
+    platformFeeOnline: {
+        min15: {
+            type: {
+                type: String,
+                enum: ["Number", "Percentage"],
+                required: true,
+            },
+            figure: {
+                type: Number,
+                required: true,
+                min: [0, "Platform fee must be at least 0%"],
+            },
+        },
+        min30: {
+            type: {
+                type: String,
+                enum: ["Number", "Percentage"],
+                required: true,
+            },
+            figure: {
+                type: Number,
+                required: true,
+                min: [0, "Platform fee must be at least 0%"],
+            },
+        },
+        min60: {
+            type: {
+                type: String,
+                enum: ["Number", "Percentage"],
+                required: true,
+            },
+            figure: {
+                type: Number,
+                required: true,
+                min: [0, "Platform fee must be at least 0%"],
+            },
+        },
     },
     opsExpenseOnline: {
-        type: Number,
-        min: [0, "Operational expense must be at least 0%"],
-        max: [100, "Operational expense cannot exceed 100%"],
+        min15: {
+            type: {
+                type: String,
+                enum: ["Number", "Percentage"],
+                required: true,
+            },
+            figure: {
+                type: Number,
+                required: true,
+                min: [0, "Operational expense must be a positive number"],
+            },
+        },
+        min30: {
+            type: {
+                type: String,
+                enum: ["Number", "Percentage"],
+                required: true,
+            },
+            figure: {
+                type: Number,
+                required: true,
+                min: [0, "Operational expense must be a positive number"],
+            },
+        },
+        min60: {
+            type: {
+                type: String,
+                enum: ["Number", "Percentage"],
+                required: true,
+            },
+            figure: {
+                type: Number,
+                required: true,
+                min: [0, "Operational expense must be a positive number"],
+            },
+        },
     },
     platformFeeClinic: {
-        type: Number,
-        min: [0, "Platform fee must be a positive number"],
+        type: {
+            type: String,
+            enum: ["Number", "Percentage"],
+            required: true,
+        },
+        figure: {
+            type: Number,
+            required: true,
+            min: [0, "Platform fee must be at least 0%"],
+        },
     },
     opsExpenseClinic: {
-        type: Number,
-        min: [0, "Operational expense must be at least 0%"],
-        max: [100, "Operational expense cannot exceed 100%"],
+        type: {
+            type: String,
+            enum: ["Number", "Percentage"],
+            required: true,
+        },
+        figure: {
+            type: Number,
+            required: true,
+            min: [0, "Operational expense must be a positive number"],
+        },
     },
     platformFeeHomeVisit: {
-        type: Number,
-        min: [0, "Platform fee must be a positive number"],
+        type: {
+            type: String,
+            enum: ["Number", "Percentage"],
+            required: true,
+        },
+        figure: {
+            type: Number,
+            required: true,
+            min: [0, "Platform fee must be at least 0%"],
+        },
     },
     opsExpenseHomeVisit: {
-        type: Number,
-        min: [0, "Operational expense must be at least 0%"],
-        max: [100, "Operational expense cannot exceed 100%"],
+        type: {
+            type: String,
+            enum: ["Number", "Percentage"],
+            required: true,
+        },
+        figure: {
+            type: Number,
+            required: true,
+            min: [0, "Operational expense must be a positive number"],
+        },
     },
     platformFeeEmergency: {
-        type: Number,
-        min: [0, "Platform fee must be a positive number"],
+        type: {
+            type: String,
+            enum: ["Number", "Percentage"],
+            required: true,
+        },
+        figure: {
+            type: Number,
+            required: true,
+            min: [0, "Platform fee must be at least 0%"],
+        },
     },
     opsExpenseEmergency: {
-        type: Number,
-        min: [0, "Operational expense must be at least 0%"],
-        max: [100, "Operational expense cannot exceed 100%"],
+        type: {
+            type: String,
+            enum: ["Number", "Percentage"],
+            required: true,
+        },
+        figure: {
+            type: Number,
+            required: true,
+            min: [0, "Operational expense must be a positive number"],
+        },
     },
 }, {
     timestamps: true,

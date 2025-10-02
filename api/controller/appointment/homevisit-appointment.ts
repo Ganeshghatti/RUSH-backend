@@ -585,10 +585,11 @@ export const completeHomeVisitAppointment = async (
         return;
       }
       
-      let platformFee = subscription.platformFeeOnline || 0;
-      let opsExpense = subscription.opsExpenseOnline || 0;
-      let doctorEarning = amountToDeduct - platformFee - (amountToDeduct * opsExpense) / 100;
-      if (doctorEarning < 0) doctorEarning = 0;
+  // Home visit appointments use normal platformFee and opsExpense fields
+  let platformFee = subscription.platformFeeHomeVisit?.figure || 0;
+  let opsExpense = subscription.opsExpenseHomeVisit?.figure || 0;
+  let doctorEarning = amountToDeduct - platformFee - (amountToDeduct * opsExpense) / 100;
+  if (doctorEarning < 0) doctorEarning = 0;
 
       const doctorUser = await User.findById(doctor.userId);
       if (!doctorUser) {
