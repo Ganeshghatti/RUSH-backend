@@ -332,6 +332,41 @@ export const updateClinicDetails = async (
     const updateQuery: { [key: string]: any } = {};
 
     if (validatedData.clinics !== undefined) {
+      // Fetch doctor to get active subscription
+      const doctor = await Doctor.findOne({ userId: doctorId }).select("subscriptions");
+      if (!doctor) {
+        res.status(404).json({
+          success: false,
+          message: "Doctor profile not found",
+        });
+        return;
+      }
+      // Find the latest/active subscription (assuming last is active)
+      const activeSub = doctor.subscriptions && doctor.subscriptions.length > 0 ? doctor.subscriptions[doctor.subscriptions.length - 1] : null;
+      if (!activeSub || !activeSub.SubscriptionId) {
+        res.status(400).json({
+          success: false,
+          message: "No active subscription found. Please subscribe to a plan.",
+        });
+        return;
+      }
+      // Fetch DoctorSubscription to get no_of_clinics
+      const subDoc = await DoctorSubscription.findById(activeSub.SubscriptionId);
+      if (!subDoc) {
+        res.status(400).json({
+          success: false,
+          message: "Subscription plan not found.",
+        });
+        return;
+      }
+      const maxClinics = subDoc.no_of_clinics || 0;
+      if (Array.isArray(validatedData.clinics) && validatedData.clinics.length > maxClinics) {
+        res.status(400).json({
+          success: false,
+          message: `Your subscription allows only ${maxClinics} clinics. Please upgrade your plan to add more clinics.`,
+        });
+        return;
+      }
       updateQuery["clinicVisit.clinics"] = validatedData.clinics;
     }
     if (validatedData.isActive !== undefined) {

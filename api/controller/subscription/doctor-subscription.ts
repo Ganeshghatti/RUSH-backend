@@ -48,6 +48,7 @@ export const createSubscription = async (
       opsExpenseHomeVisit,
       doctor_type,
       doctor_type_description,
+      no_of_clinics,
     } = req.body;
 
     if (price < 0) {
@@ -138,6 +139,7 @@ export const createSubscription = async (
       // qrCodeImage: signedUrl,
       doctor_type,
       doctor_type_description,
+      no_of_clinics: typeof no_of_clinics === "number" ? no_of_clinics : 0,
       platformFeeOnline,
       opsExpenseOnline,
       platformFeeClinic,
@@ -182,10 +184,22 @@ export const updateSubscription = async (
       opsExpenseHomeVisit,
       platformFeeEmergency,
       opsExpenseEmergency,
+      no_of_clinics,
     } = req.body;
 
-    // Build update object with only provided fields
-    const updateData: any = {};
+  // Build update object with only provided fields
+  const updateData: any = {};
+    // Validate and add no_of_clinics if provided
+    if (no_of_clinics !== undefined) {
+      if (typeof no_of_clinics !== "number" || no_of_clinics < 0) {
+        res.status(400).json({
+          success: false,
+          message: "no_of_clinics must be a non-negative number",
+        });
+        return;
+      }
+      updateData.no_of_clinics = no_of_clinics;
+    }
 
     // Validate and add isActive if provided
     if (isActive !== undefined) {

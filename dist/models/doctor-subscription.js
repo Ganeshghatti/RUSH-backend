@@ -57,6 +57,12 @@ const DoctorSubscriptionSchema = new mongoose_1.Schema({
     doctor_type_description: {
         type: String,
     },
+    no_of_clinics: {
+        type: Number,
+        default: 0,
+        min: [0, "Number of clinics cannot be negative"],
+        max: [15, "Number of clinics cannot exceed 15"],
+    },
     features: [
         {
             type: String,
