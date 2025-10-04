@@ -493,7 +493,6 @@ const findCurrentUser = (req, res) => __awaiter(void 0, void 0, void 0, function
             return;
         }
         let user = yield user_model_1.default.findById(id).select("-password");
-        console.log("user", user);
         if (!user) {
             res.status(404).json({
                 success: false,

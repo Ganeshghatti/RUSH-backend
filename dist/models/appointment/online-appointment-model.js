@@ -49,6 +49,16 @@ const onlineAppointmentSchema = new Schema({
     roomName: {
         type: String,
     },
+    paymentDetails: {
+        amount: { type: Number, required: true },
+        patientWalletDeducted: { type: Number, required: true },
+        patientWalletFrozen: { type: Number, required: true },
+        paymentStatus: {
+            type: String,
+            enum: ["pending", "completed"],
+            default: "pending",
+        },
+    },
 });
 const OnlineAppointment = mongoose_1.default.model("OnlineAppointment", onlineAppointmentSchema);
 exports.default = OnlineAppointment;

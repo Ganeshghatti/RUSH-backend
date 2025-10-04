@@ -3,13 +3,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("../../middleware/auth-middleware");
 const online_appointment_1 = require("../../controller/appointment/online-appointment");
-const create_room_1 = require("../../controller/appointment/create-room");
-const create_access_token_1 = require("../../controller/appointment/create-access-token");
 const router = (0, express_1.Router)();
 // Route for patients to book online appointments
 router
     .route("/appointment/online/book")
     .post(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), online_appointment_1.bookOnlineAppointment);
+// Route to initate the final payment process
+router
+    .route("/appointment/online/finish-payment")
+    .post(auth_middleware_1.verifyToken, online_appointment_1.finalPayment);
 // Route for doctors to get all their appointments
 router
     .route("/appointment/online/doctor")
@@ -26,12 +28,12 @@ router
 router
     .route("/appointment/online/:appointmentId/status")
     .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), online_appointment_1.updateAppointmentStatus);
-// Route to create a new twilio room
-router.route("/appointment/online/create-room").post(auth_middleware_1.verifyToken, 
-// checkRole("doctor") as RequestHandler, // Only doctors can trigger room creation
-create_room_1.createTwilioRoom);
+// Route for patient to cancel the appointment
+// router
+//   .route("/appointment/online/cancel/:appointmentId")
+//   .put(verifyToken as RequestHandler, cancelAppointment as RequestHandler);
 // Route to create access token for doctor and patient
 router
     .route("/appointment/online/access-token")
-    .post(auth_middleware_1.verifyToken, create_access_token_1.createRoomAccessToken);
+    .post(auth_middleware_1.verifyToken, online_appointment_1.createRoomAccessToken);
 exports.default = router;

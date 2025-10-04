@@ -64,11 +64,9 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         }
         let doctorsBySpecialization = [];
         if (query && !specialization) {
-            console.log("HIIIIIIIII");
             const queryRegex = new RegExp(String(query), "i");
             const filter = Object.assign({}, doctorFilter);
             if (!specialization) {
-                console.log("test");
                 filter.specialization = { $regex: queryRegex };
             }
             doctorsBySpecialization = yield doctor_model_1.default.find(filter)
@@ -83,7 +81,6 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         // Step 4: If no specialization match, search by name
         let finalDoctors = doctorsBySpecialization.filter((doc) => doc.userId);
         if (finalDoctors.length === 0 && query) {
-            console.log("HELLOOOOO ", query);
             const queryRegex = new RegExp(String(query), "i");
             const doctorsByName = yield doctor_model_1.default.find(doctorFilter)
                 .select("-password")
@@ -96,7 +93,6 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             finalDoctors = doctorsByName.filter((doc) => doc.userId);
         }
         if (!query) {
-            console.log("Filter with query ", doctorFilter);
             finalDoctors = yield doctor_model_1.default.find(doctorFilter)
                 .select("-password")
                 .populate({

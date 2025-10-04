@@ -20,7 +20,6 @@ const verifyToken = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
     try {
         // Get token from cookies
         const token = req.cookies.token;
-        console.log("Token from cookies:", token);
         if (!token) {
             res.status(401).json({
                 success: false,
@@ -41,9 +40,7 @@ const verifyToken = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
             });
             return;
         }
-        console.log("decoded", decoded);
         const user = yield user_model_1.default.findById(decoded.id);
-        console.log("user from the verified token", user);
         if (!user) {
             res.status(404).json({
                 success: false,
@@ -51,7 +48,6 @@ const verifyToken = (req, res, next) => __awaiter(void 0, void 0, void 0, functi
             });
             return;
         }
-        console.log("Decoded token:", decoded);
         // Set user info in request object
         req.user = {
             id: decoded.id,
@@ -107,7 +103,6 @@ const checkRole = (role) => {
 exports.checkRole = checkRole;
 const authOptional = (req, res, next) => {
     var _a, _b;
-    console.log("authOptional triggered");
     const token = ((_a = req.cookies) === null || _a === void 0 ? void 0 : _a.token) || ((_b = req.headers.authorization) === null || _b === void 0 ? void 0 : _b.split(" ")[1]);
     if (!token)
         return next();

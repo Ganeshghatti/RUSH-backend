@@ -19,6 +19,7 @@ const clinic_appointment_model_1 = __importDefault(require("../../models/appoint
 const validation_1 = require("../../validation/validation");
 const mongoose_1 = __importDefault(require("mongoose"));
 const otp_utils_1 = require("../../utils/otp-utils");
+const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
 // Helper function to populate clinic details from doctor's embedded clinics
 const populateClinicDetails = (appointments, doctor) => {
     return appointments.map((appointment) => {
@@ -252,7 +253,7 @@ const populateClinicDetails = (appointments, doctor) => {
 //     });
 //   }
 // };
-// single function to add, update and delete a clinic
+// single function to add, update and delete a clinic by doctor
 const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -274,7 +275,6 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
             return;
         }
         const validatedData = validation.data;
-        console.log("Validated data ", validatedData);
         if (Object.keys(validatedData).length === 0) {
             res.status(400).json({
                 success: false,
@@ -365,7 +365,7 @@ const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void
     }
 });
 exports.getDoctorClinicAvailability = getDoctorClinicAvailability;
-// Book clinic appointment
+// Book clinic appointment by patient + freeze amount
 const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -378,16 +378,17 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        const patientId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        if (!patientId) {
+        const { doctorId, clinicId, slot } = validation.data;
+        // we get userId of the patient from the middelware
+        const patientUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        if (!patientUserId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "Patient User is not authenticated",
             });
             return;
         }
-        const { doctorId, clinicId, slot } = validation.data;
-        // Validate doctor and clinic
+        //***** Validate doctor *****\\
         const doctor = yield doctor_model_1.default.findById(doctorId);
         if (!doctor) {
             res.status(404).json({
@@ -396,8 +397,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
+        //***** Validate clinic *****\\
         const clinicVisit = doctor.clinicVisit;
-        console.log("CLINIC VISIT ", clinicVisit);
         const clinic = ((clinicVisit === null || clinicVisit === void 0 ? void 0 : clinicVisit.clinics) || []).find((c) => c._id.toString() === clinicId && c.isActive);
         if (!clinic) {
             res.status(404).json({
@@ -406,17 +407,17 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        // Get patient details for wallet check
-        const patient = yield user_model_1.default.findById(patientId);
-        if (!patient) {
+        //***** Get Patient User details for wallet check *****\\
+        const patientUserDetail = yield user_model_1.default.findById(patientUserId);
+        if (!patientUserDetail) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "Patient user not found",
             });
             return;
         }
-        // Check wallet balance (including frozen amount to ensure total available funds)
-        const availableBalance = patient.getAvailableBalance();
+        //***** Check wallet balance - getAvailableBalance excludes frozen amount from wallet *****\\
+        const availableBalance = patientUserDetail.getAvailableBalance();
         if (availableBalance < clinic.consultationFee) {
             res.status(400).json({
                 success: false,
@@ -424,8 +425,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
                 data: {
                     required: clinic.consultationFee,
                     available: availableBalance,
-                    totalWallet: patient.wallet,
-                    frozenAmount: patient.frozenAmount || 0,
+                    totalWallet: patientUserDetail.wallet,
+                    frozenAmount: patientUserDetail.frozenAmount || 0,
                 },
             });
             return;
@@ -450,12 +451,13 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        // Don't deduct from wallet yet - will be frozen when doctor confirms
-        // Amount will be deducted only when appointment is confirmed by doctor
+        // Freeze amount from patient's user wallet -> unfreeze it if this appointment cancelled.
+        patientUserDetail.frozenAmount += clinic.consultationFee;
+        yield patientUserDetail.save();
         // Create appointment
         const appointment = new clinic_appointment_model_1.default({
             doctorId: doctor._id,
-            patientId: patientId,
+            patientId: patientUserId,
             clinicId: clinicId,
             slot: {
                 day: appointmentDay,
@@ -465,22 +467,23 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
                     end: endTime,
                 },
             },
-            status: "pending", // Changed from "confirmed" to "pending"
+            status: "pending",
             paymentDetails: {
                 amount: clinic.consultationFee,
-                walletDeducted: 0, // Will be updated when doctor confirms
-                paymentStatus: "pending", // Will be updated when doctor confirms
+                patientWalletDeducted: 0,
+                patientWalletFrozen: clinic.consultationFee,
+                paymentStatus: "pending",
             },
         });
         yield appointment.save();
         res.status(201).json({
             success: true,
-            message: "Clinic appointment booked successfully. Payment will be processed when doctor confirms the appointment.",
+            message: "Clinic appointment booked successfully.",
             data: {
                 appointment: appointment,
-                walletBalance: patient.wallet,
-                availableBalance: patient.getAvailableBalance(),
-                note: "Amount will be deducted from wallet when doctor confirms the appointment",
+                patientWalletFrozen: clinic.consultationFee,
+                patientAvailableBalance: patientUserDetail.getAvailableBalance(),
+                note: "Amount will be deducted from wallet when appointment will be completed",
             },
         });
     }
@@ -493,20 +496,20 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.bookClinicAppointment = bookClinicAppointment;
-// Confirm clinic appointment (Doctor only)
+// Confirm clinic appointment by Doctor + generate otp
 const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     try {
         const { appointmentId } = req.params;
         const doctorUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
         if (!doctorUserId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "Doctor is not authenticated",
             });
             return;
         }
-        // Find doctor by userId
+        //***** Find doctor by their userId *****\\
         const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
         if (!doctor) {
             res.status(404).json({
@@ -515,7 +518,7 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             });
             return;
         }
-        // Find appointment
+        //***** Find appointment *****\\
         const appointment = yield clinic_appointment_model_1.default.findOne({
             _id: appointmentId,
             doctorId: doctor._id,
@@ -544,60 +547,17 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             maxAttempts: 3,
             isUsed: false,
         };
-        // Freeze the payment amount from patient's wallet
-        const doctorWithClinic = yield doctor_model_1.default.findById(appointment.doctorId);
-        if (doctorWithClinic) {
-            const clinicVisit = doctorWithClinic.clinicVisit;
-            const clinic = ((clinicVisit === null || clinicVisit === void 0 ? void 0 : clinicVisit.clinics) || []).find((c) => c._id.toString() === appointment.clinicId);
-            if (clinic) {
-                // Get patient and freeze the amount
-                const patient = yield user_model_1.default.findById(appointment.patientId);
-                if (patient) {
-                    const availableBalance = patient.getAvailableBalance();
-                    if (availableBalance >= clinic.consultationFee) {
-                        // Freeze the amount using helper method
-                        const freezeSuccess = patient.freezeAmount(clinic.consultationFee);
-                        if (freezeSuccess) {
-                            yield patient.save();
-                            // Update payment details
-                            appointment.paymentDetails = {
-                                amount: clinic.consultationFee,
-                                walletDeducted: clinic.consultationFee,
-                                paymentStatus: "frozen", // Amount is frozen, not yet deducted
-                            };
-                        }
-                        else {
-                            res.status(500).json({
-                                success: false,
-                                message: "Failed to freeze payment amount",
-                            });
-                            return;
-                        }
-                    }
-                    else {
-                        res.status(400).json({
-                            success: false,
-                            message: "Patient has insufficient wallet balance",
-                            data: {
-                                required: clinic.consultationFee,
-                                available: availableBalance,
-                            },
-                        });
-                        return;
-                    }
-                }
-            }
-        }
         yield appointment.save();
         res.status(200).json({
             success: true,
-            message: "Appointment confirmed successfully. Payment amount has been frozen from patient's wallet.",
+            message: "Appointment confirmed successfully.",
             data: {
                 appointmentId: appointment._id,
                 status: appointment.status,
                 otpGenerated: true,
                 paymentStatus: (_b = appointment.paymentDetails) === null || _b === void 0 ? void 0 : _b.paymentStatus,
-                amountFrozen: (_c = appointment.paymentDetails) === null || _c === void 0 ? void 0 : _c.walletDeducted,
+                patientWalletDeducted: (_c = appointment.paymentDetails) === null || _c === void 0 ? void 0 : _c.patientWalletDeducted,
+                patientAmountFrozen: (_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.patientWalletFrozen,
             },
         });
     }
@@ -654,12 +614,12 @@ const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, 
         }
         // Handle refunds based on payment status
         let refundAmount = 0;
-        if (((_b = appointment.paymentDetails) === null || _b === void 0 ? void 0 : _b.walletDeducted) &&
-            appointment.paymentDetails.walletDeducted > 0) {
+        if (((_b = appointment.paymentDetails) === null || _b === void 0 ? void 0 : _b.patientWalletDeducted) &&
+            appointment.paymentDetails.patientWalletDeducted > 0) {
             const patient = yield user_model_1.default.findById(appointment.patientId);
             if (patient) {
-                refundAmount = appointment.paymentDetails.walletDeducted;
-                if (appointment.paymentDetails.paymentStatus === "frozen") {
+                refundAmount = appointment.paymentDetails.patientWalletDeducted;
+                if (appointment.paymentDetails.paymentStatus === "pending") {
                     // If amount was frozen, unfreeze it using helper method
                     patient.unfreezeAmount(refundAmount);
                 }
@@ -886,13 +846,13 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
 exports.getAppointmentOTP = getAppointmentOTP;
 // Validate OTP and complete appointment
 const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e;
     try {
         const validation = validation_1.otpValidationSchema.safeParse(req.body);
         if (!validation.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation error",
+                message: "OTP validation error",
                 errors: validation.error.errors,
             });
             return;
@@ -915,6 +875,35 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
             return;
         }
+        // Find doctor user detail to increment amount in the doctor user wallet
+        const doctorUserDetail = yield user_model_1.default.findById(doctorUserId);
+        if (!doctorUserDetail) {
+            res.status(401).json({
+                success: false,
+                message: "Doctor User not found",
+            });
+            return;
+        }
+        //***** Find doctor subscription to get info of the tax deduction *****\\
+        const now = new Date();
+        const activeSub = doctor.subscriptions.find((sub) => !sub.endDate || sub.endDate > now);
+        if (!activeSub) {
+            res.status(400).json({
+                success: false,
+                message: "Doctor has no active subscription",
+            });
+            return;
+        }
+        const subscription = yield doctor_subscription_1.default.findById(activeSub.SubscriptionId);
+        if (!subscription) {
+            res.status(404).json({
+                success: false,
+                message: "Subscription not found",
+            });
+            return;
+        }
+        let platformFee = ((_b = subscription === null || subscription === void 0 ? void 0 : subscription.platformFeeClinic) === null || _b === void 0 ? void 0 : _b.figure) || 0;
+        let opsExpense = ((_c = subscription === null || subscription === void 0 ? void 0 : subscription.opsExpenseClinic) === null || _c === void 0 ? void 0 : _c.figure) || 0;
         // Find appointment
         const appointment = yield clinic_appointment_model_1.default.findOne({
             _id: appointmentId,
@@ -985,18 +974,25 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         // OTP is valid - complete the appointment
         appointment.status = "completed";
         appointment.otp.isUsed = true;
-        // Process final payment: convert frozen amount to actual deduction
-        if (((_b = appointment.paymentDetails) === null || _b === void 0 ? void 0 : _b.paymentStatus) === "frozen" &&
-            ((_c = appointment.paymentDetails) === null || _c === void 0 ? void 0 : _c.walletDeducted) > 0) {
-            const patient = yield user_model_1.default.findById(appointment.patientId);
-            if (patient) {
-                const deductAmount = appointment.paymentDetails.walletDeducted;
-                // Deduct from frozen amount using helper method
-                const deductSuccess = patient.deductFrozenAmount(deductAmount);
+        //***** convert frozen amount to actual deduction *****\\
+        if (((_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.paymentStatus) === "pending" ||
+            ((_e = appointment.paymentDetails) === null || _e === void 0 ? void 0 : _e.paymentStatus) === "frozen") {
+            const patientUserDetail = yield user_model_1.default.findById(appointment.patientId);
+            if (patientUserDetail) {
+                const deductAmount = appointment.paymentDetails.amount;
+                // Deduct from frozen amount using helper method - (deduct from user.frozenAmount + deduct from user.wallet)
+                const deductSuccess = patientUserDetail.deductFrozenAmount(deductAmount);
                 if (deductSuccess) {
-                    yield patient.save();
-                    // Update payment status to completed
+                    yield patientUserDetail.save();
+                    appointment.paymentDetails.patientWalletDeducted = deductAmount;
+                    appointment.paymentDetails.patientWalletFrozen -= deductAmount;
                     appointment.paymentDetails.paymentStatus = "completed";
+                    // increment in doctor user
+                    let incrementAmount = deductAmount - platformFee - (deductAmount * opsExpense) / 100;
+                    if (incrementAmount < 0)
+                        incrementAmount = 0;
+                    doctorUserDetail.wallet += incrementAmount;
+                    yield doctorUserDetail.save();
                 }
                 else {
                     res.status(500).json({

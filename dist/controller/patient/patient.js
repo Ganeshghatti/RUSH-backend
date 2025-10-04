@@ -483,7 +483,6 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
                 .limit(10);
             recommendedDoctors = recommendedDoctors.filter(doctor => doctor.userId && doctor.userId.isDocumentVerified);
         }
-        console.log("Recommended Doctors ", recommendedDoctors);
         // Process recommended doctors to add signed URLs
         const processedDoctors = yield Promise.all(recommendedDoctors.map((doctor) => (0, signed_url_1.generateSignedUrlsForDoctor)(doctor)));
         res.status(200).json({
