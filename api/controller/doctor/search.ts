@@ -68,12 +68,10 @@ export const searchDoctor = async (
 
     let doctorsBySpecialization: any[] = [];
     if (query && !specialization) {
-      console.log("HIIIIIIIII");
       const queryRegex = new RegExp(String(query), "i");
 
       const filter: any = { ...doctorFilter };
       if (!specialization) {
-        console.log("test");
         filter.specialization = { $regex: queryRegex };
       }
       doctorsBySpecialization = await Doctor.find(filter)
@@ -90,7 +88,6 @@ export const searchDoctor = async (
       (doc) => doc.userId
     );
     if (finalDoctors.length === 0 && query) {
-      console.log("HELLOOOOO ", query);
       const queryRegex = new RegExp(String(query), "i");
       const doctorsByName = await Doctor.find(doctorFilter)
         .select("-password")
@@ -108,7 +105,6 @@ export const searchDoctor = async (
       finalDoctors = doctorsByName.filter((doc) => doc.userId);
     }
     if (!query) {
-      console.log("Filter with query ", doctorFilter);
       finalDoctors = await Doctor.find(doctorFilter)
         .select("-password")
         .populate({

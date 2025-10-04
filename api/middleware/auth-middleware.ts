@@ -21,8 +21,6 @@ export const verifyToken = async (
     // Get token from cookies
     const token = req.cookies.token;
 
-    console.log("Token from cookies:", token);
-
     if (!token) {
       res.status(401).json({
         success: false,
@@ -51,10 +49,7 @@ export const verifyToken = async (
       return;
     }
 
-    console.log("decoded", decoded);
     const user = await User.findById(decoded.id);
-
-    console.log("user from the verified token", user);
 
     if (!user) {
       res.status(404).json({
@@ -63,8 +58,6 @@ export const verifyToken = async (
       });
       return;
     }
-
-    console.log("Decoded token:", decoded);
 
     // Set user info in request object
     req.user = {
@@ -123,7 +116,6 @@ export const checkRole = (role: string) => {
 };
 
 export const authOptional = (req: Request, res: Response, next: NextFunction) => {
-  console.log("authOptional triggered"); 
   const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
   if (!token) return next(); 
   try {

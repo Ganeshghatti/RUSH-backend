@@ -5,8 +5,9 @@ import {
   getAllEmergencyAppointments,
   getPatientEmergencyAppointments,
   acceptEmergencyAppointment,
+  createEmergencyRoomAccessToken,
+  finalPayment
 } from "../../controller/appointment/emergency-appointment";
-import { createEmergencyRoomAccessToken } from "../../controller/appointment/create-emergency-token";
 import { RequestHandler } from "express";
 
 const router = Router();
@@ -18,6 +19,11 @@ router.route("/appointment/emergency")
     checkRole("patient") as RequestHandler, 
     createEmergencyAppointment as RequestHandler
   );
+
+// Route to initate the final payment process
+router
+  .route("/appointment/emergency/finish-payment")
+  .post(verifyToken as RequestHandler, finalPayment as RequestHandler);
 
 // Route to get all emergency appointments (for admin/staff)
 router.route("/appointment/emergency/all")

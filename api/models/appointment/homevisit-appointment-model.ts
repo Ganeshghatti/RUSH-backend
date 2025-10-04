@@ -74,6 +74,7 @@ const homeVisitAppointmentSchema = new Schema(
     paymentDetails: {
       amount: { type: Number },
       walletDeducted: { type: Number },
+      walletFrozen: { type: Number },
       paymentStatus: {
         type: String,
         enum: ["pending", "frozen", "completed", "failed"],

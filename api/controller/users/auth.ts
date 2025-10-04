@@ -528,8 +528,6 @@ export const findCurrentUser = async (
 
     let user = await User.findById(id).select("-password");
 
-    console.log("user", user);
-
     if (!user) {
       res.status(404).json({
         success: false,

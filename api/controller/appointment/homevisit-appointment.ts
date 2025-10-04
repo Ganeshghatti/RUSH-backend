@@ -61,7 +61,7 @@ const getFrozenHomeVisitAmount = async (patientId: any): Promise<number> => {
   return frozen?.[0]?.total || 0;
 };
 
-// Step 1: Patient creates home visit request with fixed cost only
+/* Step 1: Patient creates home visit request with fixed cost only */
 export const bookHomeVisitAppointment = async (
   req: Request,
   res: Response
@@ -79,9 +79,9 @@ export const bookHomeVisitAppointment = async (
     }
 
     const { doctorId, slot, patientAddress } = parsed.data;
-    const patientId = (req as any).user?.id;
 
-    if (!patientId) {
+    const patientUserId = (req as any).user?.id;
+    if (!patientUserId) {
       res.status(401).json({
         success: false,
         message: "User not authenticated",
@@ -110,7 +110,7 @@ export const bookHomeVisitAppointment = async (
     }
 
     // Check if patient exists
-    const patient = await User.findById(patientId);
+    const patient = await User.findById(patientUserId);
     if (!patient) {
       res.status(404).json({
         success: false,
@@ -161,7 +161,7 @@ export const bookHomeVisitAppointment = async (
     // Create new appointment with only fixed cost
     const newAppointment = new HomeVisitAppointment({
       doctorId,
-      patientId,
+      patientId: patientUserId,
       slot: {
         day: new Date(slot.day),
         duration: slot.duration,
@@ -192,12 +192,12 @@ export const bookHomeVisitAppointment = async (
       paymentDetails: {
         amount: fixedCost,
         walletDeducted: 0,
+        walletFrozen: 0,
         paymentStatus: "pending",
       },
       patientIp,
       patientGeo,
     });
-
     await newAppointment.save();
 
     // Populate the response
@@ -232,7 +232,7 @@ export const bookHomeVisitAppointment = async (
   }
 };
 
-// Step 2: Doctor accepts request and adds travel cost
+/* Step 2: Doctor accepts request and adds travel cost */
 export const acceptHomeVisitRequest = async (
   req: Request,
   res: Response
@@ -324,7 +324,7 @@ export const acceptHomeVisitRequest = async (
   }
 };
 
-// Step 3: Patient confirms and pays total cost (frozen in wallet)
+/* Step 3: Patient confirms the appointment and totalCost frozen in wallet */
 export const confirmHomeVisitAppointment = async (
   req: Request,
   res: Response
@@ -332,12 +332,11 @@ export const confirmHomeVisitAppointment = async (
   try {
     const { appointmentId } = req.params;
     // No body fields to validate here besides param; schema for confirm not needed (retained symmetry)
-    const patientId = (req as any).user?.id;
-
-    if (!patientId) {
+    const patientUserId = (req as any).user?.id;
+    if (!patientUserId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "Patient User not authenticated",
       });
       return;
     }
@@ -345,10 +344,9 @@ export const confirmHomeVisitAppointment = async (
     // Find the appointment
     const appointment = await HomeVisitAppointment.findOne({
       _id: appointmentId,
-      patientId,
+      patientId: patientUserId,
       status: "doctor_accepted",
     });
-
     if (!appointment) {
       res.status(404).json({
         success: false,
@@ -356,34 +354,6 @@ export const confirmHomeVisitAppointment = async (
       });
       return;
     }
-
-    // Check patient wallet balance
-    const patient = await User.findById(patientId);
-    if (!patient) {
-      res.status(404).json({
-        success: false,
-        message: "Patient not found",
-      });
-      return;
-    }
-
-    const totalCost = appointment.pricing?.totalCost || 0;
-    const frozenAmount = await getFrozenHomeVisitAmount(patientId);
-    const availableBalance = (patient.wallet || 0) - frozenAmount;
-
-    if (availableBalance < totalCost) {
-      res.status(400).json({
-        success: false,
-        message: "Insufficient wallet balance",
-        data: {
-          required: totalCost,
-          available: availableBalance,
-          totalWallet: patient.wallet,
-        },
-      });
-      return;
-    }
-
     // Check pricing and payment details exist
     if (!appointment.pricing || !appointment.paymentDetails) {
       res.status(500).json({
@@ -393,15 +363,55 @@ export const confirmHomeVisitAppointment = async (
       return;
     }
 
-    // Mark amount as frozen logically only; do not deduct wallet or increment frozen in DB
-    // We'll enforce frozen checks at spend-time and not expose it in models/UI.
+    const totalCost = appointment.pricing?.totalCost || 0;
+
+    // find patient's user details
+    const patientUserDetail = await User.findById(patientUserId);
+    if (!patientUserDetail) {
+      res.status(404).json({
+        success: false,
+        message: "Patient User not found",
+      });
+      return;
+    }
+
+    //***** Check wallet balance - getAvailableBalance excludes frozen amount from wallet *****\\
+    const availableBalance = (patientUserDetail as any).getAvailableBalance();
+    if (availableBalance < totalCost) {
+      res.status(400).json({
+        success: false,
+        message: "Insufficient wallet balance",
+        data: {
+          required: totalCost,
+          available: availableBalance,
+          totalWallet: patientUserDetail.wallet,
+          frozenAmount: patientUserDetail.frozenAmount || 0,
+        },
+      });
+      return;
+    }
+
+    const freezeSuccess = (patientUserDetail as any).freezeAmount(totalCost);
+    if (!freezeSuccess) {
+      res.status(400).json({
+        success: false,
+        message: "Insufficient wallet balance",
+        data: {
+          required: totalCost,
+          available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
+          totalWallet: patientUserDetail.wallet,
+        },
+      });
+    }
+    await patientUserDetail.save();
 
     // Generate OTP
     const otpCode = generateOTP();
 
     // Update appointment
     appointment.status = "patient_confirmed";
-    appointment.paymentDetails.walletDeducted = 0; // no deduction yet
+    appointment.paymentDetails.walletDeducted = 0;
+    appointment.paymentDetails.walletFrozen = totalCost;
     appointment.paymentDetails.paymentStatus = "frozen";
     appointment.otp = {
       code: otpCode,
@@ -431,7 +441,7 @@ export const confirmHomeVisitAppointment = async (
   }
 };
 
-// Step 4: Doctor completes appointment with OTP validation
+/* Step 4: Doctor completes appointment with OTP validation */
 export const completeHomeVisitAppointment = async (
   req: Request,
   res: Response
@@ -448,16 +458,6 @@ export const completeHomeVisitAppointment = async (
       return;
     }
     const { otp } = parsed.data;
-    const doctorId = (req as any).user?.id;
-
-    if (!doctorId) {
-      res.status(401).json({
-        success: false,
-        message: "User not authenticated",
-      });
-      return;
-    }
-
     if (!otp) {
       res.status(400).json({
         success: false,
@@ -466,7 +466,17 @@ export const completeHomeVisitAppointment = async (
       return;
     }
 
-    const doctor = await Doctor.findOne({ userId: doctorId });
+    const doctorUserId = (req as any).user?.id;
+    if (!doctorUserId) {
+      res.status(401).json({
+        success: false,
+        message: "Doctor User not authenticated",
+      });
+      return;
+    }
+
+    // find doctor
+    const doctor = await Doctor.findOne({ userId: doctorUserId });
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -475,13 +485,47 @@ export const completeHomeVisitAppointment = async (
       return;
     }
 
+    // Find doctor user detail to increment amount in the doctor user wallet
+    const doctorUserDetail = await User.findById(doctorUserId);
+    if (!doctorUserDetail) {
+      res.status(401).json({
+        success: false,
+        message: "Doctor User not found",
+      });
+      return;
+    }
+
+    //***** Find doctor subscription to get info of the tax deduction *****\\
+    const now = new Date();
+    const activeSub = doctor.subscriptions.find(
+      (sub) => !sub.endDate || sub.endDate > now
+    );
+    if (!activeSub) {
+      res.status(400).json({
+        success: false,
+        message: "Doctor has no active subscription",
+      });
+      return;
+    }
+    const subscription = await DoctorSubscription.findById(
+      activeSub.SubscriptionId
+    );
+    if (!subscription) {
+      res.status(404).json({
+        success: false,
+        message: "Subscription not found",
+      });
+      return;
+    }
+    let platformFee = subscription?.platformFeeClinic?.figure || 0;
+    let opsExpense = subscription?.opsExpenseClinic?.figure || 0;
+
     // Find the appointment
     const appointment = await HomeVisitAppointment.findOne({
       _id: appointmentId,
       doctorId: doctor._id,
       status: "patient_confirmed",
     });
-
     if (!appointment) {
       res.status(404).json({
         success: false,
@@ -531,78 +575,46 @@ export const completeHomeVisitAppointment = async (
     appointment.status = "completed";
     appointment.otp.isUsed = true;
 
-    if (appointment.paymentDetails) {
-      appointment.paymentDetails.paymentStatus = "completed";
-      appointment.paymentDetails.walletDeducted =
-        appointment.pricing?.totalCost || 0;
+    //***** convert frozen amount to actual deduction *****\\
+    if (
+      appointment.paymentDetails?.paymentStatus === "pending" ||
+      appointment.paymentDetails?.paymentStatus === "frozen"
+    ) {
+      const patientUserDetail = await User.findById(appointment.patientId);
+      if (!patientUserDetail) {
+        res.status(400).json({
+          success: false,
+          message: "Patient User not found",
+        });
+        return;
+      }
+
+      const deductAmount = appointment.paymentDetails.amount;
+      // Deduct from frozen amount using helper method - (deduct from user.frozenAmount + deduct from user.wallet)
+      const deductSuccess = (patientUserDetail as any).deductFrozenAmount(
+        deductAmount
+      );
+      if (deductSuccess && deductAmount) {
+        await patientUserDetail.save();
+        appointment.paymentDetails.walletDeducted = deductAmount;
+        if(appointment.paymentDetails.walletFrozen) appointment.paymentDetails.walletFrozen -= deductAmount;
+        appointment.paymentDetails.paymentStatus = "completed";
+
+        // increment in doctor user
+        let incrementAmount =
+          deductAmount - platformFee - (deductAmount * opsExpense) / 100;
+        if (incrementAmount < 0) incrementAmount = 0;
+        doctorUserDetail.wallet += incrementAmount;
+        await doctorUserDetail.save();
+      } else {
+        res.status(500).json({
+          success: false,
+          message: "Failed to process final payment",
+        });
+        return;
+      }
     }
     await appointment.save();
-
-    // Perform actual wallet deduction at completion time
-    const patient = await User.findById(appointment.patientId);
-    if (patient && appointment.paymentDetails) {
-      const amountToDeduct = appointment.paymentDetails.walletDeducted || 0;
-      if ((patient.wallet || 0) < amountToDeduct) {
-        // If insufficient at completion, mark failed state and revert appointment to doctor_accepted
-        appointment.status = "doctor_accepted";
-        appointment.paymentDetails.paymentStatus = "pending";
-        appointment.paymentDetails.walletDeducted = 0;
-        appointment.otp.isUsed = false;
-        await appointment.save();
-        res.status(400).json({
-          success: false,
-          message:
-            "Insufficient wallet at completion. Please ensure funds are available.",
-        });
-        return;
-      }
-
-      patient.wallet = (patient.wallet || 0) - amountToDeduct;
-      await patient.save();
-
-      // get the current subscription
-      const now = new Date();
-      const activeSub = doctor.subscriptions.find(
-        (sub) => !sub.endDate || sub.endDate > now
-      );
-
-      if (!activeSub) {
-        res.status(400).json({
-                success: false,
-                message: "Doctor has no active subscription",
-        });
-        return;
-      }
-      
-      const subscription = await DoctorSubscription.findById(
-        activeSub.SubscriptionId
-      );
-      if (!subscription) {
-        res.status(404).json({
-          success: false,
-          message: "Subscription not found",
-        });
-        return;
-      }
-      
-  // Home visit appointments use normal platformFee and opsExpense fields
-  let platformFee = subscription.platformFeeHomeVisit?.figure || 0;
-  let opsExpense = subscription.opsExpenseHomeVisit?.figure || 0;
-  let doctorEarning = amountToDeduct - platformFee - (amountToDeduct * opsExpense) / 100;
-  if (doctorEarning < 0) doctorEarning = 0;
-
-      const doctorUser = await User.findById(doctor.userId);
-      if (!doctorUser) {
-        res.status(404).json({ success: false, message: "Doctor user not found" });
-        return;
-      }
-
-      doctorUser.wallet = (doctorUser.wallet || 0) + doctorEarning;
-      await doctorUser.save();
-
-      doctor.earnings += doctorEarning;
-      await doctor.save();
-    }
 
     // Populate the response
     const completedAppointment = await populateAppointment(appointment._id);
@@ -610,7 +622,8 @@ export const completeHomeVisitAppointment = async (
     res.status(200).json({
       success: true,
       data: completedAppointment,
-      message: "Home visit appointment completed successfully",
+      message:
+        "Home visit appointment completed successfully and final payment processed",
     });
   } catch (error: any) {
     console.error("Error completing home visit appointment:", error);

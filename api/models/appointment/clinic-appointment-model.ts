@@ -53,7 +53,8 @@ const clinicAppointmentSchema = new Schema(
     },
     paymentDetails: {
       amount: { type: Number, required: true },
-      walletDeducted: { type: Number, required: true },
+      patientWalletDeducted: { type: Number, required: true },
+      patientWalletFrozen: { type: Number, required: true },
       paymentStatus: {
         type: String,
         enum: ["pending", "frozen", "completed", "failed"],
