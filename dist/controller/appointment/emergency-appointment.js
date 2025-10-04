@@ -476,6 +476,11 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             // Emergency appointments use normal platformFee and opsExpense fields
             let platformFee = ((_b = subscription.platformFeeEmergency) === null || _b === void 0 ? void 0 : _b.figure) || 0;
             let opsExpense = ((_c = subscription.opsExpenseEmergency) === null || _c === void 0 ? void 0 : _c.figure) || 0;
+            // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
+            if (!platformFee)
+                platformFee = 0;
+            if (!opsExpense)
+                opsExpense = 0;
             if (appointment.paymentDetails) {
                 const deductAmount = appointment.paymentDetails.patientWalletFrozen;
                 // deduct forzenAmount as well as wallet from patient user

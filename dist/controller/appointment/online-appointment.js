@@ -259,7 +259,6 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
         })
             .sort({ "slot.day": -1 });
         clinicAppointments = yield updateStatuses(clinicAppointments, clinic_appointment_model_1.default);
-        console.log("Clinic appointments for doctor", clinicAppointments);
         // Find all home visit appointments for this doctor
         let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
             doctorId: doctor._id,
@@ -384,7 +383,6 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
         })
             .sort({ "slot.day": -1 });
         clinicAppointments = yield updateStatuses(clinicAppointments, clinic_appointment_model_1.default);
-        console.log("Clinic appointments for patient", clinicAppointments);
         // Find all home visit appointments for this patient
         let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
             patientId: userId,
@@ -665,6 +663,7 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             return;
         }
+        console.log('ROOM NAME ', roomName);
         // find the appointment with this room name
         const appointment = yield online_appointment_model_1.default.findOne({ roomName });
         if (!appointment) {
@@ -723,6 +722,11 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             let opsExpense = subscription.opsExpenseOnline && subscription.opsExpenseOnline[slotKey]
                 ? subscription.opsExpenseOnline[slotKey].figure
                 : 0;
+            // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
+            if (!platformFee)
+                platformFee = 0;
+            if (!opsExpense)
+                opsExpense = 0;
             if (appointment.paymentDetails) {
                 const deductAmount = appointment.paymentDetails.patientWalletFrozen;
                 // deduct forzenAmount as well as wallet from patient user
