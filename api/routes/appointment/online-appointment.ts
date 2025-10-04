@@ -9,7 +9,6 @@ import {
   finalPayment,
   createRoomAccessToken,
 } from "../../controller/appointment/online-appointment";
-import { createTwilioRoom } from "../../controller/appointment/create-room";
 import { RequestHandler } from "express";
 
 const router = Router();
