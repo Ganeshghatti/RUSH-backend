@@ -538,6 +538,9 @@ export const finalPayment = async (
       // Emergency appointments use normal platformFee and opsExpense fields
       let platformFee = subscription.platformFeeEmergency?.figure || 0;
       let opsExpense = subscription.opsExpenseEmergency?.figure || 0;
+      // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
+      if(!platformFee) platformFee = 0;
+      if(!opsExpense) opsExpense = 0;
 
       if (appointment.paymentDetails) {
         const deductAmount = appointment.paymentDetails.patientWalletFrozen;

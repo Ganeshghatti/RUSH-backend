@@ -285,8 +285,6 @@ export const getDoctorAppointments = async (
       ClinicAppointment
     );
 
-    console.log("Clinic appointments for doctor", clinicAppointments);
-
     // Find all home visit appointments for this doctor
     let homeVisitAppointments = await HomeVisitAppointment.find({
       doctorId: doctor._id,
@@ -436,7 +434,6 @@ export const getPatientAppointments = async (
       clinicAppointments,
       ClinicAppointment
     );
-    console.log("Clinic appointments for patient", clinicAppointments);
 
     // Find all home visit appointments for this patient
     let homeVisitAppointments = await HomeVisitAppointment.find({
@@ -758,6 +755,7 @@ export const finalPayment = async (
       });
       return;
     }
+    console.log('ROOM NAME ',roomName)
 
     // find the appointment with this room name
     const appointment = await OnlineAppointment.findOne({ roomName });
@@ -829,6 +827,9 @@ export const finalPayment = async (
         subscription.opsExpenseOnline && subscription.opsExpenseOnline[slotKey]
           ? subscription.opsExpenseOnline[slotKey]!.figure
           : 0;
+      // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
+      if(!platformFee) platformFee = 0;
+      if(!opsExpense) opsExpense = 0;
 
       if (appointment.paymentDetails) {
         const deductAmount = appointment.paymentDetails.patientWalletFrozen;
