@@ -6,9 +6,10 @@ import {
   getPatientAppointments,
   updateAppointmentStatus,
   getDoctorAppointmentByDate,
+  finalPayment,
+  createRoomAccessToken,
 } from "../../controller/appointment/online-appointment";
 import { createTwilioRoom } from "../../controller/appointment/create-room";
-import { createRoomAccessToken } from "../../controller/appointment/create-access-token";
 import { RequestHandler } from "express";
 
 const router = Router();
@@ -21,6 +22,11 @@ router
     checkRole("patient") as RequestHandler,
     bookOnlineAppointment as RequestHandler
   );
+
+// Route to initate the final payment process
+router
+  .route("/appointment/online/finish-payment")
+  .post(verifyToken as RequestHandler, finalPayment as RequestHandler);
 
 // Route for doctors to get all their appointments
 router
@@ -58,12 +64,10 @@ router
     updateAppointmentStatus as RequestHandler
   );
 
-// Route to create a new twilio room
-router.route("/appointment/online/create-room").post(
-  verifyToken as RequestHandler,
-  // checkRole("doctor") as RequestHandler, // Only doctors can trigger room creation
-  createTwilioRoom as RequestHandler
-);
+// Route for patient to cancel the appointment
+// router
+//   .route("/appointment/online/cancel/:appointmentId")
+//   .put(verifyToken as RequestHandler, cancelAppointment as RequestHandler);
 
 // Route to create access token for doctor and patient
 router

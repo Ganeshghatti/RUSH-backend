@@ -571,7 +571,6 @@ export const getPatientDashboard = async (
 
       recommendedDoctors = recommendedDoctors.filter(doctor => doctor.userId && doctor.userId.isDocumentVerified);
     }
-    console.log("Recommended Doctors ",recommendedDoctors)
 
     // Process recommended doctors to add signed URLs
     const processedDoctors = await Promise.all(

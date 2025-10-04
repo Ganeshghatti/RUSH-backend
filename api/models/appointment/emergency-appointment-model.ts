@@ -21,9 +21,11 @@ const emergencyAppointmentSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Doctor",
     },
-    media: [{
-      type: String, // URL or file path for media
-    }],
+    media: [
+      {
+        type: String, // URL or file path for media
+      },
+    ],
     location: {
       type: String,
       required: true,
@@ -46,6 +48,16 @@ const emergencyAppointmentSchema = new Schema(
       type: String,
       trim: true,
     },
+    paymentDetails: {
+      amount: { type: Number, required: true },
+      patientWalletDeducted: { type: Number, required: true },
+      patientWalletFrozen: { type: Number, required: true },
+      paymentStatus: {
+        type: String,
+        enum: ["pending", "completed"],
+        default: "pending",
+      },
+    },
   },
   {
     timestamps: true, // Automatically manages createdAt and updatedAt
@@ -57,4 +69,4 @@ const EmergencyAppointment = mongoose.model(
   emergencyAppointmentSchema
 );
 
-export default EmergencyAppointment; 
+export default EmergencyAppointment;

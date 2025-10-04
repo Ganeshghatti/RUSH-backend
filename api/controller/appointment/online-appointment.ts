@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import twilio from "twilio";
+import { jwt } from "twilio";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
@@ -8,14 +10,14 @@ import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 import DoctorSubscription from "../../models/doctor-subscription";
 
-// Book appointment by patient
+/* Book appointment by patient + Amount freeze*/
 export const bookOnlineAppointment = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { doctorId, slot } = req.body;
-    const patientId = req.user.id;
+    const patientUserId = req.user.id;
 
     // Validate required fields
     if (!doctorId || !slot) {
@@ -25,7 +27,6 @@ export const bookOnlineAppointment = async (
       });
       return;
     }
-
     if (!slot.day || !slot.duration || !slot.time) {
       res.status(400).json({
         success: false,
@@ -33,7 +34,6 @@ export const bookOnlineAppointment = async (
       });
       return;
     }
-
     if (!slot.time.start || !slot.time.end) {
       res.status(400).json({
         success: false,
@@ -52,12 +52,12 @@ export const bookOnlineAppointment = async (
       return;
     }
 
-    // Check if patient exists
-    const patient = await User.findById(patientId);
-    if (!patient) {
+    // Check if patient user exists
+    const patientUserDetail = await User.findById(patientUserId);
+    if (!patientUserDetail) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "Patient User not found",
       });
       return;
     }
@@ -65,7 +65,6 @@ export const bookOnlineAppointment = async (
     const matchedDuration = doctor?.onlineAppointment?.duration.find(
       (item: any) => item.minute === slot.duration
     );
-
     if (!matchedDuration) {
       res.status(400).json({
         success: false,
@@ -73,16 +72,7 @@ export const bookOnlineAppointment = async (
       });
       return;
     }
-
     const price = matchedDuration.price;
-
-    if (patient.wallet < price) {
-      res.status(400).json({
-        success: false,
-        message: "Insufficient wallet balance",
-      });
-      return;
-    }
 
     // Check if the slot is already booked
     const existingAppointment = await OnlineAppointment.findOne({
@@ -92,7 +82,6 @@ export const bookOnlineAppointment = async (
       "slot.time.end": new Date(slot.time.end),
       status: { $in: ["pending", "accepted"] },
     });
-
     if (existingAppointment) {
       res.status(400).json({
         success: false,
@@ -101,10 +90,38 @@ export const bookOnlineAppointment = async (
       return;
     }
 
+    // check available balance = (wallet - frozenAmount)
+    const patientAvailableBalance = (
+      patientUserDetail as any
+    ).getAvailableBalance();
+    if (patientAvailableBalance < price) {
+      res.status(400).json({
+        success: false,
+        message: "Insufficient wallet balance",
+      });
+      return;
+    }
+
+    // freezing the price of appointment
+    const freezeSuccess = (patientUserDetail as any).freezeAmount(price);
+    if (!freezeSuccess) {
+      res.status(400).json({
+        success: false,
+        message: "Error freezing amount in wallet",
+        data: {
+          required: price,
+          available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
+          totalWallet: patientUserDetail.wallet,
+        },
+      });
+      return;
+    }
+    await patientUserDetail.save();
+
     // Create new appointment
     const newAppointment = new OnlineAppointment({
       doctorId,
-      patientId,
+      patientId: patientUserId,
       slot: {
         day: new Date(slot.day),
         duration: slot.duration,
@@ -115,8 +132,13 @@ export const bookOnlineAppointment = async (
       },
       history: slot.history ? { title: slot.history.title } : undefined,
       status: "pending",
+      paymentDetails: {
+        amount: price,
+        patientWalletDeducted: 0,
+        patientWalletFrozen: price,
+        paymentStatus: "pending",
+      },
     });
-
     await newAppointment.save();
 
     // Populate the response with detailed patient and doctor information
@@ -457,7 +479,7 @@ export const getPatientAppointments = async (
   }
 };
 
-// Update appointment status by doctor
+/* Update appointment status by doctor (if accept -> create twilio room, if reject -> unfreeze amount) */
 export const updateAppointmentStatus = async (
   req: Request,
   res: Response
@@ -465,7 +487,7 @@ export const updateAppointmentStatus = async (
   try {
     const { appointmentId } = req.params;
     const { status } = req.body;
-    const doctorId = req.user.id; // Assuming the logged-in user is a doctor
+    const doctorUserId = req.user.id;
 
     // Validate status
     if (!status || !["pending", "accepted", "rejected"].includes(status)) {
@@ -476,8 +498,7 @@ export const updateAppointmentStatus = async (
       return;
     }
 
-    const doctor = await Doctor.findOne({ userId: doctorId });
-
+    const doctor = await Doctor.findOne({ userId: doctorUserId });
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -491,7 +512,6 @@ export const updateAppointmentStatus = async (
       _id: appointmentId,
       doctorId: doctor._id,
     });
-
     if (!appointment) {
       res.status(404).json({
         success: false,
@@ -501,92 +521,49 @@ export const updateAppointmentStatus = async (
       return;
     }
 
-    // Only on 'accepted' status: handle wallet deduction
-    if (status === "accepted") {
-      const patient = await User.findById(appointment.patientId);
-      if (!patient) {
-        res.status(404).json({
+    // if status is reject unfreeze the amount from patient's user wallet.
+    if (status === "rejected" || status === "cancel") {
+      const patientUserId = appointment.patientId;
+      const patientUserDetail = await User.findById(patientUserId);
+      if (!patientUserDetail) {
+        res.status(400).json({
           success: false,
           message: "Patient not found",
         });
         return;
       }
 
-      // Find matched price for the slot duration
-      const matched = doctor?.onlineAppointment?.duration.find(
-        (d: any) => d.minute === appointment?.slot?.duration
-      );
+      const amount = appointment.paymentDetails?.patientWalletFrozen;
 
-      if (!matched) {
+      const unfreezeSuccess = (patientUserDetail as any).unfreezeAmount(amount);
+      if (unfreezeSuccess) {
+        await patientUserDetail.save();
+      } else {
         res.status(400).json({
           success: false,
-          message: "Doctor does not support this appointment duration",
+          message: "Error in adding frozen amount in patient wallet.",
         });
         return;
       }
-
-      const price = matched.price;
-
-      if (patient.wallet < price) {
-        res.status(400).json({
-          success: false,
-          message: "Patient has insufficient wallet balance",
-        });
-        return;
-      }
-
-      // Deduct amount and save patient
-      patient.wallet -= price;
-      await patient.save();
-
-      // get the current subscription
-      const now = new Date();
-      const activeSub = doctor.subscriptions.find(
-        (sub) => !sub.endDate || sub.endDate > now
-      );
-
-      if (!activeSub) {
-        res.status(400).json({
-          success: false,
-          message: "Doctor has no active subscription",
-        });
-        return;
-      }
-
-      const subscription = await DoctorSubscription.findById(
-        activeSub.SubscriptionId
-      );
-      if (!subscription) {
-        res.status(404).json({
-          success: false,
-          message: "Subscription not found",
-        });
-        return;
-      }
-
-  // Determine slot key for fee extraction
-  let slotKey = `min${appointment?.slot?.duration || 15}` as 'min15' | 'min30' | 'min60';
-  let platformFee = subscription.platformFeeOnline && subscription.platformFeeOnline[slotKey] ? subscription.platformFeeOnline[slotKey]!.figure : 0;
-  let opsExpense = subscription.opsExpenseOnline && subscription.opsExpenseOnline[slotKey] ? subscription.opsExpenseOnline[slotKey]!.figure : 0;
-  let doctorEarning = price - platformFee - (price * opsExpense) / 100;
-  if (doctorEarning < 0) doctorEarning = 0;
-
-      const doctorUser = await User.findById(doctor.userId);
-      if (!doctorUser) {
-        res
-          .status(404)
-          .json({ success: false, message: "Doctor user not found" });
-        return;
-      }
-
-      doctorUser.wallet = (doctorUser.wallet || 0) + doctorEarning;
-      await doctorUser.save();
-
-      doctor.earnings += doctorEarning;
-      await doctor.save();
     }
 
-    // Update status
+    // if status is accepted create room
+    const client = twilio(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
+    );
+    if (status === "accepted") {
+      const roomName = `online_${appointment._id}`;
+      const room = await client.video.v1.rooms.create({
+        uniqueName: roomName,
+        type: "group",
+        maxParticipants: 2,
+      });
+      console.log("Room created:", roomName);
+      appointment.roomName = room.uniqueName;
+    }
+
+    // Update status of the appointment
     appointment.status = status;
     await appointment.save();
 
@@ -616,6 +593,290 @@ export const updateAppointmentStatus = async (
       success: false,
       message: "Error updating appointment status",
       error: error.message,
+    });
+  }
+};
+
+/* cancel appointment by patient */
+// export const cancelAppointment = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const { appointmentId } = req.params;
+//     console.log("Appointment Id ", appointmentId);
+//     const user_Id = req.user.id;
+//     console.log("User ", user_Id);
+
+//     const appointment = await OnlineAppointment.findOne({
+//       _id: appointmentId,
+//     });
+//     if (!appointment) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Appointment not found in DB.",
+//       });
+//       return;
+//     }
+//     if (!appointment.slot?.time?.start) {
+//       res.status(400).json({
+//         success: false,
+//         message: "Appointment has no start time",
+//       });
+//       return;
+//     }
+
+//     const curr = Date.now();
+//     const appointmentStartTime = new Date(
+//       appointment.slot?.time?.start
+//     ).getTime();
+
+//     if (curr > appointmentStartTime) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Appointment can't be cancelled after start time",
+//       });
+//       return;
+//     }
+
+//     appointment.status = "cancelled";
+//     await appointment.save();
+
+//     const updatedAppointment = await OnlineAppointment.findById(
+//       appointment._id
+//     );
+
+//     res.status(200).json({
+//       success: true,
+//       data: updatedAppointment,
+//       message: `Appointment cancelled successfully`,
+//     });
+//   } catch (err: any) {
+//     console.error("Error cancelling appointment: ", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Error cancelling appointment",
+//       error: err.message,
+//     });
+//   }
+// };
+
+/* create room access token */
+const AccessToken = jwt.AccessToken;
+const VideoGrant = AccessToken.VideoGrant;
+export const createRoomAccessToken = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { roomName } = req.body;
+    if (!roomName) {
+      res
+        .status(400)
+        .json({ success: false, message: "Room name is required" });
+      return;
+    }
+
+    const identity = req.user.id; //user id of user who joined
+
+    // finding the appointment using rommName
+    const appointment: any = await OnlineAppointment.findOne({ roomName });
+    // if (!appointment) {
+    if (!appointment || appointment?.status !== "accepted") {
+      res.status(400).json({
+        success: false,
+        message: "Appointment not found in DB or appointment is not accepted",
+      });
+      return;
+    }
+    const doctorId = appointment?.doctorId;
+    const patientUserId = appointment?.patientId;
+
+    // doctor's user id
+    const doctor = await Doctor.findById(doctorId);
+    if (!doctor) {
+      res.status(400).json({
+        success: false,
+        message: "Doctor not found in DB",
+      });
+      return;
+    }
+    const doctorUserId = doctor?.userId;
+
+    let whoJoined = "";
+    if (identity == doctorUserId) whoJoined = "doctor";
+    else if (identity == patientUserId) whoJoined = "patient";
+    if (!whoJoined) {
+      res.status(403).json({
+        success: false,
+        message: "You are not authorized to join this room",
+      });
+      return;
+    }
+    console.log("The user who joined is ", whoJoined);
+
+    // creating token for this identity.
+    const token = new AccessToken(
+      process.env.TWILIO_ACCOUNT_SID!,
+      process.env.TWILIO_API_KEY!,
+      process.env.TWILIO_API_SECRET!,
+      { identity: `${whoJoined}_${identity}` }
+    );
+
+    const videoGrant = new VideoGrant({ room: roomName });
+    token.addGrant(videoGrant);
+
+    const jwtToken = token.toJwt();
+
+    res.status(200).json({
+      success: true,
+      token: jwtToken,
+      role: whoJoined,
+      identity: `${whoJoined}_${identity}`,
+      roomName,
+    });
+  } catch (err) {
+    console.error("Failed to generate Twilio access token:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Token generation failed" });
+  }
+};
+
+/* doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
+export const finalPayment = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    // room name coming from frontend
+    const { roomName } = req.body;
+    if (!roomName) {
+      res.status(400).json({
+        success: false,
+        message: "Missing room name",
+      });
+      return;
+    }
+
+    // find the appointment with this room name
+    const appointment = await OnlineAppointment.findOne({ roomName });
+    if (!appointment) {
+      res.status(400).json({
+        success: false,
+        message: "This appointment does not exist in DB.",
+      });
+      return;
+    }
+
+    // check payment status of this appointment
+    const paymentStatus = appointment.paymentDetails?.paymentStatus;
+    if (paymentStatus === "pending") {
+      const patientUserDetail = await User.findById(appointment.patientId);
+      if (!patientUserDetail) {
+        res.status(400).json({
+          sucess: false,
+          message: "Patient User not found.",
+        });
+        return;
+      }
+      const doctor = await Doctor.findById(appointment.doctorId);
+      const doctorUserDetail = await User.findOne({
+        "roleRefs.doctor": appointment.doctorId,
+      });
+      if (!doctorUserDetail || !doctor) {
+        res.status(400).json({
+          sucess: false,
+          message: "Doctor or doctor user not found.",
+        });
+        return;
+      }
+
+      //***** Find doctor subscription to get info of the fee deduction *****\\
+      const now = new Date();
+      const activeSub = doctor.subscriptions.find(
+        (sub) => !sub.endDate || sub.endDate > now
+      );
+      if (!activeSub) {
+        res.status(400).json({
+          success: false,
+          message: "Doctor has no active subscription",
+        });
+        return;
+      }
+      const subscription = await DoctorSubscription.findById(
+        activeSub.SubscriptionId
+      );
+      if (!subscription) {
+        res.status(404).json({
+          success: false,
+          message: "Subscription not found",
+        });
+        return;
+      }
+
+      // Determine slot key for fee extraction
+      let slotKey = `min${appointment?.slot?.duration || 15}` as
+        | "min15"
+        | "min30"
+        | "min60";
+      let platformFee =
+        subscription.platformFeeOnline &&
+        subscription.platformFeeOnline[slotKey]
+          ? subscription.platformFeeOnline[slotKey]!.figure
+          : 0;
+      let opsExpense =
+        subscription.opsExpenseOnline && subscription.opsExpenseOnline[slotKey]
+          ? subscription.opsExpenseOnline[slotKey]!.figure
+          : 0;
+
+      if (appointment.paymentDetails) {
+        const deductAmount = appointment.paymentDetails.patientWalletFrozen;
+        // deduct forzenAmount as well as wallet from patient user
+        const deductSuccess = (patientUserDetail as any).deductFrozenAmount(
+          deductAmount
+        );
+        if (deductSuccess) {
+          await patientUserDetail.save();
+          // appointment?.paymentDetails?.paymentStatus = "completed"; we are not marking the appointment complete here because this api is called as soon as doctor joins the online video.
+
+          // increment in doctor user
+          let incrementAmount =
+            deductAmount - platformFee - (deductAmount * opsExpense) / 100;
+          if (incrementAmount < 0) incrementAmount = 0;
+          doctorUserDetail.wallet += incrementAmount;
+          await doctorUserDetail.save();
+
+          appointment.paymentDetails.paymentStatus = "completed";
+          appointment.paymentDetails.patientWalletDeducted = deductAmount;
+          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+          await appointment.save();
+        } else {
+          res.status(500).json({
+            success: false,
+            message: "Failed to process final payment",
+          });
+          return;
+        }
+      }
+      res.status(200).json({
+        success: true,
+        message: "Final payment completed",
+      });
+      return;
+    } else if (paymentStatus === "completed") {
+      res.status(200).json({
+        sucess: true,
+        message: "Final payment is already processed.",
+      });
+      return;
+    }
+  } catch (err: any) {
+    console.error("Error processing final payment: ", err);
+    res.status(500).json({
+      success: false,
+      message: "Error in processing final payment",
+      error: err.message,
     });
   }
 };
