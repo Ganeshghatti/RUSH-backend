@@ -517,8 +517,8 @@ export const completeHomeVisitAppointment = async (
       });
       return;
     }
-    let platformFee = subscription?.platformFeeClinic?.figure || 0;
-    let opsExpense = subscription?.opsExpenseClinic?.figure || 0;
+    let platformFee = subscription?.platformFeeHomeVisit?.figure || 0;
+    let opsExpense = subscription?.opsExpenseHomeVisit?.figure || 0;
 
     // Find the appointment
     const appointment = await HomeVisitAppointment.findOne({
