@@ -35,7 +35,7 @@ function validateOnlineFee(fee, label) {
 }
 const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description, no_of_clinics, } = req.body;
+        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description, no_of_clinics, advertisement_cost } = req.body;
         if (price < 0) {
             res.status(400).json({
                 success: false,
@@ -107,6 +107,7 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             doctor_type,
             doctor_type_description,
             no_of_clinics: typeof no_of_clinics === "number" ? no_of_clinics : 0,
+            advertisement_cost: typeof advertisement_cost === "number" ? advertisement_cost : 0,
             platformFeeOnline,
             opsExpenseOnline,
             platformFeeClinic,
@@ -134,7 +135,7 @@ exports.createSubscription = createSubscription;
 const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        const { isActive, name, description, features, price, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency, no_of_clinics, } = req.body;
+        const { isActive, name, description, features, price, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency, no_of_clinics, advertisement_cost, } = req.body;
         // Build update object with only provided fields
         const updateData = {};
         // Validate and add no_of_clinics if provided
@@ -147,6 +148,17 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                 return;
             }
             updateData.no_of_clinics = no_of_clinics;
+        }
+        // Validate and add advertisement_cost if provided
+        if (advertisement_cost !== undefined) {
+            if (typeof advertisement_cost !== "number" || advertisement_cost < 0) {
+                res.status(400).json({
+                    success: false,
+                    message: "advertisement_cost must be a non-negative number",
+                });
+                return;
+            }
+            updateData.advertisement_cost = advertisement_cost;
         }
         // Validate and add isActive if provided
         if (isActive !== undefined) {
