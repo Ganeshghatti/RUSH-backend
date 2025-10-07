@@ -58,6 +58,7 @@ const doctorSchema = new Schema({
       },
       razorpay_order_id: { type: String },
       razorpay_payment_id: { type: String },
+      amount_paid: {type: Number}
     },
   ],
   status: {
