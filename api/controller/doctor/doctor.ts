@@ -596,6 +596,10 @@ export const verifyPaymentSubscription = async (
           endDate = new Date(startDate);
           endDate.setMonth(startDate.getMonth() + 24);
           break;
+        case "3 years":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 36);
+          break;
         case "20 years":
           endDate = new Date(startDate);
           endDate.setFullYear(startDate.getFullYear() + 20);

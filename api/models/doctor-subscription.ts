@@ -47,6 +47,7 @@ const DoctorSubscriptionSchema = new Schema(
         "3 months",
         "1 year",
         "2 years",
+        "3 years",
         "20 years",
         "15 years",
         "10 years",
