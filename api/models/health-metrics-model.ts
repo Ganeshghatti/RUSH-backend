@@ -75,6 +75,10 @@ const StressLevel = {
 const healthMetricsSchema = new Schema(
   {
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    // type : {
+    //   enum:[]
+    // }
+    // familyId: take from family model also includes boolean value if 
     reports: [String],
     medicalHistory: [{
       condition: { 

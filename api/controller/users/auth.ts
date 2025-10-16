@@ -336,7 +336,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 24 * 60 * 60 * 1000 * 30, // 30 day
       path: "/",
     });
 

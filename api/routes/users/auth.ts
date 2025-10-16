@@ -10,7 +10,7 @@ const router = Router();
 // OTP-specific rate limiting with enhanced rules to prevent abuse
 const otpLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour window
-  limit: 3, // Allow up to 3 attempts per hour
+  limit: 10, // Allow up to 3 attempts per hour
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: "Too many OTP requests. Please try again after 1 hour.",
