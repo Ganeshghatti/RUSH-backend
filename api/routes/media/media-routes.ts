@@ -42,6 +42,8 @@ router.post('/upload/v1',verifyToken, upload.single('image'), async (req: AuthRe
     // Create the S3 key (filepath in S3)
     // const userId = req.user.id; // From auth middleware
     const key = `uploads/${fileName}`;
+    console.log('File Name ',fileName)
+    console.log('Key ',key)
 
     // console.log("this is the file buffer", req.file.buffer);
 
@@ -51,6 +53,7 @@ router.post('/upload/v1',verifyToken, upload.single('image'), async (req: AuthRe
       fileBuffer: req.file.buffer,
       fileName: originalName,
     });
+    console.log("File URL ",fileUrl)
 
     // console.log("this is the file url", fileUrl);
 
@@ -82,10 +85,10 @@ router.post('/upload', verifyToken, upload.array('images'), async (req: AuthRequ
     if (req?.body?.s3Keys) {
       s3Keys = typeof req.body.s3Keys === 'string' ? JSON.parse(req.body.s3Keys) : req.body.s3Keys;
     }
+    console.log('Files to upload ',files)
+    console.log("Keys to delete ",s3Keys)
 
-    console.log("this is the s3 keys", s3Keys);
     // generate the key from pre-signed url if user profiled s3 key with pesgned url thena convert to key
-    
     const parsedS3Keys = await Promise.all(s3Keys?.map(async (key) => {
       if(key.includes('https://')){
         const parsedKey = await getKeyFromSignedUrl(key);
@@ -93,12 +96,7 @@ router.post('/upload', verifyToken, upload.array('images'), async (req: AuthRequ
       }
       return key;
     }));
-
     console.log("this is the parsed s3 keys", parsedS3Keys);
-
-
-
-    
 
     // Upload all images using Promise.all
     const uploadPromises = files?.map((file) => {
