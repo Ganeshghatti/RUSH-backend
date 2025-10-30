@@ -4,6 +4,7 @@ import { Router } from "express";
 import { patientOnboard, getPatientDashboard, getAppointmentsDoctorForPatient, updateHealthMetrics, getHealthMetrics} from "../../controller/patient/patient";
 import { updatePersonalInfo, updateIdentityProof, updateInsuranceDetails, updateBankDetail } from '../../controller/patient/settings';
 import { addFamily, updateFamily, removeFamily, getFamilyDetails } from "../../controller/patient/family";
+import { getHealthMetricsById, addHealthMetrics } from '../../controller/patient/health-metrics';
 
 const router = Router();
 
@@ -19,6 +20,11 @@ router.route("/profile/bank-detail").put(verifyToken ,checkRole("patient"), upda
 router.route("/appointments/doctor").get(verifyToken, checkRole("patient"), getAppointmentsDoctorForPatient);
 router.route("/health-metrics").put(verifyToken, checkRole("patient"), updateHealthMetrics);
 router.route("/health-metrics").get(verifyToken, checkRole("patient"), getHealthMetrics);
+
+// health metrics routes
+router.route("/health-metrics/:healthMetricsId").get(verifyToken, checkRole("patient"),getHealthMetricsById);
+router.route("/add/health-metrics").post(verifyToken, checkRole("patient"),addHealthMetrics);
+
 router.route("/family").post(verifyToken, checkRole("patient"), addFamily);
 router.route("/family").get(verifyToken, checkRole("patient"), getFamilyDetails);
 router.route("/family/:familyId").put(verifyToken, checkRole("patient"), updateFamily);

@@ -1,4 +1,13 @@
 import { z } from "zod";
+import {
+  TreatmentStatus,
+  MedicalCondition,
+  HadCondition,
+  MenstrualCycle,
+  PregnancyStatus,
+  SleepPattern,
+  StressLevel,
+} from "../models/health-metrics-model";
 
 // User update validation schema with custom messages
 export const userUpdateSchema = z
@@ -173,23 +182,123 @@ export const addHealthMetricsSchema = z
   })
   .strict();
 
+// Health metrics validation schema
+export const healthMetricsSchemaZod = z
+  .object({
+    familyId: z.string().optional(),
+    reports: z.array(z.string()).optional(),
+    medicalHistory: z
+      .array(
+        z.object({
+          condition: z.enum(
+            Object.values(MedicalCondition) as [string, ...string[]]
+          ),
+          hadCondition: z.enum(
+            Object.values(HadCondition) as [string, ...string[]]
+          ),
+          ageOfOnset: z.number().optional(),
+          treatmentStatus: z
+            .enum(Object.values(TreatmentStatus) as [string, ...string[]])
+            .optional(),
+          reports: z.array(z.string()).optional(),
+        })
+      )
+      .optional(),
+    vitals: z
+      .array(
+        z.object({
+          temperature: z.number().optional(),
+          bloodPressure: z.string().optional(),
+          pulseRate: z.number().optional(),
+          respiratoryRate: z.number().optional(),
+          bloodSugarRandom: z.number().optional(),
+          bloodSugarFasting: z.number().optional(),
+          bloodSugarPP: z.number().optional(),
+          oxygenSaturation: z.number().optional(),
+          height: z.number().optional(),
+          weight: z.number().optional(),
+          bmi: z.number().optional(),
+        })
+      )
+      .optional(),
+    femaleHealth: z
+      .object({
+        lastMenstrualPeriod: z.string().datetime().optional(),
+        menstrualCycle: z
+          .enum(Object.values(MenstrualCycle) as [string, ...string[]])
+          .optional(),
+        pregnancyStatus: z
+          .enum(Object.values(PregnancyStatus) as [string, ...string[]])
+          .optional(),
+        contraceptiveUse: z.string().optional(),
+        pregnancies: z.number().optional(),
+        deliveries: z.number().optional(),
+        abortions: z.number().optional(),
+      })
+      .optional(),
+    medications: z
+      .object({
+        otcHerbalUse: z.string().optional(),
+        allergiesDrug: z.array(z.string()).optional(),
+        allergiesFood: z.array(z.string()).optional(),
+        allergiesEnvironmental: z.array(z.string()).optional(),
+        recentVaccinations: z.array(z.string()).optional(),
+        tobaccoUse: z.boolean().optional(),
+        alcoholUse: z.boolean().optional(),
+        drugUse: z.boolean().optional(),
+      })
+      .optional(),
+    mentalHealth: z
+      .object({
+        memoryIssues: z.boolean().optional(),
+        moodDiagnosis: z.string().optional(),
+        sleepPattern: z
+          .enum(Object.values(SleepPattern) as [string, ...string[]])
+          .optional(),
+        stressLevel: z
+          .enum(Object.values(StressLevel) as [string, ...string[]])
+          .optional(),
+      })
+      .optional(),
+    dentalHealth: z
+      .object({
+        lastDentalVisit: z.string().datetime().optional(),
+        dentalIssues: z.array(z.string()).optional(),
+        brushingHabit: z.string().optional(),
+        oralConcerns: z.string().optional(),
+      })
+      .optional(),
+  })
+  .strict();
+
 // Family add validation schema
 export const addFamilySchema = z
   .object({
-    relationship: z.enum([
-      "Father",
-      "Mother",
-      "Child",
-      "Sister",
-      "Brother",
-      "Father-in-law",
-      "Mother-in-law",
-      "Other",
-    ]),
-    profilePic: z.string().optional(),
-    gender: z.enum(["Male", "Female", "Other"]).optional(),
-    age: z.number().optional(),
-    email: z.string().email().optional(),
+    relationship: z.enum(
+      [
+        "Father",
+        "Mother",
+        "Child",
+        "Spouse",
+        "Sister",
+        "Brother",
+        "Father-in-law",
+        "Mother-in-law",
+        "Other",
+      ],
+      { required_error: "Relationship is required" }
+    ),
+    basicDetails: z.object({
+      name: z.string({ required_error: "Name is required" }),
+      gender: z.enum(["Male", "Female", "Other"], {
+        required_error: "Gender is required",
+      }),
+      age: z
+        .number({ required_error: "Age is required" })
+        .min(0, "Age cannot be negative"),
+      email: z.string().email().optional().or(z.literal("")),
+      mobile: z.string().optional(),
+    }),
     address: z
       .object({
         line1: z.string().optional(),
@@ -200,28 +309,21 @@ export const addFamilySchema = z
         country: z.string().optional(),
       })
       .optional(),
-    mobile: z.string().optional(),
-    idNumber: z.string().optional(),
-    idImage: z.string().optional(),
-    insurance: z
+    idProof: z
       .object({
-        policyNumber: z.string().optional(),
-        provider: z.string().optional(),
-        image: z.string().optional(),
+        idType: z.string().optional(),
+        idNumber: z.string().optional(),
+        idImage: z.string().optional(),
       })
       .optional(),
-    healthMetrics: z
-      .object({
-        diabetes: z.boolean().optional(),
-        hypertension: z.boolean().optional(),
-        heartDisease: z.boolean().optional(),
-        stroke: z.boolean().optional(),
-        cancer: z.array(z.string()).optional(),
-        thyroid: z.boolean().optional(),
-        mentalIllness: z.boolean().optional(),
-        geneticDisorders: z.boolean().optional(),
-        Other: z.string().optional(),
-      })
+    insurance: z
+      .array(
+        z.object({
+          policyNumber: z.string().optional(),
+          provider: z.string().optional(),
+          image: z.string().optional(),
+        })
+      )
       .optional(),
   })
   .strict();
@@ -234,6 +336,7 @@ export const updateFamilySchema = z
         "Father",
         "Mother",
         "Child",
+        "Spouse",
         "Sister",
         "Brother",
         "Father-in-law",
@@ -241,10 +344,15 @@ export const updateFamilySchema = z
         "Other",
       ])
       .optional(),
-    profilePic: z.string().optional(),
-    gender: z.enum(["Male", "Female", "Other"]).optional(),
-    age: z.number().optional(),
-    email: z.string().email().optional(),
+    basicDetails: z
+      .object({
+        name: z.string().optional(),
+        gender: z.enum(["Male", "Female", "Other"]).optional(),
+        age: z.number().min(0, "Age cannot be negative").optional(),
+        email: z.string().email().optional().or(z.literal("")),
+        mobile: z.string().optional(),
+      })
+      .optional(),
     address: z
       .object({
         line1: z.string().optional(),
@@ -255,28 +363,21 @@ export const updateFamilySchema = z
         country: z.string().optional(),
       })
       .optional(),
-    mobile: z.string().optional(),
-    idNumber: z.string().optional(),
-    idImage: z.string().optional(),
-    insurance: z
+    idProof: z
       .object({
-        policyNumber: z.string().optional(),
-        provider: z.string().optional(),
-        image: z.string().optional(),
+        idType: z.string().optional(),
+        idNumber: z.string().optional(),
+        idImage: z.string().optional(),
       })
       .optional(),
-    healthMetrics: z
-      .object({
-        diabetes: z.boolean().optional(),
-        hypertension: z.boolean().optional(),
-        heartDisease: z.boolean().optional(),
-        stroke: z.boolean().optional(),
-        cancer: z.array(z.string()).optional(),
-        thyroid: z.boolean().optional(),
-        mentalIllness: z.boolean().optional(),
-        geneticDisorders: z.boolean().optional(),
-        Other: z.string().optional(),
-      })
+    insurance: z
+      .array(
+        z.object({
+          policyNumber: z.string().optional(),
+          provider: z.string().optional(),
+          image: z.string().optional(),
+        })
+      )
       .optional(),
   })
   .strict();
@@ -448,16 +549,16 @@ export const clinicAppointmentBookSchema = z.object({
     ]),
     time: z.object({
       start: z.string(),
-      end: z.string()
-    })
-  })
-})
+      end: z.string(),
+    }),
+  }),
+});
 
 // otp validation schema
 export const otpValidationSchema = z.object({
-   appointmentId: z.string(),
-   otp: z.string()
-})
+  appointmentId: z.string(),
+  otp: z.string(),
+});
 
 // Home visit appointment validation schemas
 export const homeVisitAppointmentBookSchema = z.object({
@@ -541,4 +642,52 @@ export const homeVisitAppointmentCancelSchema = z.object({
 
 export const homeVisitAppointmentCompleteSchema = z.object({
   otp: z.string().min(1, "OTP is required"),
+});
+
+export const medicineSchemaZod = z.object({
+  type: z.string({ required_error: "Medicine type is required" }),
+  name: z.string({ required_error: "Medicine name is required" }),
+  mg: z.string().optional(),
+  morning: z.number().default(0),
+  noon: z.number().default(0),
+  evening: z.number().default(0),
+  night: z.number().default(0),
+  durationDays: z.coerce.number(),
+});
+export const prescriptionSchemaZod = z.object({
+  appointmentId: z.string({ required_error: "Appointment ID is required" }),
+  appointmentTypeRef: z.enum(
+    [
+      "OnlineAppointment",
+      "ClinicAppointment",
+      "HomeVisitAppointment",
+      "EmergencyAppointment",
+    ],
+    { required_error: "Appointment type reference is required" }
+  ),
+  patientId: z.string({ required_error: "Patient ID is required" }),
+  symptoms: z.string().optional(),
+  medicines: z.array(medicineSchemaZod).optional(),
+  notes: z.string().optional(),
+  labTest: z.string().optional(),
+  nextAppointmentDate: z.coerce.date(),
+});
+
+export const ratingSchemaZod = z.object({
+  appointmentId: z.string().min(1, "Appointment ID is required"),
+  appointmentTypeRef: z.enum([
+    "OnlineAppointment",
+    "ClinicAppointment",
+    "HomeVisitAppointment",
+    "EmergencyAppointment",
+  ]),
+  doctorId: z.string().min(1, "Doctor ID is required"),
+  rating: z
+    .number({
+      required_error: "Rating is required",
+      invalid_type_error: "Rating must be a number",
+    })
+    .min(1, "Rating must be at least 1")
+    .max(5, "Rating cannot exceed 5"),
+  review: z.string().trim().optional(),
 });

@@ -48,11 +48,11 @@ const getKeyFromSignedUrl = (presignedUrl) => __awaiter(void 0, void 0, void 0, 
 });
 exports.getKeyFromSignedUrl = getKeyFromSignedUrl;
 const UploadImgToS3 = (_a) => __awaiter(void 0, [_a], void 0, function* ({ key, fileBuffer, fileName }) {
-    console.log("Uploading to S3:", {
-        bucket: process.env.AWS_STORAGE_BUCKET_NAME,
-        key,
-        fileName,
-    });
+    // console.log("Uploading to S3:", {
+    //   bucket: process.env.AWS_STORAGE_BUCKET_NAME,
+    //   key,
+    //   fileName,
+    // });
     const command = new client_s3_1.PutObjectCommand({
         Bucket: process.env.AWS_STORAGE_BUCKET_NAME,
         Key: key,
@@ -62,7 +62,7 @@ const UploadImgToS3 = (_a) => __awaiter(void 0, [_a], void 0, function* ({ key, 
     });
     try {
         const response = yield s3.send(command);
-        console.log("S3 upload response:", response);
+        // console.log("S3 upload response:", response);
         const url = `https://${process.env.AWS_STORAGE_BUCKET_NAME}.s3.${process.env.AWS_S3_REGION_NAME}.amazonaws.com/${key}`;
         // console.log("File uploaded successfully:", response);
         // console.log("Custom key url:", url);

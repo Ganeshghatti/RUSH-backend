@@ -117,6 +117,13 @@ const userSchema = new Schema({
         image: { type: String },
         idName: { type: String },
     },
+    insuranceDetails: [
+        {
+            providerName: { type: String },
+            providerPhone: { type: String },
+            imageProof: { type: String },
+        },
+    ],
     isDocumentVerified: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
 });

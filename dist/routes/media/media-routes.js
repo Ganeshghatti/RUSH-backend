@@ -41,6 +41,8 @@ router.post('/upload/v1', auth_middleware_1.verifyToken, exports.upload.single('
         // Create the S3 key (filepath in S3)
         // const userId = req.user.id; // From auth middleware
         const key = `uploads/${fileName}`;
+        console.log('File Name ', fileName);
+        console.log('Key ', key);
         // console.log("this is the file buffer", req.file.buffer);
         // Upload to S3
         const fileUrl = yield (0, upload_media_1.UploadImgToS3)({
@@ -48,6 +50,7 @@ router.post('/upload/v1', auth_middleware_1.verifyToken, exports.upload.single('
             fileBuffer: req.file.buffer,
             fileName: originalName,
         });
+        console.log("File URL ", fileUrl);
         // console.log("this is the file url", fileUrl);
         res.status(200).json({
             success: true,
@@ -78,7 +81,8 @@ router.post('/upload', auth_middleware_1.verifyToken, exports.upload.array('imag
         if ((_a = req === null || req === void 0 ? void 0 : req.body) === null || _a === void 0 ? void 0 : _a.s3Keys) {
             s3Keys = typeof req.body.s3Keys === 'string' ? JSON.parse(req.body.s3Keys) : req.body.s3Keys;
         }
-        console.log("this is the s3 keys", s3Keys);
+        console.log('Files to upload ', files);
+        console.log("Keys to delete ", s3Keys);
         // generate the key from pre-signed url if user profiled s3 key with pesgned url thena convert to key
         const parsedS3Keys = yield Promise.all(s3Keys === null || s3Keys === void 0 ? void 0 : s3Keys.map((key) => __awaiter(void 0, void 0, void 0, function* () {
             if (key.includes('https://')) {

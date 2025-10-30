@@ -64,6 +64,8 @@ const clinicAppointmentSchema = new Schema({
             default: "pending",
         },
     },
+    prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
+    ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" }
 }, {
     timestamps: true,
 });

@@ -18,6 +18,20 @@ const family_model_1 = __importDefault(require("../../models/user/family-model")
 const validation_1 = require("../../validation/validation");
 const signed_url_1 = require("../../utils/signed-url");
 const mongoose_1 = __importDefault(require("mongoose"));
+const upload_media_1 = require("../../utils/aws_s3/upload-media");
+const flattenObject = (obj, parentKey = "", res = {}) => {
+    for (const key in obj) {
+        const propName = parentKey ? `${parentKey}.${key}` : key;
+        if (typeof obj[key] === "object" && !Array.isArray(obj[key]) && obj[key] !== null) {
+            flattenObject(obj[key], propName, res);
+        }
+        else {
+            res[propName] = obj[key];
+        }
+    }
+    return res;
+};
+// Add a new family
 const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
@@ -41,6 +55,7 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const newFamily = new family_model_1.default(Object.assign({ patientId: patient._id }, validationResult.data));
         const savedFamily = yield newFamily.save();
         const familyWithUrls = yield (0, signed_url_1.generateSignedUrlsForFamily)(savedFamily);
+        // console.log("Family with url ",familyWithUrls);
         res.status(201).json({
             success: true,
             message: "Family member added successfully",
@@ -56,6 +71,7 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 exports.addFamily = addFamily;
+// update an existing family
 const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
@@ -67,6 +83,7 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             return;
         }
+        console.log("Req.boyd ", req.body);
         const validationResult = validation_1.updateFamilySchema.safeParse(req.body);
         if (!validationResult.success) {
             res.status(400).json({
@@ -84,7 +101,22 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             return;
         }
-        const updatedFamily = yield family_model_1.default.findOneAndUpdate({ _id: familyId, patientId: patient._id }, { $set: validationResult.data }, { new: true, runValidators: true });
+        const validatedData = validationResult.data;
+        console.log('Validated data');
+        if (validatedData.insurance && Array.isArray(validatedData.insurance)) {
+            for (const item of validatedData.insurance) {
+                if (item.image && item.image.includes("https://")) {
+                    console.log("Hello there ", item.image);
+                    const key = yield (0, upload_media_1.getKeyFromSignedUrl)(item.image);
+                    console.log("hey ", key);
+                    item.image = key !== null && key !== void 0 ? key : undefined;
+                }
+            }
+        }
+        const flattenedData = flattenObject(validatedData);
+        console.log("Flattened data ", flattenedData);
+        const updatedFamily = yield family_model_1.default.findOneAndUpdate({ _id: familyId, patientId: patient._id }, { $set: flattenedData }, // set operator tells db only update the fields present in this object.
+        { new: true, runValidators: true });
         if (!updatedFamily) {
             res.status(404).json({
                 success: false,
@@ -108,6 +140,7 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     }
 });
 exports.updateFamily = updateFamily;
+// delete a family
 const removeFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
@@ -152,6 +185,7 @@ const removeFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     }
 });
 exports.removeFamily = removeFamily;
+// get all the family
 const getFamilyDetails = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
