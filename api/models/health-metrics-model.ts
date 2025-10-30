@@ -35,10 +35,10 @@ const MedicalCondition = {
   COVID: "covid",
 } as const;
 const HadCondition = {
-  I_DONT_KNOW: "i dont know",
-  I_THINK_SO: "i think so",
-  YES: "yes",
-  NO: "no",
+  I_DONT_KNOW: "I dont know",
+  I_THINK_SO: "I think so",
+  YES: "Yes",
+  NO: "No",
 } as const;
 const TreatmentStatus = {
   ONGOING: "Ongoing",
@@ -88,35 +88,31 @@ const healthMetricsSchema = new Schema(
         condition: {
           type: String,
           enum: Object.values(MedicalCondition),
-          required: true,
         },
         hadCondition: {
           type: String,
           enum: Object.values(HadCondition),
-          required: true,
         },
         ageOfOnset: Number,
         treatmentStatus: { type: String, enum: Object.values(TreatmentStatus) },
         reports: [String],
       },
     ],
-    vitals: [
-      {
-        temperature: Number,
-        bloodPressure: String,
-        pulseRate: Number,
-        respiratoryRate: Number,
-        bloodSugarRandom: Number,
-        bloodSugarFasting: Number,
-        bloodSugarPP: Number,
-        oxygenSaturation: Number,
-        height: Number,
-        weight: Number,
-        bmi: Number,
-      },
-    ],
+    vitals: {
+      temperature: Number,
+      bloodPressure: String,
+      pulseRate: Number,
+      respiratoryRate: Number,
+      bloodSugarRandom: Number,
+      bloodSugarFasting: Number,
+      bloodSugarPP: Number,
+      oxygenSaturation: Number,
+      height: Number,
+      weight: Number,
+      bmi: Number,
+    },
     femaleHealth: {
-      lastMenstrualPeriod: Date,
+      lastMenstrualPeriod: String,
       menstrualCycle: {
         type: String,
         enum: Object.values(MenstrualCycle),
@@ -153,7 +149,7 @@ const healthMetricsSchema = new Schema(
       },
     },
     dentalHealth: {
-      lastDentalVisit: Date,
+      lastDentalVisit: String,
       dentalIssues: [String],
       brushingHabit: String,
       oralConcerns: String,

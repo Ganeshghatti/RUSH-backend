@@ -67,16 +67,16 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const { familyId, ...rest } = validationResult.data;
-    const ownerType = familyId ? "Family" : "Patient";
+    const { familyMemberId, ...rest } = validationResult.data;
+    const ownerType = familyMemberId ? "Family" : "Patient";
 
     console.log("VALIDATION..... ",validationResult.data)
     let existingMetrics;
 
     //***** if ownerType is family *****\\
-    if (familyId) {
+    if (familyMemberId) {
       // find the family
-      const family = await Family.findOne({ _id: familyId, patientId: patient._id });
+      const family = await Family.findOne({ _id: familyMemberId, patientId: patient._id });
       console.log("Family..... ",family)
       if (!family) {
         res.status(400).json({
@@ -99,7 +99,7 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
             ...rest,
             ownerType,
             patientId: patient._id,
-            familyId,
+            familyMemberId,
           },
           { new: true }
         );
@@ -110,7 +110,7 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
         const newMetrics = new HealthMetrics({
           patientId: patient._id,
           ownerType,
-          familyId,
+          familyMemberId,
           ...rest,
         });
         existingMetrics = await newMetrics.save();
@@ -138,7 +138,7 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
 
     res.status(201).json({
       success: true,
-      message: familyId
+      message: familyMemberId
         ? "Family Health Metrics saved successfully"
         : "Patient Health Metrics saved successfully",
       data: existingMetrics,

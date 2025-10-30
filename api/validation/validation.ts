@@ -185,88 +185,105 @@ export const addHealthMetricsSchema = z
 // Health metrics validation schema
 export const healthMetricsSchemaZod = z
   .object({
-    familyId: z.string().optional(),
-    reports: z.array(z.string()).optional(),
+    familyMemberId: z.string().nullable().optional(),
+    reports: z.array(z.string()).nullable().optional(),
     medicalHistory: z
       .array(
         z.object({
-          condition: z.enum(
-            Object.values(MedicalCondition) as [string, ...string[]]
-          ),
-          hadCondition: z.enum(
-            Object.values(HadCondition) as [string, ...string[]]
-          ),
-          ageOfOnset: z.number().optional(),
+          condition: z
+            .enum(Object.values(MedicalCondition) as [string, ...string[]])
+            .nullable()
+            .optional(),
+          hadCondition: z
+            .enum(Object.values(HadCondition) as [string, ...string[]])
+            .nullable()
+            .optional(),
+          ageOfOnset: z.number().nullable().optional(),
           treatmentStatus: z
             .enum(Object.values(TreatmentStatus) as [string, ...string[]])
+            .nullable()
             .optional(),
-          reports: z.array(z.string()).optional(),
+          reports: z.array(z.string().nullable()).nullable().optional(),
         })
       )
+      .nullable()
       .optional(),
     vitals: z
-      .array(
-        z.object({
-          temperature: z.number().optional(),
-          bloodPressure: z.string().optional(),
-          pulseRate: z.number().optional(),
-          respiratoryRate: z.number().optional(),
-          bloodSugarRandom: z.number().optional(),
-          bloodSugarFasting: z.number().optional(),
-          bloodSugarPP: z.number().optional(),
-          oxygenSaturation: z.number().optional(),
-          height: z.number().optional(),
-          weight: z.number().optional(),
-          bmi: z.number().optional(),
-        })
-      )
+      .object({
+        temperature: z.number().nullable().optional(),
+        bloodPressure: z.string().nullable().optional(),
+        pulseRate: z.number().nullable().optional(),
+        respiratoryRate: z.number().nullable().optional(),
+        bloodSugarRandom: z.number().nullable().optional(),
+        bloodSugarFasting: z.number().nullable().optional(),
+        bloodSugarPP: z.number().nullable().optional(),
+        oxygenSaturation: z.number().nullable().optional(),
+        height: z.number().nullable().optional(),
+        weight: z.number().nullable().optional(),
+        bmi: z.number().nullable().optional(),
+      })
+      .nullable()
       .optional(),
     femaleHealth: z
       .object({
-        lastMenstrualPeriod: z.string().datetime().optional(),
+        lastMenstrualPeriod: z.string().nullable().optional(),
         menstrualCycle: z
           .enum(Object.values(MenstrualCycle) as [string, ...string[]])
+          .nullable()
           .optional(),
         pregnancyStatus: z
           .enum(Object.values(PregnancyStatus) as [string, ...string[]])
+          .nullable()
           .optional(),
-        contraceptiveUse: z.string().optional(),
-        pregnancies: z.number().optional(),
-        deliveries: z.number().optional(),
-        abortions: z.number().optional(),
+        contraceptiveUse: z.string().nullable().optional(),
+        pregnancies: z.number().nullable().optional(),
+        deliveries: z.number().nullable().optional(),
+        abortions: z.number().nullable().optional(),
       })
+      .nullable()
       .optional(),
     medications: z
       .object({
-        otcHerbalUse: z.string().optional(),
-        allergiesDrug: z.array(z.string()).optional(),
-        allergiesFood: z.array(z.string()).optional(),
-        allergiesEnvironmental: z.array(z.string()).optional(),
-        recentVaccinations: z.array(z.string()).optional(),
-        tobaccoUse: z.boolean().optional(),
-        alcoholUse: z.boolean().optional(),
-        drugUse: z.boolean().optional(),
+        otcHerbalUse: z.string().nullable().optional(),
+        allergiesDrug: z.array(z.string().nullable()).nullable().optional(),
+        allergiesFood: z.array(z.string().nullable()).nullable().optional(),
+        allergiesEnvironmental: z
+          .array(z.string().nullable())
+          .nullable()
+          .optional(),
+        recentVaccinations: z
+          .array(z.string().nullable())
+          .nullable()
+          .optional(),
+        tobaccoUse: z.boolean().nullable().optional(),
+        alcoholUse: z.boolean().nullable().optional(),
+        drugUse: z.boolean().nullable().optional(),
       })
+      .nullable()
       .optional(),
     mentalHealth: z
       .object({
-        memoryIssues: z.boolean().optional(),
-        moodDiagnosis: z.string().optional(),
+        memoryIssues: z.boolean().nullable().optional(),
+        moodDiagnosis: z.string().nullable().optional(),
         sleepPattern: z
           .enum(Object.values(SleepPattern) as [string, ...string[]])
+          .nullable()
           .optional(),
         stressLevel: z
           .enum(Object.values(StressLevel) as [string, ...string[]])
+          .nullable()
           .optional(),
       })
+      .nullable()
       .optional(),
     dentalHealth: z
       .object({
-        lastDentalVisit: z.string().datetime().optional(),
-        dentalIssues: z.array(z.string()).optional(),
-        brushingHabit: z.string().optional(),
-        oralConcerns: z.string().optional(),
+        lastDentalVisit: z.string().nullable().optional(),
+        dentalIssues: z.array(z.string().nullable()).nullable().optional(),
+        brushingHabit: z.string().nullable().optional(),
+        oralConcerns: z.string().nullable().optional(),
       })
+      .nullable()
       .optional(),
   })
   .strict();
