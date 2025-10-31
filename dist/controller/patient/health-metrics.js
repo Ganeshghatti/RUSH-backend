@@ -89,15 +89,13 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
             return;
         }
-        const _a = validationResult.data, { familyId } = _a, rest = __rest(_a, ["familyId"]);
-        const ownerType = familyId ? "Family" : "Patient";
-        console.log("VALIDATION..... ", validationResult.data);
+        const _a = validationResult.data, { familyMemberId } = _a, rest = __rest(_a, ["familyMemberId"]);
+        const ownerType = familyMemberId ? "Family" : "Patient";
         let existingMetrics;
         //***** if ownerType is family *****\\
-        if (familyId) {
+        if (familyMemberId) {
             // find the family
-            const family = yield family_model_1.default.findOne({ _id: familyId, patientId: patient._id });
-            console.log("Family..... ", family);
+            const family = yield family_model_1.default.findOne({ _id: familyMemberId, patientId: patient._id });
             if (!family) {
                 res.status(400).json({
                     success: false,
@@ -105,26 +103,21 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 });
                 return;
             }
-            console.log("RESTTTT ", rest);
             if (family.basicDetails.gender !== "Female") {
                 delete rest.femaleHealth;
             }
             // check if family already has a linked health metrices
             if (family.healthMetricsId) {
-                console.log("Hi");
-                existingMetrics = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(family.healthMetricsId, Object.assign(Object.assign({}, rest), { ownerType, patientId: patient._id, familyId }), { new: true });
+                existingMetrics = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(family.healthMetricsId, Object.assign(Object.assign({}, rest), { ownerType, patientId: patient._id, familyMemberId }), { new: true });
             }
             // if not the create a new health metrices document
             else {
-                console.log("Hello");
                 const newMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id, ownerType,
-                    familyId }, rest));
+                    familyMemberId }, rest));
                 existingMetrics = yield newMetrics.save();
-                console.log("Exist metric.... ", existingMetrics);
                 // update the healthMetricesId key in the family document
                 family.healthMetricsId = existingMetrics._id;
                 yield family.save();
-                console.log("final family ", family);
             }
         }
         //***** if ownerType is patient ******\\
@@ -138,7 +131,7 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         }
         res.status(201).json({
             success: true,
-            message: familyId
+            message: familyMemberId
                 ? "Family Health Metrics saved successfully"
                 : "Patient Health Metrics saved successfully",
             data: existingMetrics,

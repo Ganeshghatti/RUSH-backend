@@ -60,14 +60,23 @@ exports.getMyRatings = getMyRatings;
 // get all ratings by doctorId to show on doctor profile.
 const getRatingsByDoctorId = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { doctorId } = req.params;
-        if (!mongoose_1.default.Types.ObjectId.isValid(doctorId)) {
+        const { userId } = req.params;
+        if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
             res.status(400).json({
                 success: false,
                 message: "Invalid Doctor ID format",
             });
             return;
         }
+        const doctor = yield doctor_model_1.default.findOne({ userId });
+        if (!doctor) {
+            res.status(400).json({
+                success: false,
+                message: "Doctor with this userId not found.",
+            });
+            return;
+        }
+        const doctorId = doctor._id;
         const ratings = yield rating_model_1.RatingModel.find({
             doctorId,
             isEnable: true,
