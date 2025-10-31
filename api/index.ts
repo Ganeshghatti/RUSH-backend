@@ -18,6 +18,9 @@ import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
 import clinicAppointmentRoutes from "./routes/appointment/clinic-appointment";
 import homeVisitAppointmentRoutes from "./routes/appointment/homevisit-appointment";
+import prescriptionRoutes from "./routes/appointment/prescription-route";
+import ratingRoute from "./routes/appointment/rating-route";
+
 import { sendSMSV3 } from "./controller/users/auth";
 import cron from "node-cron";
 import { updateAppointmentExpiredStatus } from "./controller/appointment/online-appointment";
@@ -99,6 +102,10 @@ app.use(emergencyAppointmentRoutes);
 app.use(clinicAppointmentRoutes);
 
 app.use(homeVisitAppointmentRoutes);
+
+app.use(prescriptionRoutes);
+
+app.use(ratingRoute);
 
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

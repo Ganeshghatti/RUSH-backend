@@ -13,6 +13,7 @@ const familySchema = new Schema({
             "Father",
             "Mother",
             "Child",
+            "Spouse",
             "Sister",
             "Brother",
             "Father-in-law",
@@ -21,13 +22,21 @@ const familySchema = new Schema({
         ],
         required: true,
     },
-    profilePic: { type: String },
-    gender: {
-        type: String,
-        enum: ["Male", "Female", "Other"],
+    basicDetails: {
+        name: { type: String, required: true },
+        gender: {
+            type: String,
+            enum: ["Male", "Female", "Other"],
+            required: true,
+        },
+        age: {
+            type: Number,
+            min: [0, "Age cannot be negative"],
+            required: true,
+        },
+        email: { type: String },
+        mobile: { type: String },
     },
-    age: { type: Number },
-    email: { type: String },
     address: {
         line1: { type: String },
         line2: { type: String },
@@ -36,25 +45,19 @@ const familySchema = new Schema({
         pincode: { type: String },
         country: { type: String },
     },
-    mobile: { type: String },
-    idNumber: { type: String },
-    idImage: { type: String },
-    insurance: {
-        policyNumber: { type: String },
-        provider: { type: String },
-        image: { type: String },
+    idProof: {
+        idType: String,
+        idNumber: String,
+        idImage: String, // store the key of image
     },
-    healthMetrics: {
-        diabetes: Boolean,
-        hypertension: Boolean,
-        heartDisease: Boolean,
-        stroke: Boolean,
-        cancer: [String],
-        thyroid: Boolean,
-        mentalIllness: Boolean,
-        geneticDisorders: Boolean,
-        Other: String,
-    },
+    insurance: [
+        {
+            policyNumber: { type: String },
+            provider: { type: String },
+            image: { type: String },
+        },
+    ],
+    healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrices" },
 });
 const Family = mongoose_1.default.model("Family", familySchema);
 exports.default = Family;

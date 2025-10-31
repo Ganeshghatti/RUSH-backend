@@ -10,7 +10,23 @@ import {
 } from "../../utils/signed-url";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
+import { getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
 
+// useful for partial update
+type AnyObject = Record<string, any>;
+const flattenObject = (obj: AnyObject, parentKey = "", res: AnyObject = {}) => {
+  for (const key in obj) {
+    const propName = parentKey ? `${parentKey}.${key}` : key;
+    if (typeof obj[key] === "object" && !Array.isArray(obj[key]) && obj[key] !== null) {
+      flattenObject(obj[key], propName, res);
+    } else {
+      res[propName] = obj[key];
+    }
+  }
+  return res;
+};
+
+// Add a new family
 export const addFamily = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user.id;
@@ -38,10 +54,10 @@ export const addFamily = async (req: Request, res: Response): Promise<void> => {
       patientId: patient._id,
       ...validationResult.data,
     });
-
     const savedFamily = await newFamily.save();
-
+    
     const familyWithUrls = await generateSignedUrlsForFamily(savedFamily);
+    // console.log("Family with url ",familyWithUrls);
 
     res.status(201).json({
       success: true,
@@ -57,6 +73,7 @@ export const addFamily = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+// update an existing family
 export const updateFamily = async (
   req: Request,
   res: Response
@@ -72,7 +89,7 @@ export const updateFamily = async (
       });
       return;
     }
-
+    console.log("Req.boyd ",req.body)
     const validationResult = updateFamilySchema.safeParse(req.body);
     if (!validationResult.success) {
       res.status(400).json({
@@ -92,9 +109,23 @@ export const updateFamily = async (
       return;
     }
 
+    const validatedData = validationResult.data;
+    console.log('Validated data')
+    if (validatedData.insurance && Array.isArray(validatedData.insurance)){
+      for (const item of validatedData.insurance) {
+        if (item.image && item.image.includes("https://")) {
+          console.log("Hello there ",item.image)
+          const key = await getKeyFromSignedUrl(item.image);
+          console.log("hey ",key)
+          item.image = key ?? undefined;
+        }
+      }
+    }
+    const flattenedData = flattenObject(validatedData);
+    console.log("Flattened data ",flattenedData)
     const updatedFamily = await Family.findOneAndUpdate(
       { _id: familyId, patientId: patient._id },
-      { $set: validationResult.data },
+      { $set: flattenedData},// set operator tells db only update the fields present in this object.
       { new: true, runValidators: true }
     );
 
@@ -122,6 +153,7 @@ export const updateFamily = async (
   }
 };
 
+// delete a family
 export const removeFamily = async (
   req: Request,
   res: Response
@@ -173,6 +205,7 @@ export const removeFamily = async (
   }
 };
 
+// get all the family
 export const getFamilyDetails = async (
   req: Request,
   res: Response
@@ -190,7 +223,6 @@ export const getFamilyDetails = async (
     }
 
     const families = await Family.find({ patientId: patient._id });
-
     const familiesWithUrls: any[] = await generateSignedUrlsForFamilies(
       families
     );

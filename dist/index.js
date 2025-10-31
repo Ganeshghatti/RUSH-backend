@@ -23,6 +23,8 @@ const online_appointment_1 = __importDefault(require("./routes/appointment/onlin
 const emergency_appointment_1 = __importDefault(require("./routes/appointment/emergency-appointment"));
 const clinic_appointment_1 = __importDefault(require("./routes/appointment/clinic-appointment"));
 const homevisit_appointment_1 = __importDefault(require("./routes/appointment/homevisit-appointment"));
+const prescription_route_1 = __importDefault(require("./routes/appointment/prescription-route"));
+const rating_route_1 = __importDefault(require("./routes/appointment/rating-route"));
 // Load environment variables
 dotenv_1.default.config();
 // Connect to MongoDB
@@ -80,6 +82,8 @@ app.use(online_appointment_1.default);
 app.use(emergency_appointment_1.default);
 app.use(clinic_appointment_1.default);
 app.use(homevisit_appointment_1.default);
+app.use(prescription_route_1.default);
+app.use(rating_route_1.default);
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 //   console.error(err);

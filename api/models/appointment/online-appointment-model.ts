@@ -39,13 +39,10 @@ const onlineAppointmentSchema = new Schema({
   },
   status: {
     type: String,
-
     enum: ["pending", "accepted", "rejected", "completed", "expired"],
     default: "pending",
   },
-  roomName: {
-    type: String,
-  },
+  roomName: { type: String },
   paymentDetails: {
     amount: { type: Number, required: true },
     patientWalletDeducted: { type: Number, required: true },
@@ -56,6 +53,8 @@ const onlineAppointmentSchema = new Schema({
       default: "pending",
     },
   },
+  prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
+  ratingId: {type: Schema.Types.ObjectId, ref: "RatingModel"}
 });
 
 const OnlineAppointment = mongoose.model(

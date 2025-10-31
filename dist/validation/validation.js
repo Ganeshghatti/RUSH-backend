@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.homeVisitAppointmentCompleteSchema = exports.homeVisitAppointmentCancelSchema = exports.homeVisitAppointmentAcceptSchema = exports.homeVisitConfigUpdateSchema = exports.homeVisitAppointmentBookSchema = exports.otpValidationSchema = exports.clinicAppointmentBookSchema = exports.clinicPatchRequestSchema = exports.clinicUpdateRequestSchema = exports.clinicSchema = exports.updateHealthMetricsSchema = exports.updateFamilySchema = exports.addFamilySchema = exports.addHealthMetricsSchema = exports.createEmergencyAppointmentSchema = exports.updateProfileSchema = exports.doctorUpdateSchema = exports.userUpdateSchema = void 0;
+exports.ratingSchemaZod = exports.prescriptionSchemaZod = exports.medicineSchemaZod = exports.homeVisitAppointmentCompleteSchema = exports.homeVisitAppointmentCancelSchema = exports.homeVisitAppointmentAcceptSchema = exports.homeVisitConfigUpdateSchema = exports.homeVisitAppointmentBookSchema = exports.otpValidationSchema = exports.clinicAppointmentBookSchema = exports.clinicPatchRequestSchema = exports.clinicUpdateRequestSchema = exports.clinicSchema = exports.updateHealthMetricsSchema = exports.updateFamilySchema = exports.addFamilySchema = exports.healthMetricsSchemaZod = exports.addHealthMetricsSchema = exports.createEmergencyAppointmentSchema = exports.updateProfileSchema = exports.doctorUpdateSchema = exports.userUpdateSchema = void 0;
 const zod_1 = require("zod");
+const health_metrics_model_1 = require("../models/health-metrics-model");
 // User update validation schema with custom messages
 exports.userUpdateSchema = zod_1.z
     .object({
@@ -159,6 +160,109 @@ exports.addHealthMetricsSchema = zod_1.z
     conditions: zod_1.z.array(zod_1.z.string()).optional(),
 })
     .strict();
+// Health metrics validation schema
+exports.healthMetricsSchemaZod = zod_1.z
+    .object({
+    familyMemberId: zod_1.z.string().nullable().optional(),
+    reports: zod_1.z.array(zod_1.z.string()).nullable().optional(),
+    medicalHistory: zod_1.z
+        .array(zod_1.z.object({
+        condition: zod_1.z
+            .enum(Object.values(health_metrics_model_1.MedicalCondition))
+            .nullable()
+            .optional(),
+        hadCondition: zod_1.z
+            .enum(Object.values(health_metrics_model_1.HadCondition))
+            .nullable()
+            .optional(),
+        ageOfOnset: zod_1.z.number().nullable().optional(),
+        treatmentStatus: zod_1.z
+            .enum(Object.values(health_metrics_model_1.TreatmentStatus))
+            .nullable()
+            .optional(),
+        reports: zod_1.z.array(zod_1.z.string().nullable()).nullable().optional(),
+    }))
+        .nullable()
+        .optional(),
+    vitals: zod_1.z
+        .object({
+        temperature: zod_1.z.number().nullable().optional(),
+        bloodPressure: zod_1.z.string().nullable().optional(),
+        pulseRate: zod_1.z.number().nullable().optional(),
+        respiratoryRate: zod_1.z.number().nullable().optional(),
+        bloodSugarRandom: zod_1.z.number().nullable().optional(),
+        bloodSugarFasting: zod_1.z.number().nullable().optional(),
+        bloodSugarPP: zod_1.z.number().nullable().optional(),
+        oxygenSaturation: zod_1.z.number().nullable().optional(),
+        height: zod_1.z.number().nullable().optional(),
+        weight: zod_1.z.number().nullable().optional(),
+        bmi: zod_1.z.number().nullable().optional(),
+    })
+        .nullable()
+        .optional(),
+    femaleHealth: zod_1.z
+        .object({
+        lastMenstrualPeriod: zod_1.z.string().nullable().optional(),
+        menstrualCycle: zod_1.z
+            .enum(Object.values(health_metrics_model_1.MenstrualCycle))
+            .nullable()
+            .optional(),
+        pregnancyStatus: zod_1.z
+            .enum(Object.values(health_metrics_model_1.PregnancyStatus))
+            .nullable()
+            .optional(),
+        contraceptiveUse: zod_1.z.string().nullable().optional(),
+        pregnancies: zod_1.z.number().nullable().optional(),
+        deliveries: zod_1.z.number().nullable().optional(),
+        abortions: zod_1.z.number().nullable().optional(),
+    })
+        .nullable()
+        .optional(),
+    medications: zod_1.z
+        .object({
+        otcHerbalUse: zod_1.z.string().nullable().optional(),
+        allergiesDrug: zod_1.z.array(zod_1.z.string().nullable()).nullable().optional(),
+        allergiesFood: zod_1.z.array(zod_1.z.string().nullable()).nullable().optional(),
+        allergiesEnvironmental: zod_1.z
+            .array(zod_1.z.string().nullable())
+            .nullable()
+            .optional(),
+        recentVaccinations: zod_1.z
+            .array(zod_1.z.string().nullable())
+            .nullable()
+            .optional(),
+        tobaccoUse: zod_1.z.boolean().nullable().optional(),
+        alcoholUse: zod_1.z.boolean().nullable().optional(),
+        drugUse: zod_1.z.boolean().nullable().optional(),
+    })
+        .nullable()
+        .optional(),
+    mentalHealth: zod_1.z
+        .object({
+        memoryIssues: zod_1.z.boolean().nullable().optional(),
+        moodDiagnosis: zod_1.z.string().nullable().optional(),
+        sleepPattern: zod_1.z
+            .enum(Object.values(health_metrics_model_1.SleepPattern))
+            .nullable()
+            .optional(),
+        stressLevel: zod_1.z
+            .enum(Object.values(health_metrics_model_1.StressLevel))
+            .nullable()
+            .optional(),
+    })
+        .nullable()
+        .optional(),
+    dentalHealth: zod_1.z
+        .object({
+        lastDentalVisit: zod_1.z.string().nullable().optional(),
+        dentalIssues: zod_1.z.array(zod_1.z.string().nullable()).nullable().optional(),
+        brushingHabit: zod_1.z.string().nullable().optional(),
+        oralConcerns: zod_1.z.string().nullable().optional(),
+    })
+        .nullable()
+        .optional(),
+})
+    .strict();
 // Family add validation schema
 exports.addFamilySchema = zod_1.z
     .object({
@@ -166,16 +270,24 @@ exports.addFamilySchema = zod_1.z
         "Father",
         "Mother",
         "Child",
+        "Spouse",
         "Sister",
         "Brother",
         "Father-in-law",
         "Mother-in-law",
         "Other",
-    ]),
-    profilePic: zod_1.z.string().optional(),
-    gender: zod_1.z.enum(["Male", "Female", "Other"]).optional(),
-    age: zod_1.z.number().optional(),
-    email: zod_1.z.string().email().optional(),
+    ], { required_error: "Relationship is required" }),
+    basicDetails: zod_1.z.object({
+        name: zod_1.z.string({ required_error: "Name is required" }),
+        gender: zod_1.z.enum(["Male", "Female", "Other"], {
+            required_error: "Gender is required",
+        }),
+        age: zod_1.z
+            .number({ required_error: "Age is required" })
+            .min(0, "Age cannot be negative"),
+        email: zod_1.z.string().email().optional().or(zod_1.z.literal("")),
+        mobile: zod_1.z.string().optional(),
+    }),
     address: zod_1.z
         .object({
         line1: zod_1.z.string().optional(),
@@ -186,28 +298,19 @@ exports.addFamilySchema = zod_1.z
         country: zod_1.z.string().optional(),
     })
         .optional(),
-    mobile: zod_1.z.string().optional(),
-    idNumber: zod_1.z.string().optional(),
-    idImage: zod_1.z.string().optional(),
-    insurance: zod_1.z
+    idProof: zod_1.z
         .object({
+        idType: zod_1.z.string().optional(),
+        idNumber: zod_1.z.string().optional(),
+        idImage: zod_1.z.string().optional(),
+    })
+        .optional(),
+    insurance: zod_1.z
+        .array(zod_1.z.object({
         policyNumber: zod_1.z.string().optional(),
         provider: zod_1.z.string().optional(),
         image: zod_1.z.string().optional(),
-    })
-        .optional(),
-    healthMetrics: zod_1.z
-        .object({
-        diabetes: zod_1.z.boolean().optional(),
-        hypertension: zod_1.z.boolean().optional(),
-        heartDisease: zod_1.z.boolean().optional(),
-        stroke: zod_1.z.boolean().optional(),
-        cancer: zod_1.z.array(zod_1.z.string()).optional(),
-        thyroid: zod_1.z.boolean().optional(),
-        mentalIllness: zod_1.z.boolean().optional(),
-        geneticDisorders: zod_1.z.boolean().optional(),
-        Other: zod_1.z.string().optional(),
-    })
+    }))
         .optional(),
 })
     .strict();
@@ -219,6 +322,7 @@ exports.updateFamilySchema = zod_1.z
         "Father",
         "Mother",
         "Child",
+        "Spouse",
         "Sister",
         "Brother",
         "Father-in-law",
@@ -226,10 +330,15 @@ exports.updateFamilySchema = zod_1.z
         "Other",
     ])
         .optional(),
-    profilePic: zod_1.z.string().optional(),
-    gender: zod_1.z.enum(["Male", "Female", "Other"]).optional(),
-    age: zod_1.z.number().optional(),
-    email: zod_1.z.string().email().optional(),
+    basicDetails: zod_1.z
+        .object({
+        name: zod_1.z.string().optional(),
+        gender: zod_1.z.enum(["Male", "Female", "Other"]).optional(),
+        age: zod_1.z.number().min(0, "Age cannot be negative").optional(),
+        email: zod_1.z.string().email().optional().or(zod_1.z.literal("")),
+        mobile: zod_1.z.string().optional(),
+    })
+        .optional(),
     address: zod_1.z
         .object({
         line1: zod_1.z.string().optional(),
@@ -240,28 +349,19 @@ exports.updateFamilySchema = zod_1.z
         country: zod_1.z.string().optional(),
     })
         .optional(),
-    mobile: zod_1.z.string().optional(),
-    idNumber: zod_1.z.string().optional(),
-    idImage: zod_1.z.string().optional(),
-    insurance: zod_1.z
+    idProof: zod_1.z
         .object({
+        idType: zod_1.z.string().optional(),
+        idNumber: zod_1.z.string().optional(),
+        idImage: zod_1.z.string().optional(),
+    })
+        .optional(),
+    insurance: zod_1.z
+        .array(zod_1.z.object({
         policyNumber: zod_1.z.string().optional(),
         provider: zod_1.z.string().optional(),
         image: zod_1.z.string().optional(),
-    })
-        .optional(),
-    healthMetrics: zod_1.z
-        .object({
-        diabetes: zod_1.z.boolean().optional(),
-        hypertension: zod_1.z.boolean().optional(),
-        heartDisease: zod_1.z.boolean().optional(),
-        stroke: zod_1.z.boolean().optional(),
-        cancer: zod_1.z.array(zod_1.z.string()).optional(),
-        thyroid: zod_1.z.boolean().optional(),
-        mentalIllness: zod_1.z.boolean().optional(),
-        geneticDisorders: zod_1.z.boolean().optional(),
-        Other: zod_1.z.string().optional(),
-    })
+    }))
         .optional(),
 })
     .strict();
@@ -422,14 +522,14 @@ exports.clinicAppointmentBookSchema = zod_1.z.object({
         ]),
         time: zod_1.z.object({
             start: zod_1.z.string(),
-            end: zod_1.z.string()
-        })
-    })
+            end: zod_1.z.string(),
+        }),
+    }),
 });
 // otp validation schema
 exports.otpValidationSchema = zod_1.z.object({
     appointmentId: zod_1.z.string(),
-    otp: zod_1.z.string()
+    otp: zod_1.z.string(),
 });
 // Home visit appointment validation schemas
 exports.homeVisitAppointmentBookSchema = zod_1.z.object({
@@ -505,4 +605,47 @@ exports.homeVisitAppointmentCancelSchema = zod_1.z.object({
 });
 exports.homeVisitAppointmentCompleteSchema = zod_1.z.object({
     otp: zod_1.z.string().min(1, "OTP is required"),
+});
+exports.medicineSchemaZod = zod_1.z.object({
+    type: zod_1.z.string({ required_error: "Medicine type is required" }),
+    name: zod_1.z.string({ required_error: "Medicine name is required" }),
+    mg: zod_1.z.string().optional(),
+    morning: zod_1.z.number().default(0),
+    noon: zod_1.z.number().default(0),
+    evening: zod_1.z.number().default(0),
+    night: zod_1.z.number().default(0),
+    durationDays: zod_1.z.coerce.number(),
+});
+exports.prescriptionSchemaZod = zod_1.z.object({
+    appointmentId: zod_1.z.string({ required_error: "Appointment ID is required" }),
+    appointmentTypeRef: zod_1.z.enum([
+        "OnlineAppointment",
+        "ClinicAppointment",
+        "HomeVisitAppointment",
+        "EmergencyAppointment",
+    ], { required_error: "Appointment type reference is required" }),
+    patientId: zod_1.z.string({ required_error: "Patient ID is required" }),
+    symptoms: zod_1.z.string().optional(),
+    medicines: zod_1.z.array(exports.medicineSchemaZod).optional(),
+    notes: zod_1.z.string().optional(),
+    labTest: zod_1.z.string().optional(),
+    nextAppointmentDate: zod_1.z.coerce.date(),
+});
+exports.ratingSchemaZod = zod_1.z.object({
+    appointmentId: zod_1.z.string().min(1, "Appointment ID is required"),
+    appointmentTypeRef: zod_1.z.enum([
+        "OnlineAppointment",
+        "ClinicAppointment",
+        "HomeVisitAppointment",
+        "EmergencyAppointment",
+    ]),
+    doctorId: zod_1.z.string().min(1, "Doctor ID is required"),
+    rating: zod_1.z
+        .number({
+        required_error: "Rating is required",
+        invalid_type_error: "Rating must be a number",
+    })
+        .min(1, "Rating must be at least 1")
+        .max(5, "Rating cannot exceed 5"),
+    review: zod_1.z.string().trim().optional(),
 });

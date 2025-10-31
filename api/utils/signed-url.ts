@@ -1,4 +1,4 @@
-import { GetSignedUrl } from './aws_s3/upload-media';
+import { GetSignedUrl } from "./aws_s3/upload-media";
 
 export const generateSignedUrlsForDoctor = async (doctor: any) => {
   const clone = JSON.parse(JSON.stringify(doctor));
@@ -17,7 +17,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
 
   // Signature image
   promises.push(
-    safeGetSignedUrl(clone.signatureImage).then(url => {
+    safeGetSignedUrl(clone.signatureImage).then((url) => {
       clone.signatureImage = url;
     })
   );
@@ -26,7 +26,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
   if (Array?.isArray(clone?.qualifications)) {
     for (const qual of clone?.qualifications) {
       promises.push(
-        safeGetSignedUrl(qual?.degreeImage).then(url => {
+        safeGetSignedUrl(qual?.degreeImage).then((url) => {
           qual.degreeImage = url;
         })
       );
@@ -37,7 +37,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
   if (Array?.isArray(clone?.registration)) {
     for (const reg of clone?.registration) {
       promises.push(
-        safeGetSignedUrl(reg?.licenseImage).then(url => {
+        safeGetSignedUrl(reg?.licenseImage).then((url) => {
           reg.licenseImage = url;
         })
       );
@@ -49,7 +49,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
     for (const sub of clone?.subscriptions) {
       if (sub?.paymentDetails?.paymentImage) {
         promises.push(
-          safeGetSignedUrl(sub?.paymentDetails?.paymentImage).then(url => {
+          safeGetSignedUrl(sub?.paymentDetails?.paymentImage).then((url) => {
             sub.paymentDetails.paymentImage = url;
           })
         );
@@ -59,7 +59,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
 
   if (clone?.userId?.profilePic) {
     promises.push(
-      safeGetSignedUrl(clone?.userId?.profilePic).then(url => {
+      safeGetSignedUrl(clone?.userId?.profilePic).then((url) => {
         clone.userId.profilePic = url;
       })
     );
@@ -87,7 +87,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   // Profile picture
   if (clone?.profilePic) {
     promises.push(
-      safeGetSignedUrl(clone?.profilePic).then(url => {
+      safeGetSignedUrl(clone?.profilePic).then((url) => {
         clone.profilePic = url;
       })
     );
@@ -96,7 +96,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   // Tax proof image
   if (clone?.taxProof?.image) {
     promises.push(
-      safeGetSignedUrl(clone?.taxProof?.image).then(url => {
+      safeGetSignedUrl(clone?.taxProof?.image).then((url) => {
         clone.taxProof.image = url;
       })
     );
@@ -105,7 +105,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   // Personal ID proof image
   if (clone?.personalIdProof?.image) {
     promises.push(
-      safeGetSignedUrl(clone?.personalIdProof?.image).then(url => {
+      safeGetSignedUrl(clone?.personalIdProof?.image).then((url) => {
         clone.personalIdProof.image = url;
       })
     );
@@ -114,7 +114,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   // Address proof image
   if (clone?.addressProof?.image) {
     promises.push(
-      safeGetSignedUrl(clone?.addressProof?.image).then(url => {
+      safeGetSignedUrl(clone?.addressProof?.image).then((url) => {
         clone.addressProof.image = url;
       })
     );
@@ -123,7 +123,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   // Bank details UPI QR image
   if (clone?.bankDetails?.upiQrImage) {
     promises.push(
-      safeGetSignedUrl(clone?.bankDetails?.upiQrImage).then(url => {
+      safeGetSignedUrl(clone?.bankDetails?.upiQrImage).then((url) => {
         clone.bankDetails.upiQrImage = url;
       })
     );
@@ -132,7 +132,7 @@ export const generateSignedUrlsForUser = async (user: any) => {
   // Doctor role ref
   if (clone?.roleRefs?.doctor) {
     promises.push(
-      generateSignedUrlsForDoctor(clone?.roleRefs?.doctor).then(urls => {
+      generateSignedUrlsForDoctor(clone?.roleRefs?.doctor).then((urls) => {
         clone.roleRefs.doctor = urls;
       })
     );
@@ -163,13 +163,17 @@ export const generateSignedUrlsForSubscription = async (subscription: any) => {
   return clone;
 };
 
-export const generateSignedUrlsForSubscriptions = async (subscriptions: any[]) => {
+export const generateSignedUrlsForSubscriptions = async (
+  subscriptions: any[]
+) => {
   if (!Array.isArray(subscriptions)) {
     return subscriptions;
   }
-  
+
   const signedSubscriptions = await Promise.all(
-    subscriptions.map(subscription => generateSignedUrlsForSubscription(subscription))
+    subscriptions.map((subscription) =>
+      generateSignedUrlsForSubscription(subscription)
+    )
   );
 
   return signedSubscriptions;
@@ -190,31 +194,24 @@ export const generateSignedUrlsForFamily = async (family: any) => {
 
   const promises: Promise<void>[] = [];
 
-  // Profile picture
-  if (clone?.profilePic) {
-    promises.push(
-      safeGetSignedUrl(clone?.profilePic).then(url => {
-        clone.profilePic = url;
-      })
-    );
-  }
-
   // ID image
-  if (clone?.idImage) {
+  if (clone?.idProof?.idImage) {
     promises.push(
-      safeGetSignedUrl(clone?.idImage).then(url => {
-        clone.idImage = url;
+      safeGetSignedUrl(clone?.idProof?.idImage).then((url) => {
+        clone.idProof.idImage = url;
       })
     );
   }
 
-  // Insurance image
-  if (clone?.insurance?.image) {
-    promises.push(
-      safeGetSignedUrl(clone?.insurance?.image).then(url => {
-        clone.insurance.image = url;
-      })
-    );
+  // Insurance images
+  if (Array.isArray(clone?.insurance)) {
+    clone.insurance.forEach((ins: any, index: number) => {
+      if (ins?.image) {
+        promises.push(safeGetSignedUrl(ins.image).then((url) => {
+          clone.insurance[index].image = url;
+        }));
+      }
+    });
   }
 
   await Promise.all(promises);
@@ -225,9 +222,9 @@ export const generateSignedUrlsForFamilies = async (families: any[]) => {
   if (!Array.isArray(families)) {
     return families;
   }
-  
+
   const signedFamilies = await Promise.all(
-    families.map(family => generateSignedUrlsForFamily(family))
+    families.map((family) => generateSignedUrlsForFamily(family))
   );
 
   return signedFamilies;

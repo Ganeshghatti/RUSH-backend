@@ -8,7 +8,6 @@ export const updatePersonalInfo = async (
 ): Promise<void> => {
   try {
     const userId = req.user.id;
-    console.log("Req.body ", req.body);
     const {
       profilePic,
       firstName,

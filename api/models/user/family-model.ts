@@ -7,16 +7,20 @@ export interface IFamily {
     | "Father"
     | "Mother"
     | "Child"
+    | "Spouse"
     | "Sister"
     | "Brother"
     | "Father-in-law"
     | "Mother-in-law"
     | "Other";
-  profilePic?: string;
-  gender?: "Male" | "Female" | "Other";
-  age?: number;
-  email?: string;
-  address: {
+  basicDetails: {
+    name: string;
+    gender: "Male" | "Female" | "Other";
+    age: number;
+    email?: string;
+    mobile?: string;
+  };
+  address?: {
     line1?: string;
     line2?: string;
     locality?: string;
@@ -24,25 +28,17 @@ export interface IFamily {
     pincode?: string;
     country?: string;
   };
-  mobile?: string;
-  idNumber?: string;
-  idImage?: string;
-  insurance: {
+  idProof?: {
+    idType?: string;
+    idNumber?: string;
+    idImage?: string;
+  };
+  insurance?: {
     policyNumber?: string;
     provider?: string;
     image?: string;
-  };
-  healthMetrics?: {
-    diabetes: Boolean;
-    hypertension: Boolean;
-    heartDisease: Boolean;
-    stroke: Boolean;
-    cancer: [String];
-    thyroid: Boolean;
-    mentalIllness: Boolean;
-    geneticDisorders: Boolean;
-    Other: String;
-  };
+  }[];
+  healthMetricsId?: mongoose.Types.ObjectId;
 }
 
 export type FamilyDocument = IFamily & mongoose.Document;
@@ -55,6 +51,7 @@ const familySchema = new Schema<IFamily>({
       "Father",
       "Mother",
       "Child",
+      "Spouse",
       "Sister",
       "Brother",
       "Father-in-law",
@@ -63,13 +60,21 @@ const familySchema = new Schema<IFamily>({
     ],
     required: true,
   },
-  profilePic: { type: String },
-  gender: {
-    type: String,
-    enum: ["Male", "Female", "Other"],
+  basicDetails: {
+    name: { type: String, required: true },
+    gender: {
+      type: String,
+      enum: ["Male", "Female", "Other"],
+      required: true,
+    },
+    age: {
+      type: Number,
+      min: [0, "Age cannot be negative"],
+      required: true,
+    },
+    email: { type: String },
+    mobile: { type: String },
   },
-  age: { type: Number },
-  email: { type: String },
   address: {
     line1: { type: String },
     line2: { type: String },
@@ -78,25 +83,19 @@ const familySchema = new Schema<IFamily>({
     pincode: { type: String },
     country: { type: String },
   },
-  mobile: { type: String },
-  idNumber: { type: String },
-  idImage: { type: String },
-  insurance: {
-    policyNumber: { type: String },
-    provider: { type: String },
-    image: { type: String },
+  idProof: {
+    idType: String,
+    idNumber: String,
+    idImage: String, // store the key of image
   },
-  healthMetrics: {
-    diabetes: Boolean,
-    hypertension: Boolean,
-    heartDisease: Boolean,
-    stroke: Boolean,
-    cancer: [String],
-    thyroid: Boolean,
-    mentalIllness: Boolean,
-    geneticDisorders: Boolean,
-    Other: String,
-  },
+  insurance: [
+    {
+      policyNumber: { type: String },
+      provider: { type: String },
+      image: { type: String },
+    },
+  ],
+  healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrices" },
 });
 
 const Family = mongoose.model("Family", familySchema);

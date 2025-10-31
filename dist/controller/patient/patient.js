@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getHealthMetrics = exports.updateHealthMetrics = exports.getAppointmentsDoctorForPatient = exports.updatePersonalInfo = exports.updateBankDetail = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
+exports.getHealthMetrics = exports.updateHealthMetrics = exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -505,70 +505,6 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
     }
 });
 exports.getPatientDashboard = getPatientDashboard;
-const updateBankDetail = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const { bankDetails } = req.body;
-        if (!bankDetails || Object.keys(bankDetails).length === 0) {
-            res.status(400).json({
-                success: false,
-                message: "No bank details provided",
-            });
-            return;
-        }
-        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, { $set: { bankDetails } }, // replace bankDetails object
-        { new: true, runValidators: true, select: "-password" });
-        if (!updatedUser) {
-            res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Bank details updated successfully",
-            data: updatedUser.bankDetails, // return just bankDetails
-        });
-    }
-    catch (error) {
-        console.error("Error updating bank details:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error updating bank details",
-            error: error.message,
-        });
-    }
-});
-exports.updateBankDetail = updateBankDetail;
-const updatePersonalInfo = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const { firstName, lastName, email, phone } = req.body;
-        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, {
-            firstName,
-            lastName,
-            email,
-            phone,
-        }, { new: true, runValidators: true }).select("-password");
-        if (!updatedUser) {
-            res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-            return;
-        }
-        res.json({
-            message: "Personal info updated successfully",
-            user: updatedUser,
-        });
-    }
-    catch (error) {
-        console.error("Error updating personal info:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-});
-exports.updatePersonalInfo = updatePersonalInfo;
 const getAppointmentsDoctorForPatient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;

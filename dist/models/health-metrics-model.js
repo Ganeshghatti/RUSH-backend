@@ -6,12 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.HealthMetrics = exports.StressLevel = exports.SleepPattern = exports.PregnancyStatus = exports.MenstrualCycle = exports.HadCondition = exports.MedicalCondition = exports.TreatmentStatus = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const { Schema } = mongoose_1.default;
-const TreatmentStatus = {
-    ONGOING: "Ongoing",
-    CONTROLLED: "Controlled",
-    NOT_TREATED: "Not Treated",
-};
-exports.TreatmentStatus = TreatmentStatus;
+// ***** medical history
 const MedicalCondition = {
     DIABETES: "diabetes",
     HYPERTENSION: "hypertension",
@@ -42,16 +37,23 @@ const MedicalCondition = {
     VISION_PROBLEMS: "visionProblems",
     HEARING_LOSS: "hearingLoss",
     SLEEP_DISORDERS: "sleepDisorders",
-    COVID: 'covid'
+    COVID: "covid",
 };
 exports.MedicalCondition = MedicalCondition;
 const HadCondition = {
-    I_DONT_KNOW: "i dont know",
-    I_THINK_SO: "i think so",
-    YES: "yes",
-    NO: "no",
+    I_DONT_KNOW: "I dont know",
+    I_THINK_SO: "I think so",
+    YES: "Yes",
+    NO: "No",
 };
 exports.HadCondition = HadCondition;
+const TreatmentStatus = {
+    ONGOING: "Ongoing",
+    CONTROLLED: "Controlled",
+    NOT_TREATED: "Not Treated",
+};
+exports.TreatmentStatus = TreatmentStatus;
+// ***** menstrual cycle
 const MenstrualCycle = {
     REGULAR: "Regular",
     IRREGULAR: "Irregular",
@@ -64,6 +66,7 @@ const PregnancyStatus = {
     TRYING: "Trying",
 };
 exports.PregnancyStatus = PregnancyStatus;
+// ***** mental health
 const SleepPattern = {
     NORMAL: "Normal",
     INSOMNIA: "Insomnia",
@@ -77,39 +80,47 @@ const StressLevel = {
     SEVERE: "Severe",
 };
 exports.StressLevel = StressLevel;
+// ***** final schema
 const healthMetricsSchema = new Schema({
+    // this is ID of the patient(this health metrices can be of this patient or their family)
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    ownerType: {
+        type: String,
+        required: true,
+        enum: ["Patient", "Family"],
+    },
+    familyId: { type: Schema.Types.ObjectId, ref: "Family" },
     reports: [String],
-    medicalHistory: [{
+    medicalHistory: [
+        {
             condition: {
                 type: String,
                 enum: Object.values(MedicalCondition),
-                required: true
             },
             hadCondition: {
                 type: String,
                 enum: Object.values(HadCondition),
-                required: true
             },
             ageOfOnset: Number,
             treatmentStatus: { type: String, enum: Object.values(TreatmentStatus) },
             reports: [String],
-        }],
-    vitals: [{
-            temperature: Number,
-            bloodPressure: String,
-            pulseRate: Number,
-            respiratoryRate: Number,
-            bloodSugarRandom: Number,
-            bloodSugarFasting: Number,
-            bloodSugarPP: Number,
-            oxygenSaturation: Number,
-            height: Number,
-            weight: Number,
-            bmi: Number,
-        }],
+        },
+    ],
+    vitals: {
+        temperature: Number,
+        bloodPressure: String,
+        pulseRate: Number,
+        respiratoryRate: Number,
+        bloodSugarRandom: Number,
+        bloodSugarFasting: Number,
+        bloodSugarPP: Number,
+        oxygenSaturation: Number,
+        height: Number,
+        weight: Number,
+        bmi: Number,
+    },
     femaleHealth: {
-        lastMenstrualPeriod: Date,
+        lastMenstrualPeriod: String,
         menstrualCycle: {
             type: String,
             enum: Object.values(MenstrualCycle),
@@ -146,7 +157,7 @@ const healthMetricsSchema = new Schema({
         },
     },
     dentalHealth: {
-        lastDentalVisit: Date,
+        lastDentalVisit: String,
         dentalIssues: [String],
         brushingHabit: String,
         oralConcerns: String,

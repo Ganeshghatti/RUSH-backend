@@ -90,6 +90,8 @@ const homeVisitAppointmentSchema = new Schema({
         type: { type: String, enum: ["Point"], default: "Point" },
         coordinates: [Number],
     },
+    prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
+    ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" }
 }, {
     timestamps: true,
 });
