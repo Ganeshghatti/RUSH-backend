@@ -70,14 +70,12 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
     const { familyMemberId, ...rest } = validationResult.data;
     const ownerType = familyMemberId ? "Family" : "Patient";
 
-    console.log("VALIDATION..... ",validationResult.data)
     let existingMetrics;
 
     //***** if ownerType is family *****\\
     if (familyMemberId) {
       // find the family
       const family = await Family.findOne({ _id: familyMemberId, patientId: patient._id });
-      console.log("Family..... ",family)
       if (!family) {
         res.status(400).json({
           success: false,
@@ -85,14 +83,12 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
         });
         return;
       }
-      console.log("RESTTTT ",rest)
       if (family.basicDetails.gender !== "Female") {
         delete rest.femaleHealth;
       }
 
       // check if family already has a linked health metrices
       if (family.healthMetricsId) {
-        console.log("Hi")
         existingMetrics = await HealthMetrics.findByIdAndUpdate(
           family.healthMetricsId,
           {
@@ -106,7 +102,6 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
       } 
       // if not the create a new health metrices document
       else {
-        console.log("Hello")
         const newMetrics = new HealthMetrics({
           patientId: patient._id,
           ownerType,
@@ -114,12 +109,10 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
           ...rest,
         });
         existingMetrics = await newMetrics.save();
-        console.log("Exist metric.... ",existingMetrics)
 
         // update the healthMetricesId key in the family document
         family.healthMetricsId = existingMetrics._id;
         await family.save();
-        console.log("final family ",family)
       }
     } 
     //***** if ownerType is patient ******\\

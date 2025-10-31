@@ -21,7 +21,7 @@ router
 
 // get all rating of doctor on patient side(exclude inactive ratings)
 router
-  .route("/doctor/ratings/:doctorId")
+  .route("/doctor/ratings/:userId")
   .get(verifyToken as RequestHandler, getRatingsByDoctorId as RequestHandler);
 
 // patient can add rating to a particular appointment

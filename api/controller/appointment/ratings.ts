@@ -10,7 +10,7 @@ export const getMyRatings = async (
   res: Response
 ): Promise<void> => {
   try {
-    console.log("Hi")
+    console.log("Hi");
     const userId = req.user.id;
 
     const doctor = await Doctor.findOne({ userId });
@@ -34,7 +34,7 @@ export const getMyRatings = async (
       })
       .sort({ createdAt: -1 });
 
-    console.log("Ratings ",ratings)
+    console.log("Ratings ", ratings);
 
     res.status(200).json({
       success: true,
@@ -56,8 +56,8 @@ export const getRatingsByDoctorId = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { doctorId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
       res.status(400).json({
         success: false,
         message: "Invalid Doctor ID format",
@@ -65,6 +65,15 @@ export const getRatingsByDoctorId = async (
       return;
     }
 
+    const doctor = await Doctor.findOne({ userId });
+    if (!doctor) {
+      res.status(400).json({
+        success: false,
+        message: "Doctor with this userId not found.",
+      });
+      return;
+    }
+    const doctorId = doctor._id;
     const ratings = await RatingModel.find({
       doctorId,
       isEnable: true,
@@ -257,7 +266,10 @@ export const toggleRatingVisibility = async (
 };
 
 // get a single rating by ratingId
-export const getRatingById = async (req: Request, res: Response): Promise<void> => {
+export const getRatingById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { ratingId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(ratingId)) {
@@ -277,7 +289,7 @@ export const getRatingById = async (req: Request, res: Response): Promise<void> 
       });
       return;
     }
-    console.log("Rating ",rating)
+    console.log("Rating ", rating);
 
     res.status(200).json({
       success: true,
@@ -292,4 +304,3 @@ export const getRatingById = async (req: Request, res: Response): Promise<void> 
     });
   }
 };
-
