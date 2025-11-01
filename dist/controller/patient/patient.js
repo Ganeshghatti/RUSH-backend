@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getHealthMetrics = exports.updateHealthMetrics = exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
+exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -24,8 +24,6 @@ const razorpay_1 = require("../../config/razorpay");
 const signed_url_1 = require("../../utils/signed-url");
 const emergency_appointment_model_1 = __importDefault(require("../../models/appointment/emergency-appointment-model"));
 const emergency_appointment_1 = require("../appointment/emergency-appointment");
-const validation_1 = require("../../validation/validation");
-const health_metrics_model_1 = require("../../models/health-metrics-model");
 const crypto_1 = __importDefault(require("crypto"));
 const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -581,99 +579,107 @@ const getAppointmentsDoctorForPatient = (req, res) => __awaiter(void 0, void 0, 
     }
 });
 exports.getAppointmentsDoctorForPatient = getAppointmentsDoctorForPatient;
-const updateHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        // Validate request body
-        const validationResult = validation_1.updateHealthMetricsSchema.safeParse(req.body);
-        if (!validationResult.success) {
-            res.status(400).json({
-                success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
-            });
-            return;
-        }
-        // Find patient by userId
-        const patient = yield patient_model_1.default.findOne({ userId });
-        if (!patient) {
-            res.status(404).json({
-                success: false,
-                message: "Patient not found",
-            });
-            return;
-        }
-        const updateData = validationResult.data;
-        // Try to find existing health metrics for this patient
-        let healthMetrics = yield health_metrics_model_1.HealthMetrics.findOne({ patientId: patient._id });
-        if (healthMetrics) {
-            // Update existing health metrics document
-            healthMetrics = yield health_metrics_model_1.HealthMetrics.findOneAndUpdate({ patientId: patient._id }, { $set: updateData }, { new: true, runValidators: true });
-            res.status(200).json({
-                success: true,
-                message: "Health metrics updated successfully",
-                data: healthMetrics,
-            });
-        }
-        else {
-            // Create new health metrics document if none exists
-            healthMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id }, updateData));
-            const savedHealthMetrics = yield healthMetrics.save();
-            patient.healthMetricsId = savedHealthMetrics._id;
-            yield patient.save();
-            res.status(201).json({
-                success: true,
-                message: "Health metrics created successfully",
-                data: savedHealthMetrics,
-            });
-        }
-    }
-    catch (error) {
-        console.error("Error updating health metrics:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update health metrics",
-            error: error.message,
-        });
-    }
-});
-exports.updateHealthMetrics = updateHealthMetrics;
-const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        // Find patient by userId
-        const patient = yield patient_model_1.default.findOne({ userId });
-        if (!patient) {
-            res.status(404).json({
-                success: false,
-                message: "Patient not found",
-            });
-            return;
-        }
-        // Find health metrics for this patient
-        const healthMetrics = yield health_metrics_model_1.HealthMetrics.findOne({
-            patientId: patient._id,
-        });
-        if (!healthMetrics) {
-            res.status(404).json({
-                success: false,
-                message: "Health metrics not found",
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Health metrics retrieved successfully",
-            data: healthMetrics,
-        });
-    }
-    catch (error) {
-        console.error("Error fetching health metrics:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch health metrics",
-            error: error.message,
-        });
-    }
-});
-exports.getHealthMetrics = getHealthMetrics;
+// export const updateHealthMetrics = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const userId = req.user.id;
+//     // Validate request body
+//     const validationResult = updateHealthMetricsSchema.safeParse(req.body);
+//     if (!validationResult.success) {
+//       res.status(400).json({
+//         success: false,
+//         message: "Validation failed",
+//         errors: validationResult.error.errors,
+//       });
+//       return;
+//     }
+//     // Find patient by userId
+//     const patient = await Patient.findOne({ userId });
+//     if (!patient) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Patient not found",
+//       });
+//       return;
+//     }
+//     const updateData = validationResult.data;
+//     // Try to find existing health metrics for this patient
+//     let healthMetrics = await HealthMetrics.findOne({ patientId: patient._id });
+//     if (healthMetrics) {
+//       // Update existing health metrics document
+//       healthMetrics = await HealthMetrics.findOneAndUpdate(
+//         { patientId: patient._id },
+//         { $set: updateData },
+//         { new: true, runValidators: true }
+//       );
+//       res.status(200).json({
+//         success: true,
+//         message: "Health metrics updated successfully",
+//         data: healthMetrics,
+//       });
+//     } else {
+//       // Create new health metrics document if none exists
+//       healthMetrics = new HealthMetrics({
+//         patientId: patient._id,
+//         ...updateData,
+//       });
+//       const savedHealthMetrics = await healthMetrics.save();
+//       patient.healthMetricsId = savedHealthMetrics._id;
+//       await patient.save();
+//       res.status(201).json({
+//         success: true,
+//         message: "Health metrics created successfully",
+//         data: savedHealthMetrics,
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Error updating health metrics:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to update health metrics",
+//       error: (error as Error).message,
+//     });
+//   }
+// };
+// export const getHealthMetrics = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const userId = req.user.id;
+//     // Find patient by userId
+//     const patient = await Patient.findOne({ userId });
+//     if (!patient) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Patient not found",
+//       });
+//       return;
+//     }
+//     // Find health metrics for this patient
+//     const healthMetrics = await HealthMetrics.findOne({
+//       patientId: patient._id,
+//     });
+//     if (!healthMetrics) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Health metrics not found",
+//       });
+//       return;
+//     }
+//     res.status(200).json({
+//       success: true,
+//       message: "Health metrics retrieved successfully",
+//       data: healthMetrics,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching health metrics:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch health metrics",
+//       error: (error as Error).message,
+//     });
+//   }
+// };

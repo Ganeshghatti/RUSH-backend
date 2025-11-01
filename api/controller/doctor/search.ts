@@ -75,7 +75,7 @@ export const searchDoctor = async (
         filter.specialization = { $regex: queryRegex };
       }
       doctorsBySpecialization = await Doctor.find(filter)
-        .select("-password")
+        .select("-password -earnings")
         .populate({
           path: "userId",
           match: { isDocumentVerified: true, ...(gender ? { gender } : {}) },

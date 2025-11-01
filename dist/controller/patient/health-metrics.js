@@ -23,13 +23,57 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addHealthMetrics = exports.getHealthMetricsById = void 0;
+exports.addHealthMetrics = exports.getHealthMetricsById = exports.getHealthMetrics = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const family_model_1 = __importDefault(require("../../models/user/family-model"));
 const health_metrics_model_1 = require("../../models/health-metrics-model");
 const validation_1 = require("../../validation/validation");
+// get health metrics for patient
+const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const userId = req.user.id;
+        //finding the patient linked with this userId
+        const patient = yield patient_model_1.default.findOne({ userId });
+        if (!patient) {
+            res.status(404).json({
+                success: false,
+                message: "Patient not found",
+            });
+            return;
+        }
+        // check if patient has healthMetricsId
+        if (!patient.healthMetricsId) {
+            res.status(404).json({
+                success: false,
+                message: "No health metrics associated with this patient",
+            });
+            return;
+        }
+        const healthMetrics = yield health_metrics_model_1.HealthMetrics.findById(patient.healthMetricsId);
+        if (!healthMetrics) {
+            res.status(404).json({
+                success: false,
+                message: "Health Metrics not found",
+            });
+            return;
+        }
+        res.status(200).json({
+            success: true,
+            message: "Health Metrics fetched successfully",
+            data: healthMetrics,
+        });
+    }
+    catch (error) {
+        console.error("Error fetching health metrics:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch health metrics",
+        });
+    }
+});
+exports.getHealthMetrics = getHealthMetrics;
 // get health metrics by ID
 const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -90,12 +134,15 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             return;
         }
         const _a = validationResult.data, { familyMemberId } = _a, rest = __rest(_a, ["familyMemberId"]);
+        const payload = Object.assign({}, rest);
         const ownerType = familyMemberId ? "Family" : "Patient";
-        let existingMetrics;
         //***** if ownerType is family *****\\
         if (familyMemberId) {
             // find the family
-            const family = yield family_model_1.default.findOne({ _id: familyMemberId, patientId: patient._id });
+            const family = yield family_model_1.default.findOne({
+                _id: familyMemberId,
+                patientId: patient._id,
+            });
             if (!family) {
                 res.status(400).json({
                     success: false,
@@ -104,37 +151,73 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 return;
             }
             if (family.basicDetails.gender !== "Female") {
-                delete rest.femaleHealth;
+                delete payload.femaleHealth;
             }
-            // check if family already has a linked health metrices
+            // if family already has a linked health metrices update it
             if (family.healthMetricsId) {
-                existingMetrics = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(family.healthMetricsId, Object.assign(Object.assign({}, rest), { ownerType, patientId: patient._id, familyMemberId }), { new: true });
+                const updated = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(family.healthMetricsId, {
+                    $set: Object.assign(Object.assign({}, payload), { ownerType, patientId: patient._id, familyMemberId }),
+                }, { new: true, runValidators: true });
+                if (!updated) {
+                    res.status(500).json({
+                        success: false,
+                        message: "Failed to update family health metrics",
+                    });
+                    return;
+                }
+                res.status(200).json({
+                    success: true,
+                    message: "Family health metrics updated successfully",
+                    data: updated,
+                });
+                return;
             }
             // if not the create a new health metrices document
-            else {
-                const newMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id, ownerType,
-                    familyMemberId }, rest));
-                existingMetrics = yield newMetrics.save();
-                // update the healthMetricesId key in the family document
-                family.healthMetricsId = existingMetrics._id;
-                yield family.save();
-            }
+            const newMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id, ownerType,
+                familyMemberId }, payload));
+            const saved = yield newMetrics.save();
+            // update the healthMetricesId key in the family document
+            family.healthMetricsId = saved._id;
+            yield family.save();
+            res.status(201).json({
+                success: true,
+                message: "Family health metrics created successfully",
+                data: saved,
+            });
+            return;
         }
         //***** if ownerType is patient ******\\
-        else {
-            const user = yield user_model_1.default.findById(userId);
-            if ((user === null || user === void 0 ? void 0 : user.gender) !== "Female") {
-                delete rest.femaleHealth;
-            }
-            existingMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id, ownerType }, rest));
-            existingMetrics = yield existingMetrics.save();
+        const user = yield user_model_1.default.findById(userId);
+        if ((user === null || user === void 0 ? void 0 : user.gender) !== "Female") {
+            delete rest.femaleHealth;
         }
+        //if patient already has healthMetrics update it
+        if (patient.healthMetricsId) {
+            const updated = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(patient.healthMetricsId, {
+                $set: Object.assign(Object.assign({}, payload), { ownerType, patientId: patient._id }),
+            }, { new: true, runValidators: true });
+            if (!updated) {
+                res.status(500).json({
+                    success: false,
+                    message: "Failed to update patient health metrics",
+                });
+                return;
+            }
+            res.status(200).json({
+                success: true,
+                message: "Patient health metrics updated successfully",
+                data: updated,
+            });
+            return;
+        }
+        const newMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id, ownerType }, payload));
+        const saved = yield newMetrics.save();
+        patient.healthMetricsId = saved._id;
+        yield patient.save();
         res.status(201).json({
             success: true,
-            message: familyMemberId
-                ? "Family Health Metrics saved successfully"
-                : "Patient Health Metrics saved successfully",
-            data: existingMetrics,
+            message: "Patient health metrics created successfully",
+            data: saved,
         });
     }
     catch (error) {

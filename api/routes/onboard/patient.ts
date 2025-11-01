@@ -1,10 +1,10 @@
 import { getPatientById } from './../../controller/patient/patient';
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { Router } from "express";
-import { patientOnboard, getPatientDashboard, getAppointmentsDoctorForPatient, updateHealthMetrics, getHealthMetrics} from "../../controller/patient/patient";
+import { patientOnboard, getPatientDashboard, getAppointmentsDoctorForPatient } from "../../controller/patient/patient";
 import { updatePersonalInfo, updateIdentityProof, updateInsuranceDetails, updateBankDetail } from '../../controller/patient/settings';
 import { addFamily, updateFamily, removeFamily, getFamilyDetails } from "../../controller/patient/family";
-import { getHealthMetricsById, addHealthMetrics } from '../../controller/patient/health-metrics';
+import { getHealthMetrics, getHealthMetricsById, addHealthMetrics } from '../../controller/patient/health-metrics';
 
 const router = Router();
 
@@ -18,10 +18,11 @@ router.route("/profile/insurance-details").put(verifyToken ,checkRole("patient")
 router.route("/profile/bank-detail").put(verifyToken ,checkRole("patient"), updateBankDetail);
 
 router.route("/appointments/doctor").get(verifyToken, checkRole("patient"), getAppointmentsDoctorForPatient);
-router.route("/health-metrics").put(verifyToken, checkRole("patient"), updateHealthMetrics);
-router.route("/health-metrics").get(verifyToken, checkRole("patient"), getHealthMetrics);
+// router.route("/health-metrics").put(verifyToken, checkRole("patient"), updateHealthMetrics);
+// router.route("/health-metrics").get(verifyToken, checkRole("patient"), getHealthMetrics);
 
 // health metrics routes
+router.route("/get/health-metrics").get(verifyToken, checkRole("patient"),getHealthMetrics);
 router.route("/health-metrics/:healthMetricsId").get(verifyToken, checkRole("patient"),getHealthMetricsById);
 router.route("/add/health-metrics").post(verifyToken, checkRole("patient"),addHealthMetrics);
 
