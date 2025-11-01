@@ -8,6 +8,9 @@ import twilio from "twilio";
 import { jwt } from "twilio";
 import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { transporter } from "../../config/email-transporter";
+import { sendAdminEmergencyNotification } from "../../utils/mail/emergency_appointments";
+import { sendAppointmentStatusNotification } from "../../utils/mail/appointment-notifications";
 
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -153,6 +156,99 @@ export const createEmergencyAppointment = async (
     });
     await newEmergencyAppointment.save();
 
+    // try {
+    //   const adminEmail = "vijayjoshi5410@gmail.com";
+
+    //   const adminMailOptions = {
+    //     from: process.env.SMTP_USER,
+    //     to: adminEmail,
+    //     subject: "New Emergency Appointment Created",
+    //     html: `
+    //       <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 32px;">
+    //         <div style="max-width: 520px; margin: auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 24px;">
+    //           <h2 style="color: #e53935; margin: 0 0 12px;">🚨 New Emergency Appointment</h2>
+    //           <p style="margin: 0 0 6px;"><b>Patient Name:</b> ${name}</p>
+    //           <p style="margin: 0 0 6px;"><b>Contact Number:</b> ${contactNumber}</p>
+    //           <p style="margin: 0 0 6px;"><b>Location:</b> ${location}</p>
+    //           <p style="margin: 0 0 6px;"><b>Title:</b> ${title}</p>
+    //           <p style="margin: 0 0 12px;"><b>Description:</b> ${description}</p>
+    //           <p style="margin: 0 0 12px; color:#666; font-size: 13px;"><b>Created At:</b> ${new Date().toLocaleString()}</p>
+    //           <hr style="margin: 16px 0;">
+    //           <p style="color: #777; font-size: 13px; margin:0;">
+    //             This is an automated alert from <b>RUSHDR</b> — please assign a doctor immediately.
+    //           </p>
+    //         </div>
+    //       </div>
+    //     `,
+    //   } as any;
+
+    //   console.log("Attempting to send admin emergency email to:", adminEmail);
+    //   await transporter.sendMail(adminMailOptions)
+    //     .then(() => console.log("Admin emergency email sent to:", adminEmail))
+    //     .catch((err) => {
+    //       console.error("Admin email send failed:", err?.message || err);
+    //     });
+
+    //   // Patient acknowledgement (if email available)
+    //   try {
+    //     const patientEmail = (patientUserDetail as any)?.email;
+    //     if (patientEmail) {
+    //       const patientMailOptions = {
+    //         from: process.env.SMTP_USER,
+    //         to: patientEmail,
+    //         subject: "We received your emergency request",
+    //         html: `
+    //           <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 32px;">
+    //             <div style="max-width: 520px; margin: auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 24px;">
+    //               <h2 style="color: #1a73e8; margin: 0 0 12px;">Emergency request received</h2>
+    //               <p style="margin: 0 0 8px;">Hi ${name || "there"},</p>
+    //               <p style="margin: 0 0 12px;">Your emergency request has been received. A doctor will be assigned shortly.</p>
+    //               <p style="margin: 0 0 6px;"><b>Title:</b> ${title}</p>
+    //               <p style="margin: 0 0 6px;"><b>Description:</b> ${description}</p>
+    //               <p style="margin: 0 0 6px;"><b>Contact:</b> ${contactNumber}</p>
+    //               <p style="margin: 0 0 12px;"><b>Location:</b> ${location}</p>
+    //               <hr style="margin: 16px 0;">
+    //               <p style="font-size: 12px; color: #888; margin: 0;">If this wasn’t you, please ignore this email.</p>
+    //             </div>
+    //           </div>
+    //         `,
+    //       } as any;
+    //       console.log("Attempting to send patient emergency email to:", patientEmail);
+    //       await transporter.sendMail(patientMailOptions)
+    //         .then(() => console.log("Patient emergency email sent to:", patientEmail))
+    //         .catch((err) => {
+    //           console.error("Patient email send failed:", err?.message || err);
+    //         });
+    //     }
+    //   } catch (patientEmailErr) {
+    //     console.error("Failed to send patient acknowledgement:", patientEmailErr);
+    //   }
+    // } catch (emailError) {
+    //   console.error("Failed to send emergency appointment emails:", emailError);
+    // }
+    try {
+      // Validate before sending email
+      if (!name || !title || !description || !contactNumber || !location) {
+        console.error("❌ Missing required emergency appointment details.");
+        throw new Error("All fields (name, title, description, contactNumber, location) are required to send an emergency notification.");
+      }
+
+      // Send admin notification
+      await sendAdminEmergencyNotification({
+        name,
+        title,
+        description,
+        contactNumber,
+        location,
+      });
+
+      console.log("✅ Admin emergency notification sent successfully.");
+
+    } catch (emailError: any) {
+      console.error("🚨 Failed to send emergency appointment email:", emailError.message || emailError);
+    }
+
+
     // Populate the response with patient information
     const populatedAppointment = await EmergencyAppointment.findById(
       newEmergencyAppointment._id
@@ -272,6 +368,7 @@ export const getPatientEmergencyAppointments = async (
 };
 
 /* doctor accepts emergency appointment + emergency online room is created */
+
 export const acceptEmergencyAppointment = async (
   req: Request,
   res: Response
@@ -281,7 +378,7 @@ export const acceptEmergencyAppointment = async (
     const doctorUserId = req.user.id;
 
     // Find doctor by userId
-    const doctor = await Doctor.findOne({ userId: doctorUserId });
+    const doctor = await Doctor.findOne({ userId: doctorUserId }).populate('userId');
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -309,7 +406,7 @@ export const acceptEmergencyAppointment = async (
     }
 
     // Find patient
-    const patient = await Patient.findById(emergencyAppointment.patientId);
+    const patient = await Patient.findById(emergencyAppointment.patientId).populate('userId');
     if (!patient) {
       res.status(404).json({
         success: false,
@@ -331,6 +428,25 @@ export const acceptEmergencyAppointment = async (
     emergencyAppointment.status = "in-progress";
     emergencyAppointment.roomName = room.uniqueName;
     await emergencyAppointment.save();
+
+    // Send email notifications
+    try {
+      const doctorName = (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || '');
+      const patientName = (patient.userId as any).firstName + ' ' + ((patient.userId as any).lastName || '');
+
+      await sendAppointmentStatusNotification({
+        appointmentId: emergencyAppointment._id.toString(),
+        status: emergencyAppointment.status,
+        patientName: patientName,
+        patientEmail: (patient.userId as any).email,
+        doctorName: doctorName,
+        doctorEmail: (doctor.userId as any).email,
+        type: 'Emergency',
+      });
+      console.log("✅ Emergency appointment acceptance notification sent successfully.");
+    } catch (mailError) {
+      console.error("🚨 Failed to send emergency appointment acceptance notification:", mailError);
+    }
 
     // Populate the response with both patient and doctor information
     const updatedAppointment = await EmergencyAppointment.findById(id)
@@ -461,6 +577,9 @@ export const createEmergencyRoomAccessToken = async (
   }
 };
 
+
+
+
 /* doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 export const finalPayment = async (
   req: Request,
@@ -539,8 +658,8 @@ export const finalPayment = async (
       let platformFee = subscription.platformFeeEmergency?.figure || 0;
       let opsExpense = subscription.opsExpenseEmergency?.figure || 0;
       // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
-      if(!platformFee) platformFee = 0;
-      if(!opsExpense) opsExpense = 0;
+      if (!platformFee) platformFee = 0;
+      if (!opsExpense) opsExpense = 0;
 
       if (appointment.paymentDetails) {
         const deductAmount = appointment.paymentDetails.patientWalletFrozen;

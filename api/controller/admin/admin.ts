@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
 import User from "../../models/user/user-model";
+import mongoose from "mongoose";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
+import { sendAccountStatusMail, sendDocumentVerificationMail } from "../../utils/mail/user_notifications";
 
 export const getAllDoctors = async (
   req: Request,
@@ -64,12 +66,12 @@ export const getAllPatients = async (
 
     // Filter out users where patient role ref failed to populate and generate signed URLs for basic user data only
     const validUsers = users.filter(user => user.roleRefs?.patient && typeof user.roleRefs.patient === 'object');
-    
+
     const usersWithSignedUrls = await Promise.all(
       validUsers.map(async (user) => {
         // Create a clone and only process basic user fields to avoid the signed URL error
         const clone = JSON.parse(JSON.stringify(user));
-        
+
         // Only handle profile picture for now
         if (clone?.profilePic) {
           try {
@@ -79,7 +81,7 @@ export const getAllPatients = async (
             console.warn("Could not generate signed URL for profile pic:", error);
           }
         }
-        
+
         return clone;
       })
     );
@@ -131,6 +133,22 @@ export const updateDoctorStatus = async (
       return;
     }
 
+    // Send notification email to doctor and admin
+    const populatedDoctor = await Doctor.findById(updatedDoctor._id).populate<{ userId: { firstName: string; lastName: string; email: string; } }>("userId");
+
+    if (populatedDoctor && populatedDoctor.userId) {
+      await sendAccountStatusMail({
+        userName: `${populatedDoctor.userId.firstName} ${populatedDoctor.userId.lastName}`,
+        email: populatedDoctor.userId.email,
+        status: status,
+        role: "doctor",
+        message: message
+      });
+    } else {
+      // Log an error if we can't get user details for the email, but don't fail the request
+      console.error(`Could not send status update email for doctorId: ${doctorId} because user details could not be populated.`);
+    }
+
     res.status(200).json({
       success: true,
       message: "Doctor status updated successfully",
@@ -174,6 +192,20 @@ export const updateDocumentVerificationStatus = async (
       });
       return;
     }
+
+    // Send notification email to doctor only
+    if (user.roles.includes('doctor')) {
+      await sendDocumentVerificationMail({
+        userName: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        status: isDocumentVerified ? 'Verified' : 'Rejected',
+        role: 'doctor',
+        message: `Your document verification status has been updated.`
+      });
+    } else {
+      console.warn(`Document verification status updated for a non-doctor user: ${userId}. No email sent.`);
+    }
+
 
     res.status(200).json({
       success: true,

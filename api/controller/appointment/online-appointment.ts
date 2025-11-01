@@ -9,6 +9,7 @@ import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { sendNewAppointmentNotification } from "../../utils/mail/appointment-notifications";
 
 /* Book appointment by patient + Amount freeze*/
 export const bookOnlineAppointment = async (
@@ -43,7 +44,10 @@ export const bookOnlineAppointment = async (
     }
 
     // Check if doctor exists
-    const doctor = await Doctor.findById(doctorId);
+    const doctor = await Doctor.findById(doctorId).populate({
+      path: "userId",
+      select: "firstName lastName email",
+    });
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -140,6 +144,23 @@ export const bookOnlineAppointment = async (
       },
     });
     await newAppointment.save();
+
+    try {
+      await sendNewAppointmentNotification({
+        patientName: patientUserDetail.firstName + ' ' + (patientUserDetail.lastName || ''),
+        patientEmail: patientUserDetail.email,
+        appointmentId: newAppointment._id.toString(), // Changed from appointment._id to newAppointment._id
+        status: newAppointment.status,
+        doctorName: (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || ''),
+        doctorEmail: (doctor.userId as any).email,
+        type: 'Online',
+        scheduledFor: new Date(slot.time.start).toLocaleString(),
+      });
+      console.log("✅ Doctor online appointment notification sent successfully.");
+    } catch (mailError) {
+      console.error("🚨 Failed to send online appointment notification:", mailError);
+    }
+
 
     // Populate the response with detailed patient and doctor information
     const populatedAppointment = await OnlineAppointment.findById(
@@ -755,7 +776,7 @@ export const finalPayment = async (
       });
       return;
     }
-    console.log('ROOM NAME ',roomName)
+    console.log('ROOM NAME ', roomName)
 
     // find the appointment with this room name
     const appointment = await OnlineAppointment.findOne({ roomName });
@@ -820,7 +841,7 @@ export const finalPayment = async (
         | "min60";
       let platformFee =
         subscription.platformFeeOnline &&
-        subscription.platformFeeOnline[slotKey]
+          subscription.platformFeeOnline[slotKey]
           ? subscription.platformFeeOnline[slotKey]!.figure
           : 0;
       let opsExpense =
@@ -828,8 +849,8 @@ export const finalPayment = async (
           ? subscription.opsExpenseOnline[slotKey]!.figure
           : 0;
       // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
-      if(!platformFee) platformFee = 0;
-      if(!opsExpense) opsExpense = 0;
+      if (!platformFee) platformFee = 0;
+      if (!opsExpense) opsExpense = 0;
 
       if (appointment.paymentDetails) {
         const deductAmount = appointment.paymentDetails.patientWalletFrozen;

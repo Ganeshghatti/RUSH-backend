@@ -43,6 +43,7 @@ export const updatePersonalInfo = async (
       return;
     }
 
+
     res.json({
       message: "Personal info updated successfully",
       user: updatedUser,
@@ -71,12 +72,12 @@ export const updateIdentityProof = async (
     }
 
     // make sure we are saving S3 key in the DB not urls
-      if(personalIdProof.image && personalIdProof.image.includes('https://')) 
-        personalIdProof.image = await getKeyFromSignedUrl(personalIdProof.image);
-      if(addressProof.image && addressProof.image.includes('https://')) 
-        addressProof.image = await getKeyFromSignedUrl(addressProof.image);
-      if(taxProof.image && taxProof.image.includes('https://')) 
-        taxProof.image = await getKeyFromSignedUrl(taxProof.image);
+    if (personalIdProof.image && personalIdProof.image.includes('https://'))
+      personalIdProof.image = await getKeyFromSignedUrl(personalIdProof.image);
+    if (addressProof.image && addressProof.image.includes('https://'))
+      addressProof.image = await getKeyFromSignedUrl(addressProof.image);
+    if (taxProof.image && taxProof.image.includes('https://'))
+      taxProof.image = await getKeyFromSignedUrl(taxProof.image);
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -97,6 +98,7 @@ export const updateIdentityProof = async (
       res.status(404).json({ success: false, message: "User not found." });
       return;
     }
+
 
     res.status(200).json({
       success: true,

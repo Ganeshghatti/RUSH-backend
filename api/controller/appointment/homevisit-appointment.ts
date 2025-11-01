@@ -12,6 +12,8 @@ import {
   homeVisitConfigUpdateSchema,
 } from "../../validation/validation";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { sendNewAppointmentNotification, sendAppointmentCancellationNotification } from "../../utils/mail/appointment-notifications";
+import { sendTravelCostNoticeMail } from "../../utils/mail/patient_notifications";
 
 // NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
 // Removing local AuthRequest avoids duplicated type drift.
@@ -92,7 +94,9 @@ export const bookHomeVisitAppointment = async (
     // (Field presence/shape already enforced by Zod schema)
 
     // Check if doctor exists and has home visit enabled
-    const doctor = await Doctor.findById(doctorId);
+    const doctor = await Doctor.findById(doctorId).populate({
+      path: "userId", select: "firstName lastName email"
+    });
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -200,6 +204,23 @@ export const bookHomeVisitAppointment = async (
     });
     await newAppointment.save();
 
+    // Send mail notification to admin for new home visit appointment
+    try {
+      await sendNewAppointmentNotification({
+        patientName: patient.firstName + ' ' + (patient.lastName || ''),
+        patientEmail: patient.email,
+        appointmentId: newAppointment._id.toString(),
+        status: newAppointment.status,
+        doctorName: (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || ''),
+        doctorEmail: (doctor.userId as any).email,
+        type: 'Home Visit',
+        scheduledFor: new Date(slot.time.start).toLocaleString(),
+      });
+      console.log("✅ Doctor home visit appointment notification sent successfully.");
+    } catch (mailError) {
+      console.error("🚨 Failed to send home visit appointment notification:", mailError);
+    }
+
     // Populate the response
     const populatedAppointment = await HomeVisitAppointment.findById(
       newAppointment._id
@@ -261,7 +282,7 @@ export const acceptHomeVisitRequest = async (
 
     // (travelCost validated by schema)
 
-    const doctor = await Doctor.findOne({ userId: doctorId });
+    const doctor = await Doctor.findOne({ userId: doctorId }).populate('userId');
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -275,6 +296,9 @@ export const acceptHomeVisitRequest = async (
       _id: appointmentId,
       doctorId: doctor._id,
       status: "pending",
+    }).populate({
+      path: "patientId",
+      select: "firstName lastName email",
     });
 
     if (!appointment) {
@@ -305,6 +329,22 @@ export const acceptHomeVisitRequest = async (
     appointment.doctorIp = getClientIp(req);
 
     await appointment.save();
+
+    // Send notification to patient about the added travel cost
+    try {
+      const patientInfo = appointment.patientId as any;
+      if (patientInfo && patientInfo.email) {
+        await sendTravelCostNoticeMail(patientInfo.email, {
+          patientName: `${patientInfo.firstName} ${patientInfo.lastName || ''}`,
+          appointmentId: appointment._id.toString(),
+          doctorName: (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || ''),
+          visitStatus: "Doctor Accepted",
+          travelCost: travelCost.toString(),
+        });
+      }
+    } catch (mailError) {
+      console.error("🚨 Failed to send travel cost notification to patient:", mailError);
+    }
 
     // Populate the response
     const updatedAppointment = await populateAppointment(appointment._id);
@@ -597,7 +637,7 @@ export const completeHomeVisitAppointment = async (
       if (deductSuccess && deductAmount) {
         await patientUserDetail.save();
         appointment.paymentDetails.walletDeducted = deductAmount;
-        if(appointment.paymentDetails.walletFrozen) appointment.paymentDetails.walletFrozen -= deductAmount;
+        if (appointment.paymentDetails.walletFrozen) appointment.paymentDetails.walletFrozen -= deductAmount;
         appointment.paymentDetails.paymentStatus = "completed";
 
         // increment in doctor user
