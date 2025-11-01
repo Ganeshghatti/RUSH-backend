@@ -30,7 +30,7 @@ type RecipientType = 'admin-only' | 'user-only' | 'both';
 
 const sendTransactionMail = async (data: TransactionMailData, subject: string, title: string, recipientType: RecipientType = 'both') => {
   try {
-    const adminEmail = "vijayjoshi5410@gmail.com";
+    const adminEmail = "urushdr@gmail.com";
     let recipients: string[] = [];
 
     if (recipientType === 'both') {
@@ -74,12 +74,4 @@ export const sendDebitStatusUpdateMail = async (data: TransactionMailData) => {
   const subject = `Debit Request ${data.status || 'Update'}`;
   const title = `Debit Request ${data.status || 'Update'}`;
   await sendTransactionMail(data, subject, title, 'both');
-};
-
-export const sendCreditCompletedMail = async (data: TransactionMailData) => {
-  await sendTransactionMail(data, "✅ Wallet Credit Successful", "✅ Wallet Credit Successful", 'user-only');
-};
-
-export const sendTransactionFailedMail = async (data: TransactionMailData) => {
-  await sendTransactionMail(data, "❌ Transaction Failed", "❌ Transaction Failed", 'both');
 };

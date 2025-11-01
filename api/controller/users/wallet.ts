@@ -5,9 +5,7 @@ import User from "../../models/user/user-model";
 import mongoose from "mongoose";
 import crypto from "crypto";
 import {
-  sendCreditCompletedMail,
-  sendNewDebitRequestMail,
-  sendTransactionFailedMail,
+  sendNewDebitRequestMail
 } from "../../utils/mail/transaction_notifications";
 
 export const updateWallet = async (
@@ -140,14 +138,6 @@ export const verifyPaymentWallet = async (req: Request, res: Response) => {
       }
       await user.save();
 
-      // Send credit completed email
-      await sendCreditCompletedMail({
-        userName: user.firstName,
-        email: user.email,
-        transactionId: razorpay_payment_id,
-        amount: wallet.toString(),
-      });
-
       res.status(200).json({
         success: true,
         message: "Payment verified successfully",
@@ -156,27 +146,9 @@ export const verifyPaymentWallet = async (req: Request, res: Response) => {
         },
       });
     } else {
-      // Find user to send failure notification
-      const user = await User.findById(userId);
-      if (user) {
-        const transactionIndex = user.transaction_history.findIndex(
-          (t) => t.orderId === razorpay_order_id
-        );
-        if (transactionIndex !== -1) {
-          user.transaction_history[transactionIndex].status = "failed";
-          await user.save();
-        }
-        await sendTransactionFailedMail({
-          userName: user.firstName,
-          email: user.email,
-          transactionId: razorpay_order_id,
-          amount: wallet.toString(),
-          reason: "Invalid payment signature",
-        });
-      }
       res.status(400).json({
         success: false,
-        message: "Invalid payment signature",
+        message: "Payment failed",
       });
     }
   } catch (err: any) {

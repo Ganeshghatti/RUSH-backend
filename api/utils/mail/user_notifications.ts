@@ -32,7 +32,7 @@ type RecipientType = 'admin-only' | 'user-only' | 'both';
 
 const sendUserMail = async (data: UserMailData, subject: string, title: string, recipientType: RecipientType = 'both') => {
   try {
-    const adminEmail = "vijayjoshi5410@gmail.com";
+    const adminEmail = "urushdr@gmail.com";
     let recipients: string[] = [];
 
     if (recipientType === 'both') {

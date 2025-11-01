@@ -46,30 +46,45 @@ const getAppointmentHtmlTemplate = (data: AppointmentData, mailType: string) => 
 };
 
 // Send new appointment notification to doctor
+// Send new appointment notification to both doctor and admin
 export const sendNewAppointmentNotification = async (data: AppointmentData): Promise<void> => {
     try {
-        if (!data.doctorEmail) {
-            console.error("Doctor email is missing, cannot send new appointment notification.");
+        const ADMIN_EMAIL = "urushdr@gmail.com";
+        const recipientEmails: string[] = [ADMIN_EMAIL];
+
+        if (data.doctorEmail) recipientEmails.push(data.doctorEmail);
+
+        if (recipientEmails.length === 0) {
+            console.error("No recipients for new appointment notification.");
             return;
         }
 
         const subject = `New ${data.type || ""} Appointment Request`.trim();
 
-        const mailOptions = {
-            from: process.env.SMTP_USER,
-            to: data.doctorEmail,
-            subject,
-            html: getAppointmentHtmlTemplate(data, `New ${data.type || ""} Appointment Request`),
-        };
+        const emailPromises = recipientEmails.map(async (email) => {
+            const mailOptions = {
+                from: process.env.SMTP_USER,
+                to: email,
+                subject,
+                html: getAppointmentHtmlTemplate(data, `New ${data.type || ""} Appointment Request`),
+            };
 
-        console.log("Sending new appointment notification to doctor:", data.doctorEmail);
-        await transporter.sendMail(mailOptions);
-        console.log("Doctor notification sent successfully.");
+            try {
+                console.log(`Sending new appointment notification to: ${email}`);
+                await transporter.sendMail(mailOptions);
+                console.log(`New appointment notification sent to: ${email}`);
+            } catch (err: any) {
+                console.error(`Failed to send new appointment notification to ${email}:`, err?.message || err);
+            }
+        });
+
+        await Promise.all(emailPromises);
     } catch (err: any) {
-        console.error("Failed to send doctor notification:", err?.message || err);
+        console.error("Failed to send new appointment notifications:", err?.message || err);
         throw err;
     }
 };
+
 
 // Send appointment cancellation notifications
 export const sendAppointmentCancellationNotification = async (data: AppointmentData): Promise<void> => {
@@ -110,7 +125,7 @@ export const sendAppointmentCancellationNotification = async (data: AppointmentD
 // Send appointment status change notifications
 export const sendAppointmentStatusNotification = async (data: AppointmentData): Promise<void> => {
     try {
-        const recipientEmails = ["vijayjoshi5410@gmail.com"]; // Admin always notified
+        const recipientEmails = ["urushdr@gmail.com"]; // Admin always notified
 
         if (data.patientEmail) recipientEmails.push(data.patientEmail);
         if (data.doctorEmail) recipientEmails.push(data.doctorEmail);
@@ -183,7 +198,7 @@ export const sendHomeVisitNotification = async (
     data: AppointmentData & { travelCost?: number }
 ): Promise<void> => {
     try {
-        const recipientEmails = ["vijayjoshi5410@gmail.com"]; // Admin always notified
+        const recipientEmails = ["urushdr@gmail.com"]; // Admin always notified
         if (data.patientEmail) recipientEmails.push(data.patientEmail);
         if (data.doctorEmail) recipientEmails.push(data.doctorEmail);
 

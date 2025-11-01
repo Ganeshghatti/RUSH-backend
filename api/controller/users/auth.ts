@@ -326,8 +326,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
     if (role === 'doctor') {
       mailData.status = 'pending'; // Default status for a new doctor
+      await sendNewUserMail(mailData);
     }
-    await sendNewUserMail(mailData);
 
     // Delete the OTP after successful verification
     await OTP.deleteOne({ _id: otpRecord._id });
