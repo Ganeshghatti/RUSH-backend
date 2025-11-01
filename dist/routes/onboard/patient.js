@@ -16,9 +16,10 @@ router.route("/profile/identity-proof").put(auth_middleware_1.verifyToken, (0, a
 router.route("/profile/insurance-details").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), settings_1.updateInsuranceDetails);
 router.route("/profile/bank-detail").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), settings_1.updateBankDetail);
 router.route("/appointments/doctor").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), patient_2.getAppointmentsDoctorForPatient);
-router.route("/health-metrics").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), patient_2.updateHealthMetrics);
-router.route("/health-metrics").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), patient_2.getHealthMetrics);
+// router.route("/health-metrics").put(verifyToken, checkRole("patient"), updateHealthMetrics);
+// router.route("/health-metrics").get(verifyToken, checkRole("patient"), getHealthMetrics);
 // health metrics routes
+router.route("/get/health-metrics").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), health_metrics_1.getHealthMetrics);
 router.route("/health-metrics/:healthMetricsId").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), health_metrics_1.getHealthMetricsById);
 router.route("/add/health-metrics").post(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), health_metrics_1.addHealthMetrics);
 router.route("/family").post(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("patient"), family_1.addFamily);

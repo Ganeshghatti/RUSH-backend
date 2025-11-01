@@ -6,8 +6,60 @@ import Family from "../../models/user/family-model";
 import { HealthMetrics } from "../../models/health-metrics-model";
 import { healthMetricsSchemaZod } from "../../validation/validation";
 
+// get health metrics for patient
+export const getHealthMetrics = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user.id;
+    //finding the patient linked with this userId
+    const patient = await Patient.findOne({ userId });
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+      return;
+    }
+
+    // check if patient has healthMetricsId
+    if (!patient.healthMetricsId) {
+      res.status(404).json({
+        success: false,
+        message: "No health metrics associated with this patient",
+      });
+      return;
+    }
+
+    const healthMetrics = await HealthMetrics.findById(patient.healthMetricsId);
+    if (!healthMetrics) {
+      res.status(404).json({
+        success: false,
+        message: "Health Metrics not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Health Metrics fetched successfully",
+      data: healthMetrics,
+    });
+  } catch (error) {
+    console.error("Error fetching health metrics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch health metrics",
+    });
+  }
+};
+
 // get health metrics by ID
-export const getHealthMetricsById = async (req: Request, res: Response): Promise<void> => {
+export const getHealthMetricsById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { healthMetricsId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(healthMetricsId)) {
@@ -43,9 +95,13 @@ export const getHealthMetricsById = async (req: Request, res: Response): Promise
 };
 
 // add new health Metrics (for patient or family)
-export const addHealthMetrics = async (req: Request, res: Response): Promise<void> => {
+export const addHealthMetrics = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const userId = req.user.id;
+
     // validate input
     const validationResult = healthMetricsSchemaZod.safeParse(req.body);
     if (!validationResult.success) {
@@ -68,14 +124,16 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
     }
 
     const { familyMemberId, ...rest } = validationResult.data;
+    const payload: any = { ...rest };
     const ownerType = familyMemberId ? "Family" : "Patient";
-
-    let existingMetrics;
 
     //***** if ownerType is family *****\\
     if (familyMemberId) {
       // find the family
-      const family = await Family.findOne({ _id: familyMemberId, patientId: patient._id });
+      const family = await Family.findOne({
+        _id: familyMemberId,
+        patientId: patient._id,
+      });
       if (!family) {
         res.status(400).json({
           success: false,
@@ -83,58 +141,111 @@ export const addHealthMetrics = async (req: Request, res: Response): Promise<voi
         });
         return;
       }
+
       if (family.basicDetails.gender !== "Female") {
-        delete rest.femaleHealth;
+        delete payload.femaleHealth;
       }
 
-      // check if family already has a linked health metrices
+      // if family already has a linked health metrices update it
       if (family.healthMetricsId) {
-        existingMetrics = await HealthMetrics.findByIdAndUpdate(
+        const updated = await HealthMetrics.findByIdAndUpdate(
           family.healthMetricsId,
           {
-            ...rest,
-            ownerType,
-            patientId: patient._id,
-            familyMemberId,
+            $set: {
+              ...payload,
+              ownerType,
+              patientId: patient._id,
+              familyMemberId,
+            },
           },
-          { new: true }
+          { new: true, runValidators: true }
         );
-      } 
-      // if not the create a new health metrices document
-      else {
-        const newMetrics = new HealthMetrics({
-          patientId: patient._id,
-          ownerType,
-          familyMemberId,
-          ...rest,
-        });
-        existingMetrics = await newMetrics.save();
+        if (!updated) {
+          res.status(500).json({
+            success: false,
+            message: "Failed to update family health metrics",
+          });
+          return;
+        }
 
-        // update the healthMetricesId key in the family document
-        family.healthMetricsId = existingMetrics._id;
-        await family.save();
+        res.status(200).json({
+          success: true,
+          message: "Family health metrics updated successfully",
+          data: updated,
+        });
+        return;
       }
-    } 
-    //***** if ownerType is patient ******\\
-    else {
-      const user = await User.findById(userId);
-      if (user?.gender !== "Female") {
-        delete rest.femaleHealth;
-      }
-      existingMetrics = new HealthMetrics({
+
+      // if not the create a new health metrices document
+      const newMetrics = new HealthMetrics({
         patientId: patient._id,
         ownerType,
-        ...rest,
+        familyMemberId,
+        ...payload,
       });
-      existingMetrics = await existingMetrics.save();
+      const saved = await newMetrics.save();
+
+      // update the healthMetricesId key in the family document
+      family.healthMetricsId = saved._id;
+      await family.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Family health metrics created successfully",
+        data: saved,
+      });
+      return;
     }
+
+    //***** if ownerType is patient ******\\
+    const user = await User.findById(userId);
+    if (user?.gender !== "Female") {
+      delete rest.femaleHealth;
+    }
+
+    //if patient already has healthMetrics update it
+    if (patient.healthMetricsId) {
+      const updated = await HealthMetrics.findByIdAndUpdate(
+        patient.healthMetricsId,
+        {
+          $set: {
+            ...payload,
+            ownerType,
+            patientId: patient._id,
+          },
+        },
+        { new: true, runValidators: true }
+      );
+      if (!updated) {
+        res.status(500).json({
+          success: false,
+          message: "Failed to update patient health metrics",
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Patient health metrics updated successfully",
+        data: updated,
+      });
+      return;
+    }
+
+    const newMetrics = new HealthMetrics({
+      patientId: patient._id,
+      ownerType,
+      ...payload,
+    });
+    const saved = await newMetrics.save();
+
+    patient.healthMetricsId = saved._id;
+    await patient.save();
 
     res.status(201).json({
       success: true,
-      message: familyMemberId
-        ? "Family Health Metrics saved successfully"
-        : "Patient Health Metrics saved successfully",
-      data: existingMetrics,
+      message: "Patient health metrics created successfully",
+      data: saved,
     });
   } catch (error) {
     console.error("Error adding/updating health metrics:", error);
