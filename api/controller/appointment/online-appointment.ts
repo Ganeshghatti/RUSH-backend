@@ -9,7 +9,7 @@ import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 import DoctorSubscription from "../../models/doctor-subscription";
-import { sendNewAppointmentNotification } from "../../utils/mail/appointment-notifications";
+import { sendNewAppointmentNotification, sendAppointmentStatusNotification } from "../../utils/mail/appointment-notifications";
 
 /* Book appointment by patient + Amount freeze*/
 export const bookOnlineAppointment = async (
@@ -529,7 +529,10 @@ export const updateAppointmentStatus = async (
     const appointment = await OnlineAppointment.findOne({
       _id: appointmentId,
       doctorId: doctor._id,
-    });
+    })
+      .populate({ path: 'patientId', select: 'firstName lastName email' })
+      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'firstName lastName email' } });
+
     if (!appointment) {
       res.status(404).json({
         success: false,
@@ -585,6 +588,26 @@ export const updateAppointmentStatus = async (
     appointment.status = status;
     await appointment.save();
 
+    // Send status update notification
+    if (status === 'accepted' || status === 'rejected') {
+      try {
+        const patientInfo = appointment.patientId as any;
+        const doctorInfo = (appointment.doctorId as any)?.userId;
+
+        await sendAppointmentStatusNotification({
+          appointmentId: appointment._id.toString(),
+          status: appointment.status,
+          patientName: `${patientInfo.firstName} ${patientInfo.lastName}`,
+          patientEmail: patientInfo.email,
+          doctorName: `${doctorInfo.firstName} ${doctorInfo.lastName}`,
+          doctorEmail: doctorInfo.email,
+          type: 'Online',
+        });
+      } catch (mailError) {
+        console.error("🚨 Failed to send appointment status notification:", mailError);
+      }
+    }
+
     // Populate the response with detailed patient and doctor information
     const updatedAppointment = await OnlineAppointment.findById(appointment._id)
       .populate({
@@ -616,68 +639,73 @@ export const updateAppointmentStatus = async (
 };
 
 /* cancel appointment by patient */
-// export const cancelAppointment = async (
-//   req: Request,
-//   res: Response
-// ): Promise<void> => {
-//   try {
-//     const { appointmentId } = req.params;
-//     console.log("Appointment Id ", appointmentId);
-//     const user_Id = req.user.id;
-//     console.log("User ", user_Id);
+export const cancelAppointment = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { appointmentId } = req.params;
+    const userId = req.user.id;
 
-//     const appointment = await OnlineAppointment.findOne({
-//       _id: appointmentId,
-//     });
-//     if (!appointment) {
-//       res.status(404).json({
-//         success: false,
-//         message: "Appointment not found in DB.",
-//       });
-//       return;
-//     }
-//     if (!appointment.slot?.time?.start) {
-//       res.status(400).json({
-//         success: false,
-//         message: "Appointment has no start time",
-//       });
-//       return;
-//     }
+    const appointment = await OnlineAppointment.findById(appointmentId)
+      .populate({ path: 'patientId', select: 'firstName lastName email' })
+      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'firstName lastName email' } });
 
-//     const curr = Date.now();
-//     const appointmentStartTime = new Date(
-//       appointment.slot?.time?.start
-//     ).getTime();
+    if (!appointment) {
+      res.status(404).json({
+        success: false,
+        message: "Appointment not found.",
+      });
+      return;
+    }
 
-//     if (curr > appointmentStartTime) {
-//       res.status(404).json({
-//         success: false,
-//         message: "Appointment can't be cancelled after start time",
-//       });
-//       return;
-//     }
+    // Check if user is authorized to cancel
+    const doctorUserId = (appointment.doctorId as any)?.userId?._id.toString();
+    const patientUserId = (appointment.patientId as any)?._id.toString();
 
-//     appointment.status = "cancelled";
-//     await appointment.save();
+    if (userId !== doctorUserId && userId !== patientUserId) {
+      res.status(403).json({
+        success: false,
+        message: "You are not authorized to cancel this appointment.",
+      });
+      return;
+    }
 
-//     const updatedAppointment = await OnlineAppointment.findById(
-//       appointment._id
-//     );
+    if (appointment.status === 'completed') {
+      res.status(400).json({
+        success: false,
+        message: `Cannot cancel an appointment that is already ${appointment.status}.`,
+      });
+      return;
+    }
 
-//     res.status(200).json({
-//       success: true,
-//       data: updatedAppointment,
-//       message: `Appointment cancelled successfully`,
-//     });
-//   } catch (err: any) {
-//     console.error("Error cancelling appointment: ", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "Error cancelling appointment",
-//       error: err.message,
-//     });
-//   }
-// };
+    // Unfreeze amount if it was frozen
+    if (appointment.paymentDetails?.paymentStatus === 'pending' && appointment.paymentDetails.patientWalletFrozen > 0) {
+      const patientUser = await User.findById(appointment.patientId);
+      if (patientUser) {
+        (patientUser as any).unfreezeAmount(appointment.paymentDetails.patientWalletFrozen);
+        await patientUser.save();
+      }
+    }
+
+    await appointment.save();
+
+
+
+    res.status(200).json({
+      success: true,
+      data: appointment,
+      message: `Appointment cancelled successfully`,
+    });
+  } catch (err: any) {
+    console.error("Error cancelling appointment: ", err);
+    res.status(500).json({
+      success: false,
+      message: "Error cancelling appointment",
+      error: err.message,
+    });
+  }
+};
 
 /* create room access token */
 const AccessToken = jwt.AccessToken;

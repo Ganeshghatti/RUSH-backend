@@ -325,7 +325,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     };
 
     if (role === 'doctor') {
-      mailData.status = 'pending'; // Default status for a new doctor
+      mailData.status = 'pending';
       await sendNewUserMail(mailData);
     }
 

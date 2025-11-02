@@ -12,7 +12,7 @@ import {
   homeVisitConfigUpdateSchema,
 } from "../../validation/validation";
 import DoctorSubscription from "../../models/doctor-subscription";
-import { sendNewAppointmentNotification, sendAppointmentCancellationNotification } from "../../utils/mail/appointment-notifications";
+import { sendNewAppointmentNotification } from "../../utils/mail/appointment-notifications";
 import { sendTravelCostNoticeMail } from "../../utils/mail/patient_notifications";
 
 // NOTE: Other controllers access req.user directly; we rely on global Express augmentation.

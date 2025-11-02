@@ -15,7 +15,7 @@ import {
   isMaxAttemptsReached,
 } from "../../utils/otp-utils";
 import DoctorSubscription from "../../models/doctor-subscription";
-import { sendNewAppointmentNotification } from "../../utils/mail/appointment-notifications";
+import { sendNewAppointmentNotification, sendAppointmentStatusNotification } from "../../utils/mail/appointment-notifications";
 
 
 // Interface for authenticated request
@@ -1109,6 +1109,9 @@ export const validateVisitOTP = async (
     const appointment = await ClinicAppointment.findOne({
       _id: appointmentId,
       doctorId: doctor._id,
+    }).populate({
+      path: "patientId",
+      select: "firstName lastName email",
     });
     if (!appointment) {
       res.status(404).json({
@@ -1225,6 +1228,24 @@ export const validateVisitOTP = async (
     }
 
     await appointment.save();
+
+    // Send completion notification to patient
+    try {
+      const patientInfo = appointment.patientId as any;
+      const doctorInfo = doctor.userId as any;
+
+      await sendAppointmentStatusNotification({
+        appointmentId: appointment._id.toString(),
+        status: 'completed',
+        patientName: `${patientInfo.firstName} ${patientInfo.lastName}`,
+        patientEmail: patientInfo.email,
+        doctorName: `${doctorInfo.firstName} ${doctorInfo.lastName}`,
+        doctorEmail: doctorInfo.email,
+        type: 'Clinic',
+      });
+    } catch (mailError) {
+      console.error("🚨 Failed to send clinic completion notification:", mailError);
+    }
 
     res.status(200).json({
       success: true,
