@@ -50,7 +50,7 @@ const getAppointmentHtmlTemplate = (data: AppointmentData, mailType: string) => 
 // Send new appointment notification to both doctor and admin
 export const sendNewAppointmentNotification = async (data: AppointmentData): Promise<void> => {
     try {
-        const ADMIN_EMAIL = "vijayjoshi5410@gmail.com";
+        const ADMIN_EMAIL = "urushdr@gmail.com";
         const recipientEmails: string[] = [ADMIN_EMAIL];
 
         if (data.doctorEmail) recipientEmails.push(data.doctorEmail);
@@ -133,7 +133,7 @@ export const sendAppointmentCancellationNotification = async (data: AppointmentD
 // Send appointment status change notifications
 export const sendAppointmentStatusNotification = async (data: AppointmentData): Promise<void> => {
     try {
-        const recipientEmails = ["vijayjoshi5410@gmail.com"]; // Admin always notified
+        const recipientEmails = ["urushdr@gmail.com"]; // Admin always notified
 
         if (data.patientEmail) recipientEmails.push(data.patientEmail);
 
