@@ -18,7 +18,8 @@ export const getHealthMetrics = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "getHealthMetrics:patient-not-found",
       });
       return;
     }
@@ -27,7 +28,8 @@ export const getHealthMetrics = async (
     if (!patient.healthMetricsId) {
       res.status(404).json({
         success: false,
-        message: "No health metrics associated with this patient",
+        message: "No health metrics are associated with this patient yet.",
+        action: "getHealthMetrics:metrics-missing",
       });
       return;
     }
@@ -36,21 +38,24 @@ export const getHealthMetrics = async (
     if (!healthMetrics) {
       res.status(404).json({
         success: false,
-        message: "Health Metrics not found",
+        message: "We couldn't find health metrics for this patient.",
+        action: "getHealthMetrics:metrics-not-found",
       });
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: "Health Metrics fetched successfully",
+      message: "Health metrics fetched successfully.",
+      action: "getHealthMetrics:success",
       data: healthMetrics,
     });
   } catch (error) {
     console.error("Error fetching health metrics:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch health metrics",
+      message: "We couldn't fetch the health metrics right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -65,7 +70,8 @@ export const getHealthMetricsById = async (
     if (!mongoose.Types.ObjectId.isValid(healthMetricsId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid Health Metrics ID format",
+        message: "The health metrics ID provided is invalid.",
+        action: "getHealthMetricsById:validate-id",
       });
       return;
     }
@@ -76,20 +82,23 @@ export const getHealthMetricsById = async (
     if (!healthMetrics) {
       res.status(404).json({
         success: false,
-        message: "Health Metrics not found",
+        message: "We couldn't find health metrics with that ID.",
+        action: "getHealthMetricsById:metrics-not-found",
       });
       return;
     }
     res.status(200).json({
       success: true,
-      message: "Health Metrics fetched successfully",
+      message: "Health metrics fetched successfully.",
+      action: "getHealthMetricsById:success",
       data: healthMetrics,
     });
   } catch (error) {
     console.error("Error fetching health metrics:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch health metrics",
+      message: "We couldn't fetch the health metrics right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -107,8 +116,11 @@ export const addHealthMetrics = async (
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
-        message: "Validation failed",
-        errors: validationResult.error.errors,
+        message: "Please review the health metrics details and try again.",
+        action: "addHealthMetrics:validation-error",
+        data: {
+          errors: validationResult.error.errors,
+        },
       });
       return;
     }
@@ -118,7 +130,8 @@ export const addHealthMetrics = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "addHealthMetrics:patient-not-found",
       });
       return;
     }
@@ -137,7 +150,8 @@ export const addHealthMetrics = async (
       if (!family) {
         res.status(400).json({
           success: false,
-          message: "Invalid family ID or not authorized",
+          message: "We couldn't verify that family member.",
+          action: "addHealthMetrics:family-not-authorized",
         });
         return;
       }
@@ -163,14 +177,16 @@ export const addHealthMetrics = async (
         if (!updated) {
           res.status(500).json({
             success: false,
-            message: "Failed to update family health metrics",
+            message: "We couldn't update the family health metrics.",
+            action: "addHealthMetrics:update-family-failed",
           });
           return;
         }
 
         res.status(200).json({
           success: true,
-          message: "Family health metrics updated successfully",
+          message: "Family health metrics updated successfully.",
+          action: "addHealthMetrics:update-family-success",
           data: updated,
         });
         return;
@@ -191,7 +207,8 @@ export const addHealthMetrics = async (
 
       res.status(201).json({
         success: true,
-        message: "Family health metrics created successfully",
+        message: "Family health metrics created successfully.",
+        action: "addHealthMetrics:create-family-success",
         data: saved,
       });
       return;
@@ -219,14 +236,16 @@ export const addHealthMetrics = async (
       if (!updated) {
         res.status(500).json({
           success: false,
-          message: "Failed to update patient health metrics",
+          message: "We couldn't update the patient health metrics.",
+          action: "addHealthMetrics:update-patient-failed",
         });
         return;
       }
 
       res.status(200).json({
         success: true,
-        message: "Patient health metrics updated successfully",
+        message: "Patient health metrics updated successfully.",
+        action: "addHealthMetrics:update-patient-success",
         data: updated,
       });
       return;
@@ -244,14 +263,16 @@ export const addHealthMetrics = async (
 
     res.status(201).json({
       success: true,
-      message: "Patient health metrics created successfully",
+      message: "Patient health metrics created successfully.",
+      action: "addHealthMetrics:create-patient-success",
       data: saved,
     });
   } catch (error) {
     console.error("Error adding/updating health metrics:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to add or update health metrics",
+      message: "We couldn't add or update the health metrics.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

@@ -43,13 +43,15 @@ export const getPendingDebitRequests = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
+      message: "Pending debit requests fetched successfully.",
+      action: "getPendingDebitRequests:success",
       data: pendingRequests,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to fetch pending debit requests",
-      error: error instanceof Error ? error.message : String(error),
+      message: "We couldn't load pending debit requests.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -67,13 +69,18 @@ export const processDebitRequest = async (req: Request, res: Response) => {
     ) {
       res.status(400).json({
         success: false,
-        message: "Invalid userId, transactionId, or action",
+        message: "Please provide a valid user, transaction, and action.",
+        action: "processDebitRequest:invalid-input",
       });
       return;
     }
     const user = await User.findById(userId);
     if (!user) {
-      res.status(404).json({ success: false, message: "User not found" });
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find that user.",
+        action: "processDebitRequest:user-not-found",
+      });
       return;
     }
     const txn = user.transaction_history.id(transactionId);
@@ -82,7 +89,8 @@ export const processDebitRequest = async (req: Request, res: Response) => {
         .status(404)
         .json({
           success: false,
-          message: "Pending debit transaction not found",
+          message: "We couldn't find that pending debit transaction.",
+          action: "processDebitRequest:transaction-not-found",
         });
       return;
     }
@@ -91,7 +99,8 @@ export const processDebitRequest = async (req: Request, res: Response) => {
       if (user.wallet < txn.amount) {
         res.status(400).json({
           success: false,
-          message: "Insufficient wallet balance to approve this request",
+          message: "Wallet balance is too low to approve this request.",
+          action: "processDebitRequest:insufficient-balance",
         });
         return;
       }
@@ -107,7 +116,8 @@ export const processDebitRequest = async (req: Request, res: Response) => {
     await user.save();
     res.status(200).json({
       success: true,
-      message: `Debit request ${action}d successfully`,
+      message: `Debit request ${action}d successfully.`,
+      action: `processDebitRequest:${action}`,
       data: {
         userId: user._id,
         transactionId: txn._id,
@@ -120,8 +130,8 @@ export const processDebitRequest = async (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to process debit request",
-      error: error instanceof Error ? error.message : String(error),
+      message: "We couldn't process the debit request.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -132,7 +142,8 @@ export const getTransactionsByDate = async (req: Request, res: Response) => {
     if (!date) {
       res.status(400).json({
         success: false,
-        message: "Date query parameter is required (YYYY-MM-DD)",
+        message: "The date query parameter (YYYY-MM-DD) is required.",
+        action: "getTransactionsByDate:missing-date",
       });
       return;
     }
@@ -182,14 +193,16 @@ export const getTransactionsByDate = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
+      message: "Transactions fetched successfully for the date.",
+      action: "getTransactionsByDate:success",
       data: transactions,
     });
     return;
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to fetch transactions for date",
-      error: error instanceof Error ? error.message : String(error),
+      message: "We couldn't load transactions for that date.",
+      action: error instanceof Error ? error.message : String(error),
     });
     return;
   }

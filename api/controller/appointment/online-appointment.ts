@@ -23,21 +23,24 @@ export const bookOnlineAppointment = async (
     if (!doctorId || !slot) {
       res.status(400).json({
         success: false,
-        message: "Doctor ID and slot information are required",
+        message: "Doctor ID and slot information are required.",
+        action: "bookOnlineAppointment:missing-fields",
       });
       return;
     }
     if (!slot.day || !slot.duration || !slot.time) {
       res.status(400).json({
         success: false,
-        message: "Slot day, duration, and time are required",
+        message: "Slot day, duration, and time are required.",
+        action: "bookOnlineAppointment:missing-slot-fields",
       });
       return;
     }
     if (!slot.time.start || !slot.time.end) {
       res.status(400).json({
         success: false,
-        message: "Slot start time and end time are required",
+        message: "Slot start time and end time are required.",
+        action: "bookOnlineAppointment:missing-slot-times",
       });
       return;
     }
@@ -47,7 +50,8 @@ export const bookOnlineAppointment = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find the selected doctor.",
+        action: "bookOnlineAppointment:doctor-not-found",
       });
       return;
     }
@@ -57,7 +61,8 @@ export const bookOnlineAppointment = async (
     if (!patientUserDetail) {
       res.status(404).json({
         success: false,
-        message: "Patient User not found",
+        message: "We couldn't find your patient profile.",
+        action: "bookOnlineAppointment:patient-not-found",
       });
       return;
     }
@@ -68,7 +73,8 @@ export const bookOnlineAppointment = async (
     if (!matchedDuration) {
       res.status(400).json({
         success: false,
-        message: "Doctor does not offer this duration",
+        message: "The doctor does not offer this appointment duration.",
+        action: "bookOnlineAppointment:unsupported-duration",
       });
       return;
     }
@@ -85,7 +91,8 @@ export const bookOnlineAppointment = async (
     if (existingAppointment) {
       res.status(400).json({
         success: false,
-        message: "This slot is already booked",
+        message: "This slot is already booked.",
+        action: "bookOnlineAppointment:slot-unavailable",
       });
       return;
     }
@@ -97,7 +104,8 @@ export const bookOnlineAppointment = async (
     if (patientAvailableBalance < price) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "Your wallet balance is too low for this booking.",
+        action: "bookOnlineAppointment:insufficient-balance",
       });
       return;
     }
@@ -107,7 +115,8 @@ export const bookOnlineAppointment = async (
     if (!freezeSuccess) {
       res.status(400).json({
         success: false,
-        message: "Error freezing amount in wallet",
+        message: "We couldn't reserve the appointment amount.",
+        action: "bookOnlineAppointment:freeze-failed",
         data: {
           required: price,
           available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
@@ -160,15 +169,16 @@ export const bookOnlineAppointment = async (
 
     res.status(201).json({
       success: true,
+      message: "Appointment booked successfully.",
+      action: "bookOnlineAppointment:success",
       data: populatedAppointment,
-      message: "Appointment booked successfully",
     });
   } catch (error: any) {
     console.error("Error booking online appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error booking appointment",
-      error: error.message,
+      message: "We couldn't book the appointment right now.",
+      action: error.message,
     });
   }
 };
@@ -186,7 +196,8 @@ export const getDoctorAppointments = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "getDoctorAppointments:doctor-not-found",
       });
       return;
     }
@@ -310,18 +321,21 @@ export const getDoctorAppointments = async (
 
     res.status(200).json({
       success: true,
-      onlineAppointment: onlineAppointments,
-      emergencyAppointment: emergencyAppointments,
-      clinicAppointment: clinicAppointments,
-      homevisitAppointment: homeVisitAppointments,
-      message: "Doctor appointments retrieved successfully",
+      message: "Doctor appointments retrieved successfully.",
+      action: "getDoctorAppointments:success",
+      data: {
+        onlineAppointments,
+        emergencyAppointments,
+        clinicAppointments,
+        homeVisitAppointments,
+      },
     });
   } catch (error: any) {
     console.error("Error getting doctor appointments:", error);
     res.status(500).json({
       success: false,
-      message: "Error retrieving appointments",
-      error: error.message,
+      message: "We couldn't load the doctor appointments.",
+      action: error.message,
     });
   }
 };
@@ -340,7 +354,8 @@ export const getPatientAppointments = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "getPatientAppointments:patient-not-found",
       });
       return;
     }
@@ -460,18 +475,21 @@ export const getPatientAppointments = async (
 
     res.status(200).json({
       success: true,
-      onlineAppointment: onlineAppointments,
-      emergencyAppointment: emergencyAppointments,
-      clinicAppointment: clinicAppointments,
-      homevisitAppointment: homeVisitAppointments,
-      message: "Patient appointments retrieved successfully",
+      message: "Patient appointments retrieved successfully.",
+      action: "getPatientAppointments:success",
+      data: {
+        onlineAppointments,
+        emergencyAppointments,
+        clinicAppointments,
+        homeVisitAppointments,
+      },
     });
   } catch (error: any) {
     console.error("Error getting patient appointments:", error);
     res.status(500).json({
       success: false,
-      message: "Error retrieving appointments",
-      error: error.message,
+      message: "We couldn't load the patient appointments.",
+      action: error.message,
     });
   }
 };
@@ -490,7 +508,8 @@ export const updateAppointmentStatus = async (
     if (!status || !["pending", "accepted", "rejected"].includes(status)) {
       res.status(400).json({
         success: false,
-        message: "Valid status (pending, accepted, rejected) is required",
+        message: "Status must be one of pending, accepted, or rejected.",
+        action: "updateAppointmentStatus:invalid-status",
       });
       return;
     }
@@ -499,7 +518,8 @@ export const updateAppointmentStatus = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "updateAppointmentStatus:doctor-not-found",
       });
       return;
     }
@@ -513,7 +533,8 @@ export const updateAppointmentStatus = async (
       res.status(404).json({
         success: false,
         message:
-          "Appointment not found or you don't have permission to modify it",
+          "We couldn't find that appointment or you don't have permission to modify it.",
+        action: "updateAppointmentStatus:appointment-not-found",
       });
       return;
     }
@@ -525,7 +546,8 @@ export const updateAppointmentStatus = async (
       if (!patientUserDetail) {
         res.status(400).json({
           success: false,
-          message: "Patient not found",
+          message: "We couldn't find the patient profile.",
+          action: "updateAppointmentStatus:patient-not-found",
         });
         return;
       }
@@ -538,7 +560,8 @@ export const updateAppointmentStatus = async (
       } else {
         res.status(400).json({
           success: false,
-          message: "Error in adding frozen amount in patient wallet.",
+          message: "We couldn't restore the reserved wallet amount.",
+          action: "updateAppointmentStatus:unfreeze-failed",
         });
         return;
       }
@@ -581,15 +604,16 @@ export const updateAppointmentStatus = async (
 
     res.status(200).json({
       success: true,
+      message: `Appointment status updated to ${status} successfully.`,
+      action: "updateAppointmentStatus:success",
       data: updatedAppointment,
-      message: `Appointment status updated to ${status} successfully`,
     });
   } catch (error: any) {
     console.error("Error updating appointment status:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating appointment status",
-      error: error.message,
+      message: "We couldn't update the appointment status.",
+      action: error.message,
     });
   }
 };
@@ -670,7 +694,11 @@ export const createRoomAccessToken = async (
     if (!roomName) {
       res
         .status(400)
-        .json({ success: false, message: "Room name is required" });
+        .json({
+          success: false,
+          message: "Room name is required.",
+          action: "createRoomAccessToken:missing-room-name",
+        });
       return;
     }
 
@@ -682,7 +710,8 @@ export const createRoomAccessToken = async (
     if (!appointment || appointment?.status !== "accepted") {
       res.status(400).json({
         success: false,
-        message: "Appointment not found in DB or appointment is not accepted",
+        message: "We couldn't find an accepted appointment for this room.",
+        action: "createRoomAccessToken:appointment-not-found",
       });
       return;
     }
@@ -694,7 +723,8 @@ export const createRoomAccessToken = async (
     if (!doctor) {
       res.status(400).json({
         success: false,
-        message: "Doctor not found in DB",
+        message: "We couldn't find the doctor profile.",
+        action: "createRoomAccessToken:doctor-not-found",
       });
       return;
     }
@@ -706,7 +736,8 @@ export const createRoomAccessToken = async (
     if (!whoJoined) {
       res.status(403).json({
         success: false,
-        message: "You are not authorized to join this room",
+        message: "You are not authorized to join this room.",
+        action: "createRoomAccessToken:unauthorised",
       });
       return;
     }
@@ -727,6 +758,8 @@ export const createRoomAccessToken = async (
 
     res.status(200).json({
       success: true,
+      message: "Access token generated successfully.",
+      action: "createRoomAccessToken:success",
       token: jwtToken,
       role: whoJoined,
       identity: `${whoJoined}_${identity}`,
@@ -736,7 +769,11 @@ export const createRoomAccessToken = async (
     console.error("Failed to generate Twilio access token:", err);
     res
       .status(500)
-      .json({ success: false, message: "Token generation failed" });
+      .json({
+        success: false,
+        message: "We couldn't generate the room access token.",
+        action: err instanceof Error ? err.message : String(err),
+      });
   }
 };
 
@@ -751,7 +788,8 @@ export const finalPayment = async (
     if (!roomName) {
       res.status(400).json({
         success: false,
-        message: "Missing room name",
+        message: "Room name is required.",
+        action: "onlineFinalPayment:missing-room-name",
       });
       return;
     }
@@ -762,7 +800,8 @@ export const finalPayment = async (
     if (!appointment) {
       res.status(400).json({
         success: false,
-        message: "This appointment does not exist in DB.",
+        message: "We couldn't find an appointment for this room.",
+        action: "onlineFinalPayment:appointment-not-found",
       });
       return;
     }
@@ -774,7 +813,8 @@ export const finalPayment = async (
       if (!patientUserDetail) {
         res.status(400).json({
           sucess: false,
-          message: "Patient User not found.",
+          message: "We couldn't find the patient profile.",
+          action: "onlineFinalPayment:patient-not-found",
         });
         return;
       }
@@ -785,7 +825,8 @@ export const finalPayment = async (
       if (!doctorUserDetail || !doctor) {
         res.status(400).json({
           sucess: false,
-          message: "Doctor or doctor user not found.",
+          message: "We couldn't find the doctor profile.",
+          action: "onlineFinalPayment:doctor-not-found",
         });
         return;
       }
@@ -798,7 +839,8 @@ export const finalPayment = async (
       if (!activeSub) {
         res.status(400).json({
           success: false,
-          message: "Doctor has no active subscription",
+          message: "The doctor does not have an active subscription.",
+          action: "onlineFinalPayment:no-active-subscription",
         });
         return;
       }
@@ -808,7 +850,8 @@ export const finalPayment = async (
       if (!subscription) {
         res.status(404).json({
           success: false,
-          message: "Subscription not found",
+          message: "We couldn't find the associated subscription.",
+          action: "onlineFinalPayment:subscription-not-found",
         });
         return;
       }
@@ -855,20 +898,23 @@ export const finalPayment = async (
         } else {
           res.status(500).json({
             success: false,
-            message: "Failed to process final payment",
+            message: "We couldn't process the final payment.",
+            action: "onlineFinalPayment:wallet-deduction-failed",
           });
           return;
         }
       }
       res.status(200).json({
         success: true,
-        message: "Final payment completed",
+        message: "Final payment completed.",
+        action: "onlineFinalPayment:success",
       });
       return;
     } else if (paymentStatus === "completed") {
       res.status(200).json({
-        sucess: true,
+        success: true,
         message: "Final payment is already processed.",
+        action: "onlineFinalPayment:already-processed",
       });
       return;
     }
@@ -876,8 +922,8 @@ export const finalPayment = async (
     console.error("Error processing final payment: ", err);
     res.status(500).json({
       success: false,
-      message: "Error in processing final payment",
-      error: err.message,
+      message: "We couldn't process the final payment.",
+      action: err.message,
     });
   }
 };
@@ -894,7 +940,8 @@ export const getDoctorAppointmentByDate = async (
     if (!date) {
       res.status(400).json({
         success: false,
-        message: "Date is required in request body",
+        message: "Date is required in request body.",
+        action: "getDoctorAppointmentByDate:missing-date",
       });
       return;
     }
@@ -905,7 +952,8 @@ export const getDoctorAppointmentByDate = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "getDoctorAppointmentByDate:doctor-not-found",
       });
       return;
     }
@@ -940,16 +988,19 @@ export const getDoctorAppointmentByDate = async (
 
     res.status(200).json({
       success: true,
-      data: appointments,
-      message: `Appointments for ${date} retrieved successfully`,
-      count: appointments.length,
+      message: `Appointments for ${date} retrieved successfully.`,
+      action: "getDoctorAppointmentByDate:success",
+      data: {
+        appointments,
+        count: appointments.length,
+      },
     });
   } catch (error: any) {
     console.error("Error getting doctor appointments by date:", error);
     res.status(500).json({
       success: false,
-      message: "Error retrieving appointments by date",
-      error: error.message,
+      message: "We couldn't retrieve appointments for that date.",
+      action: error.message,
     });
   }
 };
@@ -971,16 +1022,19 @@ export const getAllPatients = async (
 
     res.status(200).json({
       success: true,
-      data: patients,
-      message: "All patients retrieved successfully",
-      count: patients.length,
+      message: "All patients retrieved successfully.",
+      action: "getAllPatients:success",
+      data: {
+        patients,
+        count: patients.length,
+      },
     });
   } catch (error: any) {
     console.error("Error getting all patients:", error);
     res.status(500).json({
       success: false,
-      message: "Error retrieving patients",
-      error: error.message,
+      message: "We couldn't load patients right now.",
+      action: error.message,
     });
   }
 };

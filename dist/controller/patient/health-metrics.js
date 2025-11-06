@@ -39,7 +39,8 @@ const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "getHealthMetrics:patient-not-found",
             });
             return;
         }
@@ -47,7 +48,8 @@ const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!patient.healthMetricsId) {
             res.status(404).json({
                 success: false,
-                message: "No health metrics associated with this patient",
+                message: "No health metrics are associated with this patient yet.",
+                action: "getHealthMetrics:metrics-missing",
             });
             return;
         }
@@ -55,13 +57,15 @@ const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!healthMetrics) {
             res.status(404).json({
                 success: false,
-                message: "Health Metrics not found",
+                message: "We couldn't find health metrics for this patient.",
+                action: "getHealthMetrics:metrics-not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Health Metrics fetched successfully",
+            message: "Health metrics fetched successfully.",
+            action: "getHealthMetrics:success",
             data: healthMetrics,
         });
     }
@@ -69,7 +73,8 @@ const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.error("Error fetching health metrics:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch health metrics",
+            message: "We couldn't fetch the health metrics right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -81,7 +86,8 @@ const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, fun
         if (!mongoose_1.default.Types.ObjectId.isValid(healthMetricsId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid Health Metrics ID format",
+                message: "The health metrics ID provided is invalid.",
+                action: "getHealthMetricsById:validate-id",
             });
             return;
         }
@@ -91,13 +97,15 @@ const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, fun
         if (!healthMetrics) {
             res.status(404).json({
                 success: false,
-                message: "Health Metrics not found",
+                message: "We couldn't find health metrics with that ID.",
+                action: "getHealthMetricsById:metrics-not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Health Metrics fetched successfully",
+            message: "Health metrics fetched successfully.",
+            action: "getHealthMetricsById:success",
             data: healthMetrics,
         });
     }
@@ -105,7 +113,8 @@ const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, fun
         console.error("Error fetching health metrics:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch health metrics",
+            message: "We couldn't fetch the health metrics right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -119,8 +128,11 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
+                message: "Please review the health metrics details and try again.",
+                action: "addHealthMetrics:validation-error",
+                data: {
+                    errors: validationResult.error.errors,
+                },
             });
             return;
         }
@@ -129,7 +141,8 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "addHealthMetrics:patient-not-found",
             });
             return;
         }
@@ -146,7 +159,8 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             if (!family) {
                 res.status(400).json({
                     success: false,
-                    message: "Invalid family ID or not authorized",
+                    message: "We couldn't verify that family member.",
+                    action: "addHealthMetrics:family-not-authorized",
                 });
                 return;
             }
@@ -161,13 +175,15 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 if (!updated) {
                     res.status(500).json({
                         success: false,
-                        message: "Failed to update family health metrics",
+                        message: "We couldn't update the family health metrics.",
+                        action: "addHealthMetrics:update-family-failed",
                     });
                     return;
                 }
                 res.status(200).json({
                     success: true,
-                    message: "Family health metrics updated successfully",
+                    message: "Family health metrics updated successfully.",
+                    action: "addHealthMetrics:update-family-success",
                     data: updated,
                 });
                 return;
@@ -181,7 +197,8 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             yield family.save();
             res.status(201).json({
                 success: true,
-                message: "Family health metrics created successfully",
+                message: "Family health metrics created successfully.",
+                action: "addHealthMetrics:create-family-success",
                 data: saved,
             });
             return;
@@ -199,13 +216,15 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             if (!updated) {
                 res.status(500).json({
                     success: false,
-                    message: "Failed to update patient health metrics",
+                    message: "We couldn't update the patient health metrics.",
+                    action: "addHealthMetrics:update-patient-failed",
                 });
                 return;
             }
             res.status(200).json({
                 success: true,
-                message: "Patient health metrics updated successfully",
+                message: "Patient health metrics updated successfully.",
+                action: "addHealthMetrics:update-patient-success",
                 data: updated,
             });
             return;
@@ -216,7 +235,8 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         yield patient.save();
         res.status(201).json({
             success: true,
-            message: "Patient health metrics created successfully",
+            message: "Patient health metrics created successfully.",
+            action: "addHealthMetrics:create-patient-success",
             data: saved,
         });
     }
@@ -224,7 +244,8 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.error("Error adding/updating health metrics:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to add or update health metrics",
+            message: "We couldn't add or update the health metrics.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

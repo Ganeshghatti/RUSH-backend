@@ -24,7 +24,8 @@ export const verifyToken = async (
     if (!token) {
       res.status(401).json({
         success: false,
-        message: "Access denied: No token provided",
+        message: "Please login to continue",
+        action: "verifyToken:no-token",
       });
       return;
     }
@@ -44,7 +45,8 @@ export const verifyToken = async (
     if (!decoded) {
       res.status(401).json({
         success: false,
-        message: "Invalid token",
+        message: "Please login to continue",
+        action: "verifyToken:invalid-token",
       });
       return;
     }
@@ -54,7 +56,8 @@ export const verifyToken = async (
     if (!user) {
       res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "Please login to continue",
+        action: "verifyToken:user-not-found",
       });
       return;
     }
@@ -71,7 +74,8 @@ export const verifyToken = async (
     console.error("Token verification error:", error);
     res.status(500).json({
       success: false,
-      message: "First login to continue",
+      message: "Please login to continue",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -83,7 +87,8 @@ export const checkRole = (role: string) => {
       if (!req.user) {
         res.status(401).json({
           success: false,
-          message: "Unauthorized: Authentication required",
+          message: "Please login to continue",
+          action: "checkRole:unauthorized",
         });
         return;
       }
@@ -94,7 +99,8 @@ export const checkRole = (role: string) => {
       if (!hasRequiredRole) {
         res.status(403).json({
           success: false,
-          message: `Access denied: Only ${role} can access this route`,
+          message: `Access denied: Only ${role} can access this page`,
+          action: "checkRole:invalid-role",
         });
         return;
       }
@@ -104,7 +110,8 @@ export const checkRole = (role: string) => {
       console.error("Role verification error:", error);
       res.status(500).json({
         success: false,
-        message: "Internal server error during role verification",
+        message: "Please login to continue",
+        action: error instanceof Error ? error.message : String(error),
       });
       return;
     }
@@ -123,6 +130,12 @@ export const authOptional = (req: Request, res: Response, next: NextFunction) =>
     (req as any).userId = decoded.id;
   } catch (err) {
     console.error("JWT decode failed:", err);
+    res.status(500).json({
+      success: false,
+      message: "Please login to continue",
+      action: err instanceof Error ? err.message : String(err),
+    });
+    return;
   }
 
   next();

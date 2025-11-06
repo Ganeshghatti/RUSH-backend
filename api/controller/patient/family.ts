@@ -35,8 +35,11 @@ export const addFamily = async (req: Request, res: Response): Promise<void> => {
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
-        message: "Validation failed",
-        errors: validationResult.error.errors,
+        message: "Please check the family member details and try again.",
+        action: "addFamily:validation-error",
+        data: {
+          errors: validationResult.error.errors,
+        },
       });
       return;
     }
@@ -45,7 +48,8 @@ export const addFamily = async (req: Request, res: Response): Promise<void> => {
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "addFamily:patient-not-found",
       });
       return;
     }
@@ -61,14 +65,16 @@ export const addFamily = async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       success: true,
-      message: "Family member added successfully",
+      message: "Family member added successfully.",
+      action: "addFamily:success",
       data: familyWithUrls,
     });
   } catch (error) {
     console.error("Error adding family member:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to add family member",
+      message: "We couldn't add the family member.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -85,7 +91,8 @@ export const updateFamily = async (
     if (!mongoose.Types.ObjectId.isValid(familyId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid family ID format",
+        message: "The family ID provided is invalid.",
+        action: "updateFamily:validate-family-id",
       });
       return;
     }
@@ -94,8 +101,11 @@ export const updateFamily = async (
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
-        message: "Validation failed",
-        errors: validationResult.error.errors,
+        message: "Please check the family member details and try again.",
+        action: "updateFamily:validation-error",
+        data: {
+          errors: validationResult.error.errors,
+        },
       });
       return;
     }
@@ -104,7 +114,8 @@ export const updateFamily = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "updateFamily:patient-not-found",
       });
       return;
     }
@@ -132,7 +143,8 @@ export const updateFamily = async (
     if (!updatedFamily) {
       res.status(404).json({
         success: false,
-        message: "Family member not found or not authorized",
+        message: "We couldn't find that family member or you don't have access.",
+        action: "updateFamily:family-not-found",
       });
       return;
     }
@@ -141,14 +153,16 @@ export const updateFamily = async (
 
     res.status(200).json({
       success: true,
-      message: "Family member updated successfully",
+      message: "Family member updated successfully.",
+      action: "updateFamily:success",
       data: familyWithUrls,
     });
   } catch (error) {
     console.error("Error updating family member:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update family member",
+      message: "We couldn't update the family member.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -165,7 +179,8 @@ export const removeFamily = async (
     if (!mongoose.Types.ObjectId.isValid(familyId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid family ID format",
+        message: "The family ID provided is invalid.",
+        action: "removeFamily:validate-family-id",
       });
       return;
     }
@@ -174,7 +189,8 @@ export const removeFamily = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "removeFamily:patient-not-found",
       });
       return;
     }
@@ -187,20 +203,23 @@ export const removeFamily = async (
     if (!deletedFamily) {
       res.status(404).json({
         success: false,
-        message: "Family member not found or not authorized",
+        message: "We couldn't find that family member or you don't have access.",
+        action: "removeFamily:family-not-found",
       });
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: "Family member removed successfully",
+      message: "Family member removed successfully.",
+      action: "removeFamily:success",
     });
   } catch (error) {
     console.error("Error removing family member:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to remove family member",
+      message: "We couldn't remove the family member.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -217,7 +236,8 @@ export const getFamilyDetails = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "getFamilyDetails:patient-not-found",
       });
       return;
     }
@@ -229,14 +249,16 @@ export const getFamilyDetails = async (
 
     res.status(200).json({
       success: true,
-      message: "Family details fetched successfully",
+      message: "Family details fetched successfully.",
+      action: "getFamilyDetails:success",
       data: familiesWithUrls,
     });
   } catch (error) {
     console.error("Error fetching family details:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch family details",
+      message: "We couldn't fetch family details right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

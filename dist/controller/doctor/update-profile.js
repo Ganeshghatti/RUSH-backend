@@ -26,7 +26,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
         if (!doctorId) {
             res.status(400).json({
                 success: false,
-                message: "Doctor ID is required",
+                message: "Doctor ID is required.",
+                action: "updateDoctorOnlineAppointment:missing-doctor-id",
             });
             return;
         }
@@ -37,7 +38,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
             if (!Array.isArray(availability)) {
                 res.status(400).json({
                     success: false,
-                    message: "Valid availability array is required",
+                    message: "Availability must be provided as a list.",
+                    action: "updateDoctorOnlineAppointment:invalid-availability-type",
                 });
                 return;
             }
@@ -46,7 +48,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                 if (!slot.day || !Array.isArray(slot.duration)) {
                     res.status(400).json({
                         success: false,
-                        message: "Each availability slot must have a day and duration array",
+                        message: "Each availability slot must include a day and time ranges.",
+                        action: "updateDoctorOnlineAppointment:invalid-slot",
                     });
                     return;
                 }
@@ -55,7 +58,11 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                 if (!validDays.includes(slot.day.toLowerCase())) {
                     res.status(400).json({
                         success: false,
-                        message: `Invalid day value. Must be one of: ${validDays.join(", ")}`,
+                        message: "Please use a valid day of the week.",
+                        action: "updateDoctorOnlineAppointment:invalid-day",
+                        data: {
+                            allowedDays: validDays,
+                        },
                     });
                     return;
                 }
@@ -64,7 +71,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                     if (!duration.start || !duration.end) {
                         res.status(400).json({
                             success: false,
-                            message: "Each duration must have start and end times",
+                            message: "Each time range must include start and end times.",
+                            action: "updateDoctorOnlineAppointment:invalid-duration-range",
                         });
                         return;
                     }
@@ -78,7 +86,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
             if (!Array.isArray(duration)) {
                 res.status(400).json({
                     success: false,
-                    message: "Valid duration array is required",
+                    message: "Duration must be provided as a list.",
+                    action: "updateDoctorOnlineAppointment:invalid-duration-type",
                 });
                 return;
             }
@@ -87,7 +96,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                 if (!slot.minute || !slot.price) {
                     res.status(400).json({
                         success: false,
-                        message: "Each duration slot must have minute and price",
+                        message: "Each duration slot must include minutes and price.",
+                        action: "updateDoctorOnlineAppointment:missing-duration-fields",
                     });
                     return;
                 }
@@ -95,7 +105,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                 if (![15, 30].includes(slot.minute)) {
                     res.status(400).json({
                         success: false,
-                        message: "Duration minute must be either 15 or 30",
+                        message: "Duration minutes must be either 15 or 30.",
+                        action: "updateDoctorOnlineAppointment:invalid-minute",
                     });
                     return;
                 }
@@ -103,7 +114,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                 if (typeof slot.price !== 'number' || slot.price <= 0) {
                     res.status(400).json({
                         success: false,
-                        message: "Price must be a positive number",
+                        message: "Price must be a positive number.",
+                        action: "updateDoctorOnlineAppointment:invalid-price",
                     });
                     return;
                 }
@@ -118,7 +130,8 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
         if (Object.keys(updateFields).length === 0) {
             res.status(400).json({
                 success: false,
-                message: "Either availability, duration, or isActive must be provided",
+                message: "Provide availability, duration, or active status to update.",
+                action: "updateDoctorOnlineAppointment:no-fields",
             });
             return;
         }
@@ -129,23 +142,25 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
         if (!updatedDoctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find the doctor profile.",
+                action: "updateDoctorOnlineAppointment:doctor-not-found",
             });
             return;
         }
         const doctorWithSignedUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(updatedDoctor);
         res.status(200).json({
             success: true,
+            message: "Online appointment settings updated successfully.",
+            action: "updateDoctorOnlineAppointment:success",
             data: doctorWithSignedUrls,
-            message: "Online appointment settings updated successfully",
         });
     }
     catch (error) {
         console.error("Error updating online appointment settings:", error);
         res.status(500).json({
             success: false,
-            message: "Error updating online appointment settings",
-            error: error.message,
+            message: "We couldn't update the online appointment settings.",
+            action: error.message,
         });
     }
 });
@@ -158,8 +173,11 @@ const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
+                message: "Please review the profile details and try again.",
+                action: "updateDoctorProfile:validation-error",
+                data: {
+                    errors: validationResult.error.errors,
+                },
             });
             return;
         }
@@ -171,7 +189,8 @@ const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!existingDoctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor profile not found for this user",
+                message: "We couldn't find a doctor profile for this user.",
+                action: "updateDoctorProfile:doctor-not-found",
             });
             return;
         }
@@ -231,22 +250,24 @@ const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!updateResults) {
             res.status(500).json({
                 success: false,
-                message: "Failed to update doctor information",
+                message: "We couldn't update the doctor information.",
+                action: "updateDoctorProfile:update-failed",
             });
             return;
         }
         res.status(200).json({
             success: true,
+            message: "Doctor profile updated successfully.",
+            action: "updateDoctorProfile:success",
             data: {},
-            message: "Doctor profile updated successfully",
         });
     }
     catch (error) {
         console.error("Error updating doctor profile:", error);
         res.status(500).json({
             success: false,
-            message: "Error updating doctor profile",
-            error: error.message,
+            message: "We couldn't update the doctor profile.",
+            action: error.message,
         });
     }
 });

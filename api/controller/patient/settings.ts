@@ -37,18 +37,27 @@ export const updatePersonalInfo = async (
     if (!updatedUser) {
       res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "We couldn't find the requested user.",
+        action: "updatePersonalInfo:user-not-found",
       });
       return;
     }
 
     res.json({
-      message: "Personal info updated successfully",
-      user: updatedUser,
+      success: true,
+      message: "Your personal information has been updated.",
+      action: "updatePersonalInfo:success",
+      data: {
+        user: updatedUser,
+      },
     });
   } catch (error) {
     console.error("Error updating personal info:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "We couldn't update your personal information.",
+      action: error instanceof Error ? error.message : String(error),
+    });
   }
 };
 
@@ -64,7 +73,8 @@ export const updateIdentityProof = async (
       res.status(400).json({
         success: false,
         message:
-          "Incomplete data. Please provide personalIdProof, addressProof, and taxProof.",
+          "Please provide personal ID, address, and tax proofs to continue.",
+        action: "updateIdentityProof:validate-missing-proof",
       });
       return;
     }
@@ -93,13 +103,18 @@ export const updateIdentityProof = async (
     );
 
     if (!updatedUser) {
-      res.status(404).json({ success: false, message: "User not found." });
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find the requested user.",
+        action: "updateIdentityProof:user-not-found",
+      });
       return;
     }
 
     res.status(200).json({
       success: true,
       message: "Identity proofs updated successfully.",
+      action: "updateIdentityProof:success",
       data: {
         personalIdProof: updatedUser.personalIdProof,
         addressProof: updatedUser.addressProof,
@@ -112,15 +127,19 @@ export const updateIdentityProof = async (
     if (err.name === "ValidationError") {
       res.status(400).json({
         success: false,
-        message: "Validation failed.",
-        errors: err.errors,
+        message: "Some of the provided proof details are invalid.",
+        action: "updateIdentityProof:validation-error",
+        data: {
+          errors: err.errors,
+        },
       });
       return;
     }
 
     res.status(500).json({
       success: false,
-      message: "Server error. Could not update identity proofs.",
+      message: "We couldn't update your identity proofs.",
+      action: err instanceof Error ? err.message : String(err),
     });
   }
 };
@@ -137,7 +156,8 @@ export const updateInsuranceDetails = async (
     if (!Array.isArray(insuranceDetails)) {
       res.status(400).json({
         success: false,
-        message: "insuranceDetails must be an array.",
+        message: "Insurance details must be provided as a list.",
+        action: "updateInsuranceDetails:validate-array",
       });
       return;
     }
@@ -155,20 +175,27 @@ export const updateInsuranceDetails = async (
     );
 
     if (!user) {
-      res.status(404).json({ success: false, message: "User not found." });
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find the requested user.",
+        action: "updateInsuranceDetails:user-not-found",
+      });
       return;
     }
 
     res.status(200).json({
       success: true,
       message: "Insurance details updated successfully.",
+      action: "updateInsuranceDetails:success",
       data: user.insuranceDetails,
     });
   } catch (err) {
     console.error("Error updating insurance details:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Server error. Please try again." });
+    res.status(500).json({
+      success: false,
+      message: "We couldn't update the insurance details.",
+      action: err instanceof Error ? err.message : String(err),
+    });
   }
 };
 
@@ -183,7 +210,8 @@ export const updateBankDetail = async (
     if (!bankDetails || Object.keys(bankDetails).length === 0) {
       res.status(400).json({
         success: false,
-        message: "No bank details provided",
+        message: "Please share the bank details you want to save.",
+        action: "updateBankDetail:validate-missing-details",
       });
       return;
     }
@@ -197,7 +225,8 @@ export const updateBankDetail = async (
     if (!updatedUser) {
       res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "We couldn't find the requested user.",
+        action: "updateBankDetail:user-not-found",
       });
       return;
     }
@@ -205,14 +234,15 @@ export const updateBankDetail = async (
     res.status(200).json({
       success: true,
       message: "Bank details updated successfully",
+      action: "updateBankDetail:success",
       data: updatedUser.bankDetails, // return just bankDetails
     });
   } catch (error: any) {
     console.error("Error updating bank details:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating bank details",
-      error: error.message,
+      message: "We couldn't update the bank details.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

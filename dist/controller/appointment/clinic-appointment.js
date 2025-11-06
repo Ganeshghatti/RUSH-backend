@@ -261,8 +261,11 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!validation.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation error: Invalid data format.",
-                errors: validation.error.errors,
+                message: "Please review the clinic details and try again.",
+                action: "updateClinicDetails:validation-error",
+                data: {
+                    errors: validation.error.errors,
+                },
             });
             return;
         }
@@ -270,7 +273,8 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!doctorId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "You must be signed in to update clinic details.",
+                action: "updateClinicDetails:not-authenticated",
             });
             return;
         }
@@ -278,7 +282,8 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (Object.keys(validatedData).length === 0) {
             res.status(400).json({
                 success: false,
-                message: "No update data provided.",
+                message: "Please provide fields to update.",
+                action: "updateClinicDetails:no-fields",
             });
             return;
         }
@@ -289,7 +294,8 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
             if (!doctor) {
                 res.status(404).json({
                     success: false,
-                    message: "Doctor profile not found",
+                    message: "We couldn't find your doctor profile.",
+                    action: "updateClinicDetails:doctor-not-found",
                 });
                 return;
             }
@@ -299,6 +305,7 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
                 res.status(400).json({
                     success: false,
                     message: "No active subscription found. Please subscribe to a plan.",
+                    action: "updateClinicDetails:no-active-subscription",
                 });
                 return;
             }
@@ -307,7 +314,8 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
             if (!subDoc) {
                 res.status(400).json({
                     success: false,
-                    message: "Subscription plan not found.",
+                    message: "We couldn't find the associated subscription plan.",
+                    action: "updateClinicDetails:subscription-not-found",
                 });
                 return;
             }
@@ -315,7 +323,8 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
             if (Array.isArray(validatedData.clinics) && validatedData.clinics.length > maxClinics) {
                 res.status(400).json({
                     success: false,
-                    message: `Your subscription allows only ${maxClinics} clinics. Please upgrade your plan to add more clinics.`,
+                    message: `Your subscription allows only ${maxClinics} clinics. Upgrade your plan to add more clinics.`,
+                    action: "updateClinicDetails:clinic-limit",
                 });
                 return;
             }
@@ -328,13 +337,15 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!updatedDoctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor profile not found",
+                message: "We couldn't find your doctor profile.",
+                action: "updateClinicDetails:doctor-not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Clinic details updated successfully",
+            message: "Clinic details updated successfully.",
+            action: "updateClinicDetails:success",
             data: updatedDoctor.clinicVisit,
         });
     }
@@ -342,7 +353,8 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
         console.error("Error patching clinic details:", err);
         res.status(500).json({
             success: false,
-            message: "An internal server error occurred.",
+            message: "We couldn't update the clinic details.",
+            action: err instanceof Error ? err.message : String(err),
         });
     }
 });
@@ -354,7 +366,8 @@ const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void
         if (!mongoose_1.default.Types.ObjectId.isValid(doctorId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid doctor ID",
+                message: "The doctor ID provided is invalid.",
+                action: "getDoctorClinicAvailability:invalid-id",
             });
             return;
         }
@@ -364,7 +377,8 @@ const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find that doctor.",
+                action: "getDoctorClinicAvailability:doctor-not-found",
             });
             return;
         }
@@ -372,7 +386,8 @@ const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void
         if (!(clinicVisit === null || clinicVisit === void 0 ? void 0 : clinicVisit.isActive)) {
             res.status(404).json({
                 success: false,
-                message: "Doctor does not offer clinic visits",
+                message: "This doctor does not offer clinic visits.",
+                action: "getDoctorClinicAvailability:no-active-clinic",
             });
             return;
         }
@@ -380,7 +395,8 @@ const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void
         const activeClinics = ((clinicVisit === null || clinicVisit === void 0 ? void 0 : clinicVisit.clinics) || []).filter((clinic) => clinic.isActive);
         res.status(200).json({
             success: true,
-            message: "Doctor clinic availability retrieved successfully",
+            message: "Doctor clinic availability retrieved successfully.",
+            action: "getDoctorClinicAvailability:success",
             data: {
                 doctor: {
                     _id: doctor._id,
@@ -395,7 +411,8 @@ const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void
         console.error("Error retrieving doctor clinic availability:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't load the clinic availability.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -408,8 +425,11 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!validation.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation error",
-                errors: validation.error.errors,
+                message: "Please review the clinic appointment details and try again.",
+                action: "bookClinicAppointment:validation-error",
+                data: {
+                    errors: validation.error.errors,
+                },
             });
             return;
         }
@@ -419,7 +439,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!patientUserId) {
             res.status(401).json({
                 success: false,
-                message: "Patient User is not authenticated",
+                message: "You must be signed in to book a clinic appointment.",
+                action: "bookClinicAppointment:not-authenticated",
             });
             return;
         }
@@ -428,7 +449,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find the selected doctor.",
+                action: "bookClinicAppointment:doctor-not-found",
             });
             return;
         }
@@ -438,7 +460,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!clinic) {
             res.status(404).json({
                 success: false,
-                message: "Clinic not found or inactive",
+                message: "We couldn't find an active clinic for that doctor.",
+                action: "bookClinicAppointment:clinic-not-found",
             });
             return;
         }
@@ -447,7 +470,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!patientUserDetail) {
             res.status(404).json({
                 success: false,
-                message: "Patient user not found",
+                message: "We couldn't find your patient profile.",
+                action: "bookClinicAppointment:patient-not-found",
             });
             return;
         }
@@ -456,7 +480,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (availableBalance < clinic.consultationFee) {
             res.status(400).json({
                 success: false,
-                message: "Insufficient wallet balance",
+                message: "Your wallet balance is too low for this appointment.",
+                action: "bookClinicAppointment:insufficient-balance",
                 data: {
                     required: clinic.consultationFee,
                     available: availableBalance,
@@ -482,7 +507,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (conflictingAppointment) {
             res.status(400).json({
                 success: false,
-                message: "Time slot is already booked",
+                message: "This clinic slot is already booked.",
+                action: "bookClinicAppointment:slot-unavailable",
             });
             return;
         }
@@ -514,11 +540,12 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         res.status(201).json({
             success: true,
             message: "Clinic appointment booked successfully.",
+            action: "bookClinicAppointment:success",
             data: {
-                appointment: appointment,
+                appointment,
                 patientWalletFrozen: clinic.consultationFee,
                 patientAvailableBalance: patientUserDetail.getAvailableBalance(),
-                note: "Amount will be deducted from wallet when appointment will be completed",
+                note: "Amount will be deducted from the wallet once the appointment is completed.",
             },
         });
     }
@@ -526,7 +553,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         console.error("Error booking clinic appointment:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't book the clinic appointment.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -540,7 +568,8 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         if (!doctorUserId) {
             res.status(401).json({
                 success: false,
-                message: "Doctor is not authenticated",
+                message: "You must be signed in to confirm appointments.",
+                action: "confirmClinicAppointment:not-authenticated",
             });
             return;
         }
@@ -549,7 +578,8 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor profile not found",
+                message: "We couldn't find your doctor profile.",
+                action: "confirmClinicAppointment:doctor-not-found",
             });
             return;
         }
@@ -561,14 +591,16 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         if (!appointment) {
             res.status(404).json({
                 success: false,
-                message: "Appointment not found",
+                message: "We couldn't find that appointment.",
+                action: "confirmClinicAppointment:appointment-not-found",
             });
             return;
         }
         if (appointment.status !== "pending") {
             res.status(400).json({
                 success: false,
-                message: "Only pending appointments can be confirmed",
+                message: "Only pending appointments can be confirmed.",
+                action: "confirmClinicAppointment:invalid-status",
             });
             return;
         }
@@ -586,6 +618,7 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         res.status(200).json({
             success: true,
             message: "Appointment confirmed successfully.",
+            action: "confirmClinicAppointment:success",
             data: {
                 appointmentId: appointment._id,
                 status: appointment.status,
@@ -600,7 +633,8 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         console.error("Error confirming clinic appointment:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't confirm the clinic appointment.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -614,7 +648,8 @@ const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, 
         if (!doctorUserId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "You must be signed in to cancel appointments.",
+                action: "cancelClinicAppointment:not-authenticated",
             });
             return;
         }
@@ -623,7 +658,8 @@ const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, 
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor profile not found",
+                message: "We couldn't find your doctor profile.",
+                action: "cancelClinicAppointment:doctor-not-found",
             });
             return;
         }
@@ -635,7 +671,8 @@ const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, 
         if (!appointment) {
             res.status(404).json({
                 success: false,
-                message: "Appointment not found",
+                message: "We couldn't find that appointment.",
+                action: "cancelClinicAppointment:appointment-not-found",
             });
             return;
         }
@@ -643,7 +680,8 @@ const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, 
             appointment.status === "cancelled") {
             res.status(400).json({
                 success: false,
-                message: "Cannot cancel completed or already cancelled appointments",
+                message: "This appointment is already completed or cancelled.",
+                action: "cancelClinicAppointment:invalid-status",
             });
             return;
         }
@@ -671,7 +709,8 @@ const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, 
         yield appointment.save();
         res.status(200).json({
             success: true,
-            message: "Appointment cancelled successfully",
+            message: "Appointment cancelled successfully.",
+            action: "cancelClinicAppointment:success",
             data: {
                 appointmentId: appointment._id,
                 status: appointment.status,
@@ -686,7 +725,8 @@ const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, 
         console.error("Error cancelling clinic appointment:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't cancel the clinic appointment.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -699,7 +739,8 @@ const getPatientClinicAppointments = (req, res) => __awaiter(void 0, void 0, voi
         if (!patientId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "You must be signed in to view clinic appointments.",
+                action: "getPatientClinicAppointments:not-authenticated",
             });
             return;
         }
@@ -732,7 +773,8 @@ const getPatientClinicAppointments = (req, res) => __awaiter(void 0, void 0, voi
         });
         res.status(200).json({
             success: true,
-            message: "Patient clinic appointments retrieved successfully",
+            message: "Patient clinic appointments retrieved successfully.",
+            action: "getPatientClinicAppointments:success",
             data: {
                 appointments: appointmentsWithClinicDetails,
             },
@@ -742,7 +784,8 @@ const getPatientClinicAppointments = (req, res) => __awaiter(void 0, void 0, voi
         console.error("Error retrieving patient clinic appointments:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't load the patient's clinic appointments.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -755,7 +798,8 @@ const getDoctorClinicAppointments = (req, res) => __awaiter(void 0, void 0, void
         if (!doctorUserId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "You must be signed in to view clinic appointments.",
+                action: "getDoctorClinicAppointments:not-authenticated",
             });
             return;
         }
@@ -764,7 +808,8 @@ const getDoctorClinicAppointments = (req, res) => __awaiter(void 0, void 0, void
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor profile not found",
+                message: "We couldn't find your doctor profile.",
+                action: "getDoctorClinicAppointments:doctor-not-found",
             });
             return;
         }
@@ -789,7 +834,8 @@ const getDoctorClinicAppointments = (req, res) => __awaiter(void 0, void 0, void
         });
         res.status(200).json({
             success: true,
-            message: "Doctor clinic appointments retrieved successfully",
+            message: "Doctor clinic appointments retrieved successfully.",
+            action: "getDoctorClinicAppointments:success",
             data: {
                 appointments: appointmentsWithClinicDetails,
             },
@@ -799,7 +845,8 @@ const getDoctorClinicAppointments = (req, res) => __awaiter(void 0, void 0, void
         console.error("Error retrieving doctor clinic appointments:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't load the doctor clinic appointments.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -813,7 +860,8 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
         if (!patientId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "You must be signed in to view the OTP.",
+                action: "getAppointmentOTP:not-authenticated",
             });
             return;
         }
@@ -824,14 +872,16 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
         if (!appointment) {
             res.status(404).json({
                 success: false,
-                message: "Appointment not found",
+                message: "We couldn't find that appointment.",
+                action: "getAppointmentOTP:appointment-not-found",
             });
             return;
         }
         if (appointment.status !== "confirmed") {
             res.status(400).json({
                 success: false,
-                message: "OTP can only be retrieved for confirmed appointments",
+                message: "OTP is only available for confirmed appointments.",
+                action: "getAppointmentOTP:invalid-status",
             });
             return;
         }
@@ -840,7 +890,8 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
         if (!(otpData === null || otpData === void 0 ? void 0 : otpData.code)) {
             res.status(400).json({
                 success: false,
-                message: "No OTP found for this appointment. Please contact support.",
+                message: "No OTP was generated for this appointment.",
+                action: "getAppointmentOTP:otp-missing",
             });
             return;
         }
@@ -848,7 +899,8 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
         if ((otpData === null || otpData === void 0 ? void 0 : otpData.expiresAt) && (0, otp_utils_1.isOTPExpired)(otpData.expiresAt)) {
             res.status(400).json({
                 success: false,
-                message: "OTP has expired. Please contact your doctor for a new appointment.",
+                message: "This OTP has expired. Please contact your doctor.",
+                action: "getAppointmentOTP:otp-expired",
             });
             return;
         }
@@ -856,14 +908,16 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
         if (otpData === null || otpData === void 0 ? void 0 : otpData.isUsed) {
             res.status(400).json({
                 success: false,
-                message: "OTP has already been used",
+                message: "This OTP has already been used.",
+                action: "getAppointmentOTP:otp-used",
             });
             return;
         }
         const updatedOtpData = appointment.otp;
         res.status(200).json({
             success: true,
-            message: "OTP retrieved successfully",
+            message: "OTP retrieved successfully.",
+            action: "getAppointmentOTP:success",
             data: {
                 otp: updatedOtpData === null || updatedOtpData === void 0 ? void 0 : updatedOtpData.code,
                 expiresAt: updatedOtpData === null || updatedOtpData === void 0 ? void 0 : updatedOtpData.expiresAt,
@@ -874,7 +928,8 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
         console.error("Error generating appointment OTP:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't retrieve the appointment OTP.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -887,8 +942,11 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!validation.success) {
             res.status(400).json({
                 success: false,
-                message: "OTP validation error",
-                errors: validation.error.errors,
+                message: "Please review the OTP details and try again.",
+                action: "validateVisitOTP:validation-error",
+                data: {
+                    errors: validation.error.errors,
+                },
             });
             return;
         }
@@ -896,7 +954,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!doctorUserId) {
             res.status(401).json({
                 success: false,
-                message: "User not authenticated",
+                message: "You must be signed in to validate the visit.",
+                action: "validateVisitOTP:not-authenticated",
             });
             return;
         }
@@ -906,7 +965,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor profile not found",
+                message: "We couldn't find your doctor profile.",
+                action: "validateVisitOTP:doctor-not-found",
             });
             return;
         }
@@ -915,7 +975,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!doctorUserDetail) {
             res.status(401).json({
                 success: false,
-                message: "Doctor User not found",
+                message: "We couldn't find your doctor profile.",
+                action: "validateVisitOTP:doctor-user-not-found",
             });
             return;
         }
@@ -925,7 +986,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!activeSub) {
             res.status(400).json({
                 success: false,
-                message: "Doctor has no active subscription",
+                message: "The doctor does not have an active subscription.",
+                action: "validateVisitOTP:no-active-subscription",
             });
             return;
         }
@@ -933,7 +995,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!subscription) {
             res.status(404).json({
                 success: false,
-                message: "Subscription not found",
+                message: "We couldn't find the associated subscription.",
+                action: "validateVisitOTP:subscription-not-found",
             });
             return;
         }
@@ -947,14 +1010,16 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!appointment) {
             res.status(404).json({
                 success: false,
-                message: "Appointment not found",
+                message: "We couldn't find that appointment.",
+                action: "validateVisitOTP:appointment-not-found",
             });
             return;
         }
         if (appointment.status !== "confirmed") {
             res.status(400).json({
                 success: false,
-                message: "Appointment is not in confirmed status",
+                message: "Appointment is not in confirmed status.",
+                action: "validateVisitOTP:invalid-status",
             });
             return;
         }
@@ -963,7 +1028,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!(otpData === null || otpData === void 0 ? void 0 : otpData.code)) {
             res.status(400).json({
                 success: false,
-                message: "No OTP generated for this appointment",
+                message: "No OTP was generated for this appointment.",
+                action: "validateVisitOTP:otp-missing",
             });
             return;
         }
@@ -971,7 +1037,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (otpData === null || otpData === void 0 ? void 0 : otpData.isUsed) {
             res.status(400).json({
                 success: false,
-                message: "OTP has already been used",
+                message: "This OTP has already been used.",
+                action: "validateVisitOTP:otp-used",
             });
             return;
         }
@@ -979,7 +1046,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if ((0, otp_utils_1.isMaxAttemptsReached)((otpData === null || otpData === void 0 ? void 0 : otpData.attempts) || 0, (otpData === null || otpData === void 0 ? void 0 : otpData.maxAttempts) || 3)) {
             res.status(400).json({
                 success: false,
-                message: "Maximum OTP verification attempts exceeded",
+                message: "Maximum OTP verification attempts exceeded.",
+                action: "validateVisitOTP:max-attempts",
             });
             return;
         }
@@ -987,7 +1055,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if ((otpData === null || otpData === void 0 ? void 0 : otpData.expiresAt) && (0, otp_utils_1.isOTPExpired)(otpData.expiresAt)) {
             res.status(400).json({
                 success: false,
-                message: "OTP has expired",
+                message: "This OTP has expired.",
+                action: "validateVisitOTP:otp-expired",
             });
             return;
         }
@@ -999,9 +1068,10 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
             const remainingAttempts = ((otpData === null || otpData === void 0 ? void 0 : otpData.maxAttempts) || 3) - appointment.otp.attempts;
             res.status(400).json({
                 success: false,
-                message: "Invalid OTP",
+                message: "Invalid OTP.",
+                action: "validateVisitOTP:otp-mismatch",
                 data: {
-                    remainingAttempts: remainingAttempts,
+                    remainingAttempts,
                 },
             });
             return;
@@ -1032,7 +1102,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 else {
                     res.status(500).json({
                         success: false,
-                        message: "Failed to process final payment",
+                        message: "We couldn't process the final payment.",
+                        action: "validateVisitOTP:wallet-deduction-failed",
                     });
                     return;
                 }
@@ -1042,6 +1113,7 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         res.status(200).json({
             success: true,
             message: "Visit validated successfully. Appointment completed.",
+            action: "validateVisitOTP:success",
             data: {
                 appointment: appointment,
             },
@@ -1051,7 +1123,8 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.error("Error validating visit OTP:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error",
+            message: "We couldn't validate the clinic visit.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

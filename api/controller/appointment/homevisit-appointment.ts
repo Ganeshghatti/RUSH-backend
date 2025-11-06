@@ -72,8 +72,11 @@ export const bookHomeVisitAppointment = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the home visit request details and try again.",
+        action: "bookHomeVisitAppointment:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
@@ -84,7 +87,8 @@ export const bookHomeVisitAppointment = async (
     if (!patientUserId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to request a home visit.",
+        action: "bookHomeVisitAppointment:not-authenticated",
       });
       return;
     }
@@ -96,7 +100,8 @@ export const bookHomeVisitAppointment = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find the selected doctor.",
+        action: "bookHomeVisitAppointment:doctor-not-found",
       });
       return;
     }
@@ -104,7 +109,8 @@ export const bookHomeVisitAppointment = async (
     if (!doctor.homeVisit || !doctor.homeVisit.isActive) {
       res.status(400).json({
         success: false,
-        message: "Doctor does not offer home visit services",
+        message: "This doctor does not offer home visit services.",
+        action: "bookHomeVisitAppointment:home-visit-disabled",
       });
       return;
     }
@@ -114,7 +120,8 @@ export const bookHomeVisitAppointment = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "bookHomeVisitAppointment:patient-not-found",
       });
       return;
     }
@@ -124,7 +131,8 @@ export const bookHomeVisitAppointment = async (
     if (fixedCost <= 0) {
       res.status(400).json({
         success: false,
-        message: "Doctor has not set home visit pricing",
+        message: "The doctor has not set home visit pricing.",
+        action: "bookHomeVisitAppointment:no-pricing",
       });
       return;
     }
@@ -143,7 +151,8 @@ export const bookHomeVisitAppointment = async (
     if (existingAppointment) {
       res.status(400).json({
         success: false,
-        message: "This slot is already booked",
+        message: "This slot is already booked.",
+        action: "bookHomeVisitAppointment:slot-unavailable",
       });
       return;
     }
@@ -219,15 +228,16 @@ export const bookHomeVisitAppointment = async (
 
     res.status(201).json({
       success: true,
+      message: "Home visit request created successfully.",
+      action: "bookHomeVisitAppointment:success",
       data: populatedAppointment,
-      message: "Home visit request created successfully",
     });
   } catch (error: any) {
     console.error("Error booking home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error creating home visit request",
-      error: error.message,
+      message: "We couldn't create the home visit request.",
+      action: error.message,
     });
   }
 };
@@ -243,8 +253,11 @@ export const acceptHomeVisitRequest = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the request details and try again.",
+        action: "acceptHomeVisitRequest:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
@@ -254,7 +267,8 @@ export const acceptHomeVisitRequest = async (
     if (!doctorId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to accept requests.",
+        action: "acceptHomeVisitRequest:not-authenticated",
       });
       return;
     }
@@ -265,7 +279,8 @@ export const acceptHomeVisitRequest = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "acceptHomeVisitRequest:doctor-not-found",
       });
       return;
     }
@@ -280,7 +295,8 @@ export const acceptHomeVisitRequest = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or not in pending status",
+        message: "We couldn't find a pending appointment to accept.",
+        action: "acceptHomeVisitRequest:appointment-not-found",
       });
       return;
     }
@@ -289,7 +305,8 @@ export const acceptHomeVisitRequest = async (
     if (!appointment.pricing || !appointment.paymentDetails) {
       res.status(500).json({
         success: false,
-        message: "Appointment pricing or payment details not found",
+        message: "Appointment pricing or payment details are missing.",
+        action: "acceptHomeVisitRequest:pricing-missing",
       });
       return;
     }
@@ -311,15 +328,16 @@ export const acceptHomeVisitRequest = async (
 
     res.status(200).json({
       success: true,
+      message: "Home visit request accepted and travel cost added.",
+      action: "acceptHomeVisitRequest:success",
       data: updatedAppointment,
-      message: "Home visit request accepted with travel cost added",
     });
   } catch (error: any) {
     console.error("Error accepting home visit request:", error);
     res.status(500).json({
       success: false,
-      message: "Error accepting request",
-      error: error.message,
+      message: "We couldn't accept the home visit request.",
+      action: error.message,
     });
   }
 };
@@ -336,7 +354,8 @@ export const confirmHomeVisitAppointment = async (
     if (!patientUserId) {
       res.status(401).json({
         success: false,
-        message: "Patient User not authenticated",
+        message: "You must be signed in to confirm this appointment.",
+        action: "confirmHomeVisitAppointment:not-authenticated",
       });
       return;
     }
@@ -350,7 +369,8 @@ export const confirmHomeVisitAppointment = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or not in correct status",
+        message: "We couldn't find the appointment to confirm.",
+        action: "confirmHomeVisitAppointment:appointment-not-found",
       });
       return;
     }
@@ -358,7 +378,8 @@ export const confirmHomeVisitAppointment = async (
     if (!appointment.pricing || !appointment.paymentDetails) {
       res.status(500).json({
         success: false,
-        message: "Appointment pricing or payment details not found",
+        message: "Appointment pricing or payment details are missing.",
+        action: "confirmHomeVisitAppointment:pricing-missing",
       });
       return;
     }
@@ -370,7 +391,8 @@ export const confirmHomeVisitAppointment = async (
     if (!patientUserDetail) {
       res.status(404).json({
         success: false,
-        message: "Patient User not found",
+        message: "We couldn't find your patient profile.",
+        action: "confirmHomeVisitAppointment:patient-not-found",
       });
       return;
     }
@@ -380,7 +402,8 @@ export const confirmHomeVisitAppointment = async (
     if (availableBalance < totalCost) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "Your wallet balance is too low to confirm this appointment.",
+        action: "confirmHomeVisitAppointment:insufficient-balance",
         data: {
           required: totalCost,
           available: availableBalance,
@@ -395,7 +418,8 @@ export const confirmHomeVisitAppointment = async (
     if (!freezeSuccess) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "We couldn't reserve the appointment amount.",
+        action: "confirmHomeVisitAppointment:freeze-failed",
         data: {
           required: totalCost,
           available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
@@ -428,15 +452,16 @@ export const confirmHomeVisitAppointment = async (
 
     res.status(200).json({
       success: true,
+      message: "Home visit appointment confirmed and payment reserved.",
+      action: "confirmHomeVisitAppointment:success",
       data: confirmedAppointment,
-      message: "Home visit appointment confirmed and payment frozen",
     });
   } catch (error: any) {
     console.error("Error confirming home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error confirming appointment",
-      error: error.message,
+      message: "We couldn't confirm the home visit appointment.",
+      action: error.message,
     });
   }
 };
@@ -452,8 +477,11 @@ export const completeHomeVisitAppointment = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the completion details and try again.",
+        action: "completeHomeVisitAppointment:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
@@ -461,7 +489,8 @@ export const completeHomeVisitAppointment = async (
     if (!otp) {
       res.status(400).json({
         success: false,
-        message: "OTP is required",
+        message: "OTP is required.",
+        action: "completeHomeVisitAppointment:missing-otp",
       });
       return;
     }
@@ -470,7 +499,8 @@ export const completeHomeVisitAppointment = async (
     if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "Doctor User not authenticated",
+        message: "You must be signed in to complete this appointment.",
+        action: "completeHomeVisitAppointment:not-authenticated",
       });
       return;
     }
@@ -480,7 +510,8 @@ export const completeHomeVisitAppointment = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "completeHomeVisitAppointment:doctor-not-found",
       });
       return;
     }
@@ -490,7 +521,8 @@ export const completeHomeVisitAppointment = async (
     if (!doctorUserDetail) {
       res.status(401).json({
         success: false,
-        message: "Doctor User not found",
+        message: "We couldn't find your doctor profile.",
+        action: "completeHomeVisitAppointment:doctor-user-not-found",
       });
       return;
     }
@@ -503,7 +535,8 @@ export const completeHomeVisitAppointment = async (
     if (!activeSub) {
       res.status(400).json({
         success: false,
-        message: "Doctor has no active subscription",
+        message: "The doctor does not have an active subscription.",
+        action: "completeHomeVisitAppointment:no-active-subscription",
       });
       return;
     }
@@ -513,7 +546,8 @@ export const completeHomeVisitAppointment = async (
     if (!subscription) {
       res.status(404).json({
         success: false,
-        message: "Subscription not found",
+        message: "We couldn't find the associated subscription.",
+        action: "completeHomeVisitAppointment:subscription-not-found",
       });
       return;
     }
@@ -529,7 +563,8 @@ export const completeHomeVisitAppointment = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or not in confirmed status",
+        message: "We couldn't find a confirmed appointment to complete.",
+        action: "completeHomeVisitAppointment:appointment-not-found",
       });
       return;
     }
@@ -538,7 +573,8 @@ export const completeHomeVisitAppointment = async (
     if (!appointment.otp || appointment.otp.isUsed) {
       res.status(400).json({
         success: false,
-        message: "OTP is not available or already used",
+        message: "The OTP is not available or has already been used.",
+        action: "completeHomeVisitAppointment:otp-unavailable",
       });
       return;
     }
@@ -553,7 +589,8 @@ export const completeHomeVisitAppointment = async (
     ) {
       res.status(400).json({
         success: false,
-        message: "Maximum OTP attempts exceeded",
+        message: "Maximum OTP attempts exceeded.",
+        action: "completeHomeVisitAppointment:max-attempts",
       });
       return;
     }
@@ -564,9 +601,12 @@ export const completeHomeVisitAppointment = async (
 
       res.status(400).json({
         success: false,
-        message: "Invalid OTP",
-        attemptsRemaining:
-          appointment.otp.maxAttempts - appointment.otp.attempts,
+        message: "Invalid OTP.",
+        action: "completeHomeVisitAppointment:otp-mismatch",
+        data: {
+          attemptsRemaining:
+            appointment.otp.maxAttempts - appointment.otp.attempts,
+        },
       });
       return;
     }
@@ -584,7 +624,8 @@ export const completeHomeVisitAppointment = async (
       if (!patientUserDetail) {
         res.status(400).json({
           success: false,
-          message: "Patient User not found",
+          message: "We couldn't find the patient profile.",
+          action: "completeHomeVisitAppointment:patient-not-found",
         });
         return;
       }
@@ -597,7 +638,9 @@ export const completeHomeVisitAppointment = async (
       if (deductSuccess && deductAmount) {
         await patientUserDetail.save();
         appointment.paymentDetails.walletDeducted = deductAmount;
-        if(appointment.paymentDetails.walletFrozen) appointment.paymentDetails.walletFrozen -= deductAmount;
+        if (appointment.paymentDetails.walletFrozen) {
+          appointment.paymentDetails.walletFrozen -= deductAmount;
+        }
         appointment.paymentDetails.paymentStatus = "completed";
 
         // increment in doctor user
@@ -609,7 +652,8 @@ export const completeHomeVisitAppointment = async (
       } else {
         res.status(500).json({
           success: false,
-          message: "Failed to process final payment",
+          message: "We couldn't process the final payment.",
+          action: "completeHomeVisitAppointment:wallet-deduction-failed",
         });
         return;
       }
@@ -621,16 +665,17 @@ export const completeHomeVisitAppointment = async (
 
     res.status(200).json({
       success: true,
-      data: completedAppointment,
       message:
-        "Home visit appointment completed successfully and final payment processed",
+        "Home visit appointment completed successfully and payment processed.",
+      action: "completeHomeVisitAppointment:success",
+      data: completedAppointment,
     });
   } catch (error: any) {
     console.error("Error completing home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error completing appointment",
-      error: error.message,
+      message: "We couldn't complete the home visit appointment.",
+      action: error.message,
     });
   }
 };
@@ -646,8 +691,11 @@ export const cancelHomeVisitAppointment = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the cancellation details and try again.",
+        action: "cancelHomeVisitAppointment:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
@@ -657,7 +705,8 @@ export const cancelHomeVisitAppointment = async (
     if (!userId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to cancel this appointment.",
+        action: "cancelHomeVisitAppointment:not-authenticated",
       });
       return;
     }
@@ -667,7 +716,8 @@ export const cancelHomeVisitAppointment = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found",
+        message: "We couldn't find that appointment.",
+        action: "cancelHomeVisitAppointment:appointment-not-found",
       });
       return;
     }
@@ -681,7 +731,8 @@ export const cancelHomeVisitAppointment = async (
     if (!isDoctor && !isPatient) {
       res.status(403).json({
         success: false,
-        message: "Not authorized to cancel this appointment",
+        message: "You are not authorised to cancel this appointment.",
+        action: "cancelHomeVisitAppointment:unauthorised",
       });
       return;
     }
@@ -693,7 +744,8 @@ export const cancelHomeVisitAppointment = async (
     ) {
       res.status(400).json({
         success: false,
-        message: "Cannot cancel completed or already cancelled appointment",
+        message: "This appointment is already completed or cancelled.",
+        action: "cancelHomeVisitAppointment:invalid-status",
       });
       return;
     }
@@ -713,15 +765,16 @@ export const cancelHomeVisitAppointment = async (
 
     res.status(200).json({
       success: true,
+      message: "Home visit appointment cancelled successfully.",
+      action: "cancelHomeVisitAppointment:success",
       data: cancelledAppointment,
-      message: "Home visit appointment cancelled successfully",
     });
   } catch (error: any) {
     console.error("Error cancelling home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error cancelling appointment",
-      error: error.message,
+      message: "We couldn't cancel the home visit appointment.",
+      action: error.message,
     });
   }
 };
@@ -738,7 +791,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     if (!doctorId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to view these appointments.",
+        action: "getDoctorHomeVisitAppointmentByDate:not-authenticated",
       });
       return;
     }
@@ -746,7 +800,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     if (!date) {
       res.status(400).json({
         success: false,
-        message: "Date is required",
+        message: "Date is required.",
+        action: "getDoctorHomeVisitAppointmentByDate:missing-date",
       });
       return;
     }
@@ -755,7 +810,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "getDoctorHomeVisitAppointmentByDate:doctor-not-found",
       });
       return;
     }
@@ -789,9 +845,10 @@ export const getDoctorHomeVisitAppointmentByDate = async (
 
     res.status(200).json({
       success: true,
-      data: appointments,
       message:
-        "Doctor home visit appointments for the date retrieved successfully",
+        "Doctor home visit appointments for the date retrieved successfully.",
+      action: "getDoctorHomeVisitAppointmentByDate:success",
+      data: appointments,
     });
   } catch (error: any) {
     console.error(
@@ -800,8 +857,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     );
     res.status(500).json({
       success: false,
-      message: "Error retrieving appointments",
-      error: error.message,
+      message: "We couldn't load home visit appointments for that date.",
+      action: error.message,
     });
   }
 };
@@ -817,8 +874,11 @@ export const updateHomeVisitConfig = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the configuration details and try again.",
+        action: "updateHomeVisitConfig:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
@@ -827,7 +887,8 @@ export const updateHomeVisitConfig = async (
     if (!doctorId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to update home visit settings.",
+        action: "updateHomeVisitConfig:not-authenticated",
       });
       return;
     }
@@ -836,7 +897,8 @@ export const updateHomeVisitConfig = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "updateHomeVisitConfig:doctor-not-found",
       });
       return;
     }
@@ -866,15 +928,16 @@ export const updateHomeVisitConfig = async (
 
     res.status(200).json({
       success: true,
+      message: "Home visit configuration updated successfully.",
+      action: "updateHomeVisitConfig:success",
       data: doctor.homeVisit,
-      message: "Home visit configuration updated successfully",
     });
   } catch (error: any) {
     console.error("Error updating home visit configuration:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating configuration",
-      error: error.message,
+      message: "We couldn't update the home visit configuration.",
+      action: error.message,
     });
   }
 };

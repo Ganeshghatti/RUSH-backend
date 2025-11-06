@@ -55,7 +55,8 @@ export const createSubscription = async (
     if (price < 0) {
       res.status(400).json({
         success: false,
-        message: "Price must be a non-negative number (0 or greater)",
+        message: "Price must be zero or higher.",
+        action: "createDoctorSubscription:invalid-price",
       });
       return;
     }
@@ -69,7 +70,11 @@ export const createSubscription = async (
     if (pfOnlineErr || oeOnlineErr) {
       res.status(400).json({
         success: false,
-        message: pfOnlineErr || oeOnlineErr,
+        message: "Please review the online fee settings.",
+        action: `createDoctorSubscription:${pfOnlineErr ? "platform-fee-error" : "ops-fee-error"}`,
+        data: {
+          details: pfOnlineErr || oeOnlineErr,
+        },
       });
       return;
     }
@@ -94,7 +99,8 @@ export const createSubscription = async (
         res.status(400).json({
           success: false,
           message:
-            "All platform/ops fees (except online) must be objects with type ('Number' or 'Percentage') and a non-negative figure",
+            "Please review the clinic, home visit, and emergency fee settings.",
+          action: `createDoctorSubscription:invalid-fee-${feeFields.indexOf(fee)}`,
         });
         return;
       }
@@ -105,7 +111,8 @@ export const createSubscription = async (
       res.status(400).json({
         success: false,
         message:
-          "Missing required subscription fields: price, name, description, and duration are required",
+          "Price, name, description, and duration are required to create a subscription.",
+        action: "createDoctorSubscription:missing-required-fields",
       });
       return;
     }
@@ -154,14 +161,16 @@ export const createSubscription = async (
 
     res.status(201).json({
       success: true,
-      message: "Subscription created successfully",
+      message: "Subscription created successfully.",
+      action: "createDoctorSubscription:success",
       data: subscription,
     });
   } catch (error) {
     console.error("Error creating subscription:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to create subscription",
+      message: "We couldn't create the subscription.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -197,7 +206,8 @@ export const updateSubscription = async (
       if (typeof no_of_clinics !== "number" || no_of_clinics < 0) {
         res.status(400).json({
           success: false,
-          message: "no_of_clinics must be a non-negative number",
+          message: "Number of clinics must be zero or higher.",
+          action: "updateDoctorSubscription:invalid-clinic-count",
         });
         return;
       }
@@ -209,7 +219,8 @@ export const updateSubscription = async (
       if (typeof advertisement_cost !== "number" || advertisement_cost < 0) {
         res.status(400).json({
           success: false,
-          message: "advertisement_cost must be a non-negative number",
+          message: "Advertisement cost must be zero or higher.",
+          action: "updateDoctorSubscription:invalid-advertisement-cost",
         });
         return;
       }
@@ -221,7 +232,8 @@ export const updateSubscription = async (
       if (typeof isActive !== "boolean") {
         res.status(400).json({
           success: false,
-          message: "isActive field must be a boolean",
+          message: "isActive must be true or false.",
+          action: "updateDoctorSubscription:invalid-isActive",
         });
         return;
       }
@@ -233,7 +245,8 @@ export const updateSubscription = async (
       if (typeof name !== "string" || name.trim() === "") {
         res.status(400).json({
           success: false,
-          message: "name field must be a non-empty string",
+          message: "Name must be a non-empty string.",
+          action: "updateDoctorSubscription:invalid-name",
         });
         return;
       }
@@ -245,7 +258,8 @@ export const updateSubscription = async (
       if (typeof description !== "string" || description.trim() === "") {
         res.status(400).json({
           success: false,
-          message: "description field must be a non-empty string",
+          message: "Description must be a non-empty string.",
+          action: "updateDoctorSubscription:invalid-description",
         });
         return;
       }
@@ -257,7 +271,8 @@ export const updateSubscription = async (
       if (!Array.isArray(features)) {
         res.status(400).json({
           success: false,
-          message: "features field must be an array",
+          message: "Features must be provided as a list.",
+          action: "updateDoctorSubscription:invalid-features-type",
         });
         return;
       }
@@ -267,7 +282,8 @@ export const updateSubscription = async (
         if (typeof feature !== "string" || feature.trim() === "") {
           res.status(400).json({
             success: false,
-            message: "All features must be non-empty strings",
+            message: "Each feature must be a non-empty string.",
+            action: "updateDoctorSubscription:invalid-feature-entry",
           });
           return;
         }
@@ -295,7 +311,11 @@ export const updateSubscription = async (
           if (err) {
             res.status(400).json({
               success: false,
-              message: err,
+              message: "Please review the online fee settings.",
+              action: `updateDoctorSubscription:${field}-error`,
+              data: {
+                details: err,
+              },
             });
             return;
           }
@@ -311,7 +331,8 @@ export const updateSubscription = async (
           ) {
             res.status(400).json({
               success: false,
-              message: `Field ${field} must be an object with type ('Number' or 'Percentage') and a non-negative figure`,
+              message: "Please review the fee settings for clinic, home visit, or emergency.",
+              action: `updateDoctorSubscription:invalid-fee-${field}`,
             });
             return;
           }
@@ -325,7 +346,8 @@ export const updateSubscription = async (
       if (typeof price !== "number") {
         res.status(400).json({
           success: false,
-          message: "Price field must be a number",
+          message: "Price must be a number.",
+          action: "updateDoctorSubscription:invalid-price",
         });
         return;
       }
@@ -337,7 +359,8 @@ export const updateSubscription = async (
       res.status(400).json({
         success: false,
         message:
-          "At least one field (isActive, name, description, or features) must be provided for update",
+          "Provide at least one field to update the subscription.",
+        action: "updateDoctorSubscription:no-fields",
       });
       return;
     }
@@ -351,21 +374,24 @@ export const updateSubscription = async (
     if (!subscription) {
       res.status(404).json({
         success: false,
-        message: "Subscription not found",
+        message: "We couldn't find that subscription.",
+        action: "updateDoctorSubscription:not-found",
       });
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: "Subscription updated successfully",
+      message: "Subscription updated successfully.",
+      action: "updateDoctorSubscription:success",
       data: subscription,
     });
   } catch (error) {
     console.error("Error updating subscription:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update subscription",
+      message: "We couldn't update the subscription.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -382,14 +408,16 @@ export const getSubscriptions = async (
 
     res.status(200).json({
       success: true,
-      message: "Subscriptions fetched successfully",
+      message: "Subscriptions fetched successfully.",
+      action: "getDoctorSubscriptions:success",
       data: subscriptionsWithSignedUrls,
     });
   } catch (error) {
     console.error("Error fetching subscriptions:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch subscriptions",
+      message: "We couldn't load the subscriptions.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -406,7 +434,8 @@ export const getActiveSubscriptions = async (
     if (!activeSubscriptions || activeSubscriptions.length === 0) {
       res.status(404).json({
         success: false,
-        message: "No active subscriptions found",
+        message: "No active subscriptions are available right now.",
+        action: "getActiveDoctorSubscriptions:none-found",
       });
       return;
     }
@@ -417,14 +446,16 @@ export const getActiveSubscriptions = async (
 
     res.status(200).json({
       success: true,
-      message: "Active subscriptions fetched successfully",
+      message: "Active subscriptions fetched successfully.",
+      action: "getActiveDoctorSubscriptions:success",
       data: subscriptionsWithSignedUrls,
     });
   } catch (error) {
     console.error("Error fetching active subscriptions:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch active subscriptions",
+      message: "We couldn't load the active subscriptions.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -440,7 +471,8 @@ export const deleteSubscription = async (
     if (!subscription) {
       res.status(404).json({
         success: false,
-        message: "Subscription not found",
+        message: "We couldn't find that subscription.",
+        action: "deleteDoctorSubscription:not-found",
       });
       return;
     }
@@ -453,8 +485,11 @@ export const deleteSubscription = async (
       res.status(400).json({
         success: false,
         message:
-          "Cannot delete this subscription as it is currently used by one or more doctors",
-        doctorCount: doctorsUsingSubscription.length,
+          "This subscription is assigned to one or more doctors and cannot be deleted.",
+        action: "deleteDoctorSubscription:in-use",
+        data: {
+          doctorCount: doctorsUsingSubscription.length,
+        },
       });
       return;
     }
@@ -482,13 +517,15 @@ export const deleteSubscription = async (
 
     res.status(200).json({
       success: true,
-      message: "Subscription deleted successfully",
+      message: "Subscription deleted successfully.",
+      action: "deleteDoctorSubscription:success",
     });
   } catch (error) {
     console.error("Error deleting subscription:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to delete subscription",
+      message: "We couldn't delete the subscription.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

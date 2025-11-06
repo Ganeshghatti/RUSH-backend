@@ -13,22 +13,29 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
     const { role, email } = req.body;
 
     if (!email || !validator.isEmail(email) || !role) {
-      res
-        .status(400)
-        .json({ success: false, message: "Valid email and role are required" });
+      res.status(400).json({
+        success: false,
+        message: "Please provide a valid email and role.",
+        action: "sendResetPasswordLink:validate-input",
+      });
       return;
     }
 
     const user = await User.findOne({ email });
     if (!user) {
-      res.status(404).json({ success: false, message: "User not found" });
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find an account with that email.",
+        action: "sendResetPasswordLink:user-not-found",
+      });
       return;
     }
 
     if (!user.roles.includes(role)) {
       res.status(400).json({
         success: false,
-        message: `You do not have the role: ${role}`,
+        message: "This account doesn't have access to that role.",
+        action: `sendResetPasswordLink:missing-role:${role}`,
       });
       return;
     }
@@ -42,7 +49,8 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
         res.status(400).json({
           success: false,
           message:
-            "An email reset link has already been sent to this email address. Please wait 10 minutes.",
+            "We already sent a reset link—please wait a few minutes before requesting another.",
+          action: "sendResetPasswordLink:throttled",
         });
         return;
       } else {
@@ -94,13 +102,15 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      message: "Password reset link sent to your email",
+      message: "We emailed you a link to reset your password.",
+      action: "sendResetPasswordLink:success",
     });
   } catch (error) {
     console.error("Error sending reset link:", error);
     res.status(500).json({
       success: false,
-      message: "Server error while sending reset link",
+      message: "We couldn't send the reset email right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -111,25 +121,30 @@ export const resetPassword = async (req: Request, res: Response) => {
     const { newPassword, role } = req.body;
 
     if (!token || !role) {
-      res
-        .status(400)
-        .json({ success: false, message: "Token and role are required" });
+      res.status(400).json({
+        success: false,
+        message: "Token and role are required.",
+        action: "resetPassword:validate-input",
+      });
       return;
     }
 
     if (!newPassword || newPassword.length < 6) {
       res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters long",
+        message: "Password must be at least 6 characters long.",
+        action: "resetPassword:validate-password-length",
       });
       return;
     }
 
     const resetEntry = await ResetPassword.findOne({ token });
     if (!resetEntry) {
-      res
-        .status(400)
-        .json({ success: false, message: "Invalid or expired reset token" });
+      res.status(400).json({
+        success: false,
+        message: "That reset link is no longer valid.",
+        action: "resetPassword:token-not-found",
+      });
       return;
     }
 
@@ -141,21 +156,27 @@ export const resetPassword = async (req: Request, res: Response) => {
       await ResetPassword.deleteOne({ token });
       res.status(400).json({
         success: false,
-        message: "Reset token has expired. Please request a new link.",
+        message: "This reset link has expired. Please request a new one.",
+        action: "resetPassword:token-expired",
       });
       return;
     }
 
     const user = await User.findOne({ email: resetEntry.email });
     if (!user) {
-      res.status(404).json({ success: false, message: "User not found" });
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find the related account.",
+        action: "resetPassword:user-not-found",
+      });
       return;
     }
 
     if (resetEntry.role !== role) {
       res.status(400).json({
         success: false,
-        message: `You do not have the role: ${role}`,
+        message: "This reset link doesn't match the selected role.",
+        action: `resetPassword:role-mismatch:${role}`,
       });
       return;
     }
@@ -163,9 +184,11 @@ export const resetPassword = async (req: Request, res: Response) => {
     if (role === "doctor") {
       const doctor = await Doctor.findOne({ userId: user._id });
       if (!doctor) {
-        res
-          .status(404)
-          .json({ success: false, message: "Doctor profile not found" });
+        res.status(404).json({
+          success: false,
+          message: "Doctor profile is missing for this account.",
+          action: "resetPassword:doctor-profile-missing",
+        });
         return;
       }
       const salt = await bcrypt.genSalt(10);
@@ -176,9 +199,11 @@ export const resetPassword = async (req: Request, res: Response) => {
     } else if (role === "patient") {
       const patient = await Patient.findOne({ userId: user._id });
       if (!patient) {
-        res
-          .status(404)
-          .json({ success: false, message: "Patient profile not found" });
+        res.status(404).json({
+          success: false,
+          message: "Patient profile is missing for this account.",
+          action: "resetPassword:patient-profile-missing",
+        });
         return;
       }
       const salt = await bcrypt.genSalt(10);
@@ -187,7 +212,11 @@ export const resetPassword = async (req: Request, res: Response) => {
       patient.password = hashedPassword;
       await patient.save();
     } else {
-      res.status(400).json({ success: false, message: "Invalid role" });
+      res.status(400).json({
+        success: false,
+        message: "That role isn't supported for password resets.",
+        action: `resetPassword:invalid-role:${role}`,
+      });
       return;
     }
 
@@ -196,13 +225,15 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     res.status(200).json({
       success: true,
-      message: "Password reset successful",
+      message: "Your password has been updated.",
+      action: "resetPassword:success",
     });
   } catch (error) {
     console.error("Error resetting password:", error);
     res.status(500).json({
       success: false,
-      message: "Server error while resetting password",
+      message: "We couldn't reset the password right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

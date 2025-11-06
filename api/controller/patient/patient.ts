@@ -30,8 +30,8 @@ export const subscribePatient = async (
     if (!req.body.data) {
       res.status(400).json({
         success: false,
-        message:
-          "Missing required fields: JSON data is required",
+        message: "Please include the required form data.",
+        action: "subscribePatient:missing-json",
       });
       return;
     }
@@ -43,7 +43,8 @@ export const subscribePatient = async (
     } catch (error) {
       res.status(400).json({
         success: false,
-        message: "Invalid JSON data format",
+        message: "We couldn't read the submitted information.",
+        action: "subscribePatient:invalid-json",
       });
       return;
     }
@@ -55,7 +56,8 @@ export const subscribePatient = async (
       res.status(400).json({
         success: false,
         message:
-          "Missing required fields: patientId, subscriptionId, or paymentDetails.upiId",
+          "Missing required details. Please provide the patient and subscription IDs.",
+        action: "subscribePatient:missing-fields",
       });
       return;
     }
@@ -69,7 +71,8 @@ export const subscribePatient = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "We couldn't find the patient for this subscription.",
+        action: "subscribePatient:patient-not-found",
       });
       return;
     }
@@ -81,7 +84,8 @@ export const subscribePatient = async (
     if (!subscription) {
       res.status(404).json({
         success: false,
-        message: "Subscription plan not found",
+        message: "We couldn't find that subscription plan.",
+        action: "subscribePatient:plan-not-found",
       });
       return;
     }
@@ -89,7 +93,8 @@ export const subscribePatient = async (
     if (!subscription.isActive) {
       res.status(400).json({
         success: false,
-        message: "Subscription plan is not active",
+        message: "This subscription plan is currently inactive.",
+        action: "subscribePatient:plan-inactive",
       });
       return;
     }
@@ -109,7 +114,8 @@ export const subscribePatient = async (
 
     res.status(200).json({
       success: true,
-      message: "Patient subscribed successfully",
+      message: "Subscription order created successfully.",
+      action: "subscribePatient:order-created",
       data: {
         order,
         prefill: {
@@ -124,8 +130,8 @@ export const subscribePatient = async (
     console.error("Error in subscribing patient:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to subscribe patient",
-      error: error,
+      message: "We couldn't start the subscription.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -154,7 +160,8 @@ export const verifyPaymentSubscription = async (
       res.status(400).json({
         success: false,
         message:
-          "Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, userId",
+          "Please provide all payment verification details.",
+        action: "verifyPaymentSubscription:validate-input",
       });
       return;
     }
@@ -170,7 +177,8 @@ export const verifyPaymentSubscription = async (
       if (!patient) {
         res.status(404).json({
           success: false,
-          message: "User not found",
+          message: "We couldn't find the patient for this subscription.",
+          action: "verifyPaymentSubscription:patient-not-found",
         });
         return;
       }
@@ -179,7 +187,8 @@ export const verifyPaymentSubscription = async (
       if (!subscription) {
         res.status(404).json({
           success: false,
-          message: "Subscription plan not found",
+          message: "We couldn't find that subscription plan.",
+          action: "verifyPaymentSubscription:plan-not-found",
         });
         return;
       }
@@ -187,7 +196,8 @@ export const verifyPaymentSubscription = async (
       if (!subscription.isActive) {
         res.status(400).json({
           success: false,
-          message: "Subscription plan is not active",
+          message: "This subscription plan is currently inactive.",
+          action: "verifyPaymentSubscription:plan-inactive",
         });
         return;
       }
@@ -238,7 +248,8 @@ export const verifyPaymentSubscription = async (
         default:
           res.status(400).json({
             success: false,
-            message: "Invalid subscription duration",
+            message: "This subscription duration is not supported.",
+            action: `verifyPaymentSubscription:invalid-duration:${subscription.duration}`,
           });
           return;
       }
@@ -258,17 +269,23 @@ export const verifyPaymentSubscription = async (
 
       res.status(200).json({
         success: true,
-        message: "Payment verified successfully",
+        message: "Subscription payment verified successfully.",
+        action: "verifyPaymentSubscription:success",
         data: patient,
       });
     } else {
       res.status(400).json({
         success: false,
-        message: "Invalid payment signature",
+        message: "We could not verify the payment signature.",
+        action: "verifyPaymentSubscription:signature-mismatch",
       });
     }
   } catch (err: any) {
-    res.status(500).json({ error: (err as Error).message });
+    res.status(500).json({
+      success: false,
+      message: "We couldn't verify the subscription payment.",
+      action: (err as Error).message,
+    });
   }
 };
 
@@ -283,7 +300,8 @@ export const getPatientById = async (
     if (!mongoose.Types.ObjectId.isValid(id)) {
       res.status(400).json({
         success: false,
-        message: "Invalid patient ID format",
+        message: "The patient ID provided is invalid.",
+        action: "getPatientById:validate-id",
       });
       return;
     }
@@ -299,7 +317,8 @@ export const getPatientById = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find a patient with that ID.",
+        action: "getPatientById:not-found",
       });
       return;
     }
@@ -309,14 +328,16 @@ export const getPatientById = async (
 
     res.status(200).json({
       success: true,
-      message: "Patient details fetched successfully",
+      message: "Patient details fetched successfully.",
+      action: "getPatientById:success",
       data: patientWithSignedUrls,
     });
   } catch (error) {
     console.error("Error fetching patient details:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch patient details",
+      message: "We couldn't fetch the patient details.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -345,7 +366,8 @@ export const patientOnboard = async (
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid user ID format",
+        message: "The user ID provided is invalid.",
+        action: "patientOnboard:validate-user-id",
       });
       return;
     }
@@ -355,7 +377,8 @@ export const patientOnboard = async (
     if (!user) {
       res.status(404).json({
         success: false,
-        message: "User not found or not a patient",
+        message: "We couldn't find the user or they are not a patient.",
+        action: "patientOnboard:user-not-found",
       });
       return;
     }
@@ -364,7 +387,8 @@ export const patientOnboard = async (
     if (!gender || !dob || !address) {
       res.status(400).json({
         success: false,
-        message: "Missing required fields",
+        message: "Please fill in all required patient details.",
+        action: "patientOnboard:missing-fields",
       });
       return;
     }
@@ -398,22 +422,24 @@ export const patientOnboard = async (
     if (!updatedPatient) {
       res.status(500).json({
         success: false,
-        message: "Failed to update patient information",
+        message: "We couldn't update the patient information.",
+        action: "patientOnboard:update-failed",
       });
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: "Patient onboarded successfully",
+      message: "Patient information saved successfully.",
+      action: "patientOnboard:success",
       data: updatedPatient,
     });
   } catch (error) {
     console.error("Error in patient onboarding:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to onboard patient",
-      error: (error as Error).message,
+      message: "We couldn't complete the patient onboarding.",
+      action: (error as Error).message,
     });
   }
 };
@@ -432,7 +458,8 @@ export const getPatientDashboard = async (
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "getPatientDashboard:patient-not-found",
       });
       return;
     }
@@ -578,7 +605,8 @@ export const getPatientDashboard = async (
 
     res.status(200).json({
       success: true,
-      message: "Patient dashboard data retrieved successfully",
+      message: "Patient dashboard data retrieved successfully.",
+      action: "getPatientDashboard:success",
       data: {
         appointmentCounts,
         emergencyAppointments: emergencyAppointmentsWithUrls,
@@ -589,8 +617,8 @@ export const getPatientDashboard = async (
     console.error("Error getting patient dashboard:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to get patient dashboard data",
-      error: (error as Error).message,
+      message: "We couldn't load the patient dashboard.",
+      action: (error as Error).message,
     });
   }
 };
@@ -687,15 +715,16 @@ export const getAppointmentsDoctorForPatient = async (
 
     res.status(200).json({
       success: true,
-      message: "Appointments for patient retrieved successfully",
+      message: "Appointments retrieved successfully.",
+      action: "getAppointmentsDoctorForPatient:success",
       data: appointmentsWithSignedUrls,
     });
   } catch (error) {
     console.error("Error in getting appointments for patient:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to get appointments for patient",
-      error: (error as Error).message,
+      message: "We couldn't fetch the patient's appointments.",
+      action: (error as Error).message,
     });
   }
 };

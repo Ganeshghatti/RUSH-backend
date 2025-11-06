@@ -26,7 +26,8 @@ const getMyRatings = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found for this user",
+                message: "We couldn't find the doctor profile for this account.",
+                action: "getMyRatings:doctor-not-found",
             });
             return;
         }
@@ -44,7 +45,8 @@ const getMyRatings = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         console.log("Ratings ", ratings);
         res.status(200).json({
             success: true,
-            message: "Doctor's ratings fetched successfully",
+            message: "Doctor ratings fetched successfully.",
+            action: "getMyRatings:success",
             data: ratings,
         });
     }
@@ -52,7 +54,8 @@ const getMyRatings = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         console.error("Error fetching doctor's own ratings:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch doctor's ratings",
+            message: "We couldn't load the doctor ratings right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -64,7 +67,8 @@ const getRatingsByDoctorId = (req, res) => __awaiter(void 0, void 0, void 0, fun
         if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid Doctor ID format",
+                message: "The doctor ID provided is invalid.",
+                action: "getRatingsByDoctorId:invalid-id",
             });
             return;
         }
@@ -72,7 +76,8 @@ const getRatingsByDoctorId = (req, res) => __awaiter(void 0, void 0, void 0, fun
         if (!doctor) {
             res.status(400).json({
                 success: false,
-                message: "Doctor with this userId not found.",
+                message: "We couldn't find a doctor with that user ID.",
+                action: "getRatingsByDoctorId:doctor-not-found",
             });
             return;
         }
@@ -92,7 +97,8 @@ const getRatingsByDoctorId = (req, res) => __awaiter(void 0, void 0, void 0, fun
         console.log("Ratings ", ratings);
         res.status(200).json({
             success: true,
-            message: "Ratings fetched successfully",
+            message: "Ratings fetched successfully.",
+            action: "getRatingsByDoctorId:success",
             data: ratings,
         });
     }
@@ -100,7 +106,8 @@ const getRatingsByDoctorId = (req, res) => __awaiter(void 0, void 0, void 0, fun
         console.error("Error fetching ratings:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch ratings",
+            message: "We couldn't load ratings right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -114,8 +121,11 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
+                message: "Please review the rating details and try again.",
+                action: "addRating:validation-error",
+                data: {
+                    errors: validationResult.error.errors,
+                },
             });
             return;
         }
@@ -125,7 +135,8 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!patient) {
             res.status(400).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find the patient profile.",
+                action: "addRating:patient-not-found",
             });
             return;
         }
@@ -134,7 +145,8 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!doctor) {
             res.status(400).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find the doctor you are trying to rate.",
+                action: "addRating:doctor-not-found",
             });
             return;
         }
@@ -144,7 +156,8 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!appointment) {
             res.status(404).json({
                 success: false,
-                message: "Appointment not found",
+                message: "We couldn't find the related appointment.",
+                action: "addRating:appointment-not-found",
             });
             return;
         }
@@ -152,7 +165,8 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             !appointment.doctorId.equals(doctor._id)) {
             res.status(403).json({
                 success: false,
-                message: "You can only rate your own appointments",
+                message: "You can only rate appointments you attended.",
+                action: "addRating:unauthorised",
             });
             return;
         }
@@ -161,7 +175,8 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             yield rating_model_1.RatingModel.findByIdAndUpdate(appointment.ratingId, { rating, review }, { new: true });
             res.status(200).json({
                 success: true,
-                message: "Rating updated successfully",
+                message: "Rating updated successfully.",
+                action: "addRating:update-success",
             });
             return;
         }
@@ -179,7 +194,8 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         yield appointment.save();
         res.status(201).json({
             success: true,
-            message: "Rating added successfully",
+            message: "Rating added successfully.",
+            action: "addRating:success",
             data: newRating,
         });
     }
@@ -187,7 +203,8 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         console.error("Error in adding the rating:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to add rating",
+            message: "We couldn't submit your rating.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -203,7 +220,8 @@ const toggleRatingVisibility = (req, res) => __awaiter(void 0, void 0, void 0, f
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find the doctor profile.",
+                action: "toggleRatingVisibility:doctor-not-found",
             });
             return;
         }
@@ -212,7 +230,8 @@ const toggleRatingVisibility = (req, res) => __awaiter(void 0, void 0, void 0, f
         if (!rating) {
             res.status(404).json({
                 success: false,
-                message: "Rating not found",
+                message: "We couldn't find that rating.",
+                action: "toggleRatingVisibility:rating-not-found",
             });
             return;
         }
@@ -220,7 +239,8 @@ const toggleRatingVisibility = (req, res) => __awaiter(void 0, void 0, void 0, f
         if (!rating.doctorId.equals(doctor._id)) {
             res.status(403).json({
                 success: false,
-                message: "Unauthorized to modify this rating",
+                message: "You can only manage your own ratings.",
+                action: "toggleRatingVisibility:unauthorised",
             });
             return;
         }
@@ -234,7 +254,8 @@ const toggleRatingVisibility = (req, res) => __awaiter(void 0, void 0, void 0, f
         yield rating.save();
         res.status(200).json({
             success: true,
-            message: "Rating visibility updated successfully",
+            message: "Rating visibility updated successfully.",
+            action: "toggleRatingVisibility:success",
             data: { ratingId: rating._id, isEnable: rating.isEnable },
         });
     }
@@ -242,7 +263,8 @@ const toggleRatingVisibility = (req, res) => __awaiter(void 0, void 0, void 0, f
         console.error("Error toggling rating visibility:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to update rating visibility",
+            message: "We couldn't update the rating visibility.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -254,7 +276,8 @@ const getRatingById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!mongoose_1.default.Types.ObjectId.isValid(ratingId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid Rating ID format",
+                message: "The rating ID provided is invalid.",
+                action: "getRatingById:invalid-id",
             });
             return;
         }
@@ -263,14 +286,16 @@ const getRatingById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!rating) {
             res.status(404).json({
                 success: false,
-                message: "Rating not found",
+                message: "We couldn't find that rating.",
+                action: "getRatingById:not-found",
             });
             return;
         }
         console.log("Rating ", rating);
         res.status(200).json({
             success: true,
-            message: "Rating fetched successfully",
+            message: "Rating fetched successfully.",
+            action: "getRatingById:success",
             data: rating,
         });
     }
@@ -278,7 +303,8 @@ const getRatingById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         console.error("Error fetching rating by ID:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch rating",
+            message: "We couldn't load the rating right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

@@ -35,7 +35,8 @@ const getPrescriptionById = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!mongoose_1.default.Types.ObjectId.isValid(prescriptionId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid Prescription ID format",
+                message: "The prescription ID provided is invalid.",
+                action: "getPrescriptionById:invalid-id",
             });
             return;
         }
@@ -53,13 +54,15 @@ const getPrescriptionById = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!prescription) {
             res.status(404).json({
                 success: false,
-                message: "Prescription not found",
+                message: "We couldn't find that prescription.",
+                action: "getPrescriptionById:not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Prescription fetched successfully",
+            message: "Prescription fetched successfully.",
+            action: "getPrescriptionById:success",
             data: prescription,
         });
     }
@@ -67,7 +70,8 @@ const getPrescriptionById = (req, res) => __awaiter(void 0, void 0, void 0, func
         console.error("Error fetching prescription:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch prescription",
+            message: "We couldn't load the prescription right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -81,8 +85,11 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
+                message: "Please review the prescription details and try again.",
+                action: "addPrescription:validation-error",
+                data: {
+                    errors: validationResult.error.errors,
+                },
             });
             return;
         }
@@ -93,7 +100,8 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!doctor) {
             res.status(400).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "addPrescription:doctor-not-found",
             });
             return;
         }
@@ -102,7 +110,8 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!patientUser) {
             res.status(400).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find the patient record.",
+                action: "addPrescription:patient-not-found",
             });
             return;
         }
@@ -110,7 +119,8 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!AppointmentModel) {
             res.status(400).json({
                 success: false,
-                message: "Invalid appointment type reference",
+                message: "The appointment type reference is invalid.",
+                action: "addPrescription:invalid-appointment-type",
             });
             return;
         }
@@ -119,14 +129,18 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!appointment) {
             res.status(400).json({
                 success: false,
-                message: "Appointment not found for given ID and type",
+                message: "We couldn't find the appointment for the provided details.",
+                action: "addPrescription:appointment-not-found",
             });
             return;
         }
-        let savedPrescription, message;
+        let savedPrescription;
+        let successMessage;
+        let successAction;
         // ***** prescription id already exist
         if (appointment.prescriptionId) {
-            message = "Prescription updated successfully";
+            successMessage = "Prescription updated successfully.";
+            successAction = "addPrescription:update-success";
             const existingPrescription = yield prescription_model_1.Prescription.findById(appointment.prescriptionId);
             // update existing prescription
             if (existingPrescription) {
@@ -159,7 +173,8 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         }
         // ***** create new prescription
         else {
-            message = "Prescription created successfully";
+            successMessage = "Prescription created successfully.";
+            successAction = "addPrescription:create-success";
             const newPrescription = new prescription_model_1.Prescription({
                 appointmentId,
                 appointmentTypeRef,
@@ -177,7 +192,8 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         }
         res.status(200).json({
             success: true,
-            message: message,
+            message: successMessage,
+            action: successAction,
             data: savedPrescription,
         });
     }
@@ -185,7 +201,8 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         console.error("Error creating/updating prescription:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to create or update prescription",
+            message: "We couldn't save the prescription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

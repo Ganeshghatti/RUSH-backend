@@ -39,8 +39,11 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
+                message: "Please check the family member details and try again.",
+                action: "addFamily:validation-error",
+                data: {
+                    errors: validationResult.error.errors,
+                },
             });
             return;
         }
@@ -48,7 +51,8 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "addFamily:patient-not-found",
             });
             return;
         }
@@ -58,7 +62,8 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         // console.log("Family with url ",familyWithUrls);
         res.status(201).json({
             success: true,
-            message: "Family member added successfully",
+            message: "Family member added successfully.",
+            action: "addFamily:success",
             data: familyWithUrls,
         });
     }
@@ -66,7 +71,8 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         console.error("Error adding family member:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to add family member",
+            message: "We couldn't add the family member.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -79,7 +85,8 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!mongoose_1.default.Types.ObjectId.isValid(familyId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid family ID format",
+                message: "The family ID provided is invalid.",
+                action: "updateFamily:validate-family-id",
             });
             return;
         }
@@ -88,8 +95,11 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
+                message: "Please check the family member details and try again.",
+                action: "updateFamily:validation-error",
+                data: {
+                    errors: validationResult.error.errors,
+                },
             });
             return;
         }
@@ -97,7 +107,8 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "updateFamily:patient-not-found",
             });
             return;
         }
@@ -120,14 +131,16 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!updatedFamily) {
             res.status(404).json({
                 success: false,
-                message: "Family member not found or not authorized",
+                message: "We couldn't find that family member or you don't have access.",
+                action: "updateFamily:family-not-found",
             });
             return;
         }
         const familyWithUrls = yield (0, signed_url_1.generateSignedUrlsForFamily)(updatedFamily);
         res.status(200).json({
             success: true,
-            message: "Family member updated successfully",
+            message: "Family member updated successfully.",
+            action: "updateFamily:success",
             data: familyWithUrls,
         });
     }
@@ -135,7 +148,8 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         console.error("Error updating family member:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to update family member",
+            message: "We couldn't update the family member.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -148,7 +162,8 @@ const removeFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!mongoose_1.default.Types.ObjectId.isValid(familyId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid family ID format",
+                message: "The family ID provided is invalid.",
+                action: "removeFamily:validate-family-id",
             });
             return;
         }
@@ -156,7 +171,8 @@ const removeFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "removeFamily:patient-not-found",
             });
             return;
         }
@@ -167,20 +183,23 @@ const removeFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!deletedFamily) {
             res.status(404).json({
                 success: false,
-                message: "Family member not found or not authorized",
+                message: "We couldn't find that family member or you don't have access.",
+                action: "removeFamily:family-not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Family member removed successfully",
+            message: "Family member removed successfully.",
+            action: "removeFamily:success",
         });
     }
     catch (error) {
         console.error("Error removing family member:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to remove family member",
+            message: "We couldn't remove the family member.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -193,7 +212,8 @@ const getFamilyDetails = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "getFamilyDetails:patient-not-found",
             });
             return;
         }
@@ -201,7 +221,8 @@ const getFamilyDetails = (req, res) => __awaiter(void 0, void 0, void 0, functio
         const familiesWithUrls = yield (0, signed_url_1.generateSignedUrlsForFamilies)(families);
         res.status(200).json({
             success: true,
-            message: "Family details fetched successfully",
+            message: "Family details fetched successfully.",
+            action: "getFamilyDetails:success",
             data: familiesWithUrls,
         });
     }
@@ -209,7 +230,8 @@ const getFamilyDetails = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.error("Error fetching family details:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch family details",
+            message: "We couldn't fetch family details right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

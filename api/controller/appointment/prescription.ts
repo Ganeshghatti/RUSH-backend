@@ -25,7 +25,8 @@ export const getPrescriptionById = async (
     if (!mongoose.Types.ObjectId.isValid(prescriptionId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid Prescription ID format",
+        message: "The prescription ID provided is invalid.",
+        action: "getPrescriptionById:invalid-id",
       });
       return;
     }
@@ -44,20 +45,23 @@ export const getPrescriptionById = async (
     if (!prescription) {
       res.status(404).json({
         success: false,
-        message: "Prescription not found",
+        message: "We couldn't find that prescription.",
+        action: "getPrescriptionById:not-found",
       });
       return;
     }
     res.status(200).json({
       success: true,
-      message: "Prescription fetched successfully",
+      message: "Prescription fetched successfully.",
+      action: "getPrescriptionById:success",
       data: prescription,
     });
   } catch (error) {
     console.error("Error fetching prescription:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch prescription",
+      message: "We couldn't load the prescription right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -75,8 +79,11 @@ export const addPrescription = async (
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
-        message: "Validation failed",
-        errors: validationResult.error.errors,
+        message: "Please review the prescription details and try again.",
+        action: "addPrescription:validation-error",
+        data: {
+          errors: validationResult.error.errors,
+        },
       });
       return;
     }
@@ -98,7 +105,8 @@ export const addPrescription = async (
     if (!doctor) {
       res.status(400).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "addPrescription:doctor-not-found",
       });
       return;
     }
@@ -108,7 +116,8 @@ export const addPrescription = async (
     if (!patientUser) {
       res.status(400).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find the patient record.",
+        action: "addPrescription:patient-not-found",
       });
       return;
     }
@@ -117,7 +126,8 @@ export const addPrescription = async (
     if (!AppointmentModel) {
       res.status(400).json({
         success: false,
-        message: "Invalid appointment type reference",
+        message: "The appointment type reference is invalid.",
+        action: "addPrescription:invalid-appointment-type",
       });
       return;
     }
@@ -127,15 +137,19 @@ export const addPrescription = async (
     if (!appointment) {
       res.status(400).json({
         success: false,
-        message: "Appointment not found for given ID and type",
+        message: "We couldn't find the appointment for the provided details.",
+        action: "addPrescription:appointment-not-found",
       });
       return;
     }
 
-    let savedPrescription, message;
+    let savedPrescription;
+    let successMessage: string;
+    let successAction: string;
     // ***** prescription id already exist
     if (appointment.prescriptionId) {
-      message = "Prescription updated successfully";
+      successMessage = "Prescription updated successfully.";
+      successAction = "addPrescription:update-success";
       const existingPrescription = await Prescription.findById(
         appointment.prescriptionId
       );
@@ -170,7 +184,8 @@ export const addPrescription = async (
     }
     // ***** create new prescription
     else {
-      message = "Prescription created successfully";
+      successMessage = "Prescription created successfully.";
+      successAction = "addPrescription:create-success";
       const newPrescription = new Prescription({
         appointmentId,
         appointmentTypeRef,
@@ -190,14 +205,16 @@ export const addPrescription = async (
 
     res.status(200).json({
       success: true,
-      message: message,
+      message: successMessage,
+      action: successAction,
       data: savedPrescription,
     });
   } catch (error) {
     console.error("Error creating/updating prescription:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to create or update prescription",
+      message: "We couldn't save the prescription.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

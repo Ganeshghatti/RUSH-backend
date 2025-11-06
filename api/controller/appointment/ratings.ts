@@ -17,7 +17,8 @@ export const getMyRatings = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found for this user",
+        message: "We couldn't find the doctor profile for this account.",
+        action: "getMyRatings:doctor-not-found",
       });
       return;
     }
@@ -38,14 +39,16 @@ export const getMyRatings = async (
 
     res.status(200).json({
       success: true,
-      message: "Doctor's ratings fetched successfully",
+      message: "Doctor ratings fetched successfully.",
+      action: "getMyRatings:success",
       data: ratings,
     });
   } catch (error) {
     console.error("Error fetching doctor's own ratings:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch doctor's ratings",
+      message: "We couldn't load the doctor ratings right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -60,7 +63,8 @@ export const getRatingsByDoctorId = async (
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid Doctor ID format",
+        message: "The doctor ID provided is invalid.",
+        action: "getRatingsByDoctorId:invalid-id",
       });
       return;
     }
@@ -69,7 +73,8 @@ export const getRatingsByDoctorId = async (
     if (!doctor) {
       res.status(400).json({
         success: false,
-        message: "Doctor with this userId not found.",
+        message: "We couldn't find a doctor with that user ID.",
+        action: "getRatingsByDoctorId:doctor-not-found",
       });
       return;
     }
@@ -91,14 +96,16 @@ export const getRatingsByDoctorId = async (
 
     res.status(200).json({
       success: true,
-      message: "Ratings fetched successfully",
+      message: "Ratings fetched successfully.",
+      action: "getRatingsByDoctorId:success",
       data: ratings,
     });
   } catch (error) {
     console.error("Error fetching ratings:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch ratings",
+      message: "We couldn't load ratings right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -113,8 +120,11 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
-        message: "Validation failed",
-        errors: validationResult.error.errors,
+        message: "Please review the rating details and try again.",
+        action: "addRating:validation-error",
+        data: {
+          errors: validationResult.error.errors,
+        },
       });
       return;
     }
@@ -126,7 +136,8 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
     if (!patient) {
       res.status(400).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find the patient profile.",
+        action: "addRating:patient-not-found",
       });
       return;
     }
@@ -136,7 +147,8 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
     if (!doctor) {
       res.status(400).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find the doctor you are trying to rate.",
+        action: "addRating:doctor-not-found",
       });
       return;
     }
@@ -147,7 +159,8 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found",
+        message: "We couldn't find the related appointment.",
+        action: "addRating:appointment-not-found",
       });
       return;
     }
@@ -157,7 +170,8 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
     ) {
       res.status(403).json({
         success: false,
-        message: "You can only rate your own appointments",
+        message: "You can only rate appointments you attended.",
+        action: "addRating:unauthorised",
       });
       return;
     }
@@ -171,7 +185,8 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
       );
       res.status(200).json({
         success: true,
-        message: "Rating updated successfully",
+        message: "Rating updated successfully.",
+        action: "addRating:update-success",
       });
       return;
     }
@@ -191,14 +206,16 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       success: true,
-      message: "Rating added successfully",
+      message: "Rating added successfully.",
+      action: "addRating:success",
       data: newRating,
     });
   } catch (error) {
     console.error("Error in adding the rating:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to add rating",
+      message: "We couldn't submit your rating.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -218,7 +235,8 @@ export const toggleRatingVisibility = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find the doctor profile.",
+        action: "toggleRatingVisibility:doctor-not-found",
       });
       return;
     }
@@ -228,7 +246,8 @@ export const toggleRatingVisibility = async (
     if (!rating) {
       res.status(404).json({
         success: false,
-        message: "Rating not found",
+        message: "We couldn't find that rating.",
+        action: "toggleRatingVisibility:rating-not-found",
       });
       return;
     }
@@ -237,7 +256,8 @@ export const toggleRatingVisibility = async (
     if (!rating.doctorId.equals(doctor._id)) {
       res.status(403).json({
         success: false,
-        message: "Unauthorized to modify this rating",
+        message: "You can only manage your own ratings.",
+        action: "toggleRatingVisibility:unauthorised",
       });
       return;
     }
@@ -253,14 +273,16 @@ export const toggleRatingVisibility = async (
 
     res.status(200).json({
       success: true,
-      message: "Rating visibility updated successfully",
+      message: "Rating visibility updated successfully.",
+      action: "toggleRatingVisibility:success",
       data: { ratingId: rating._id, isEnable: rating.isEnable },
     });
   } catch (error) {
     console.error("Error toggling rating visibility:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update rating visibility",
+      message: "We couldn't update the rating visibility.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -275,7 +297,8 @@ export const getRatingById = async (
     if (!mongoose.Types.ObjectId.isValid(ratingId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid Rating ID format",
+        message: "The rating ID provided is invalid.",
+        action: "getRatingById:invalid-id",
       });
       return;
     }
@@ -285,7 +308,8 @@ export const getRatingById = async (
     if (!rating) {
       res.status(404).json({
         success: false,
-        message: "Rating not found",
+        message: "We couldn't find that rating.",
+        action: "getRatingById:not-found",
       });
       return;
     }
@@ -293,14 +317,16 @@ export const getRatingById = async (
 
     res.status(200).json({
       success: true,
-      message: "Rating fetched successfully",
+      message: "Rating fetched successfully.",
+      action: "getRatingById:success",
       data: rating,
     });
   } catch (error) {
     console.error("Error fetching rating by ID:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch rating",
+      message: "We couldn't load the rating right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

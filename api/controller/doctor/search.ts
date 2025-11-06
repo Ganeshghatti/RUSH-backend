@@ -137,14 +137,16 @@ export const searchDoctor = async (
 
     res.status(200).json({
       success: true,
+      message: "Doctors fetched successfully.",
+      action: "searchDoctor:success",
       data: doctorsWithSignedUrls,
-      message: "Doctors fetched successfully",
     });
   } catch (error: any) {
     console.error("Error while searching doctors:", error);
     res.status(500).json({
       success: false,
-      message: "Error while searching doctors",
+      message: "We couldn't complete the doctor search.",
+      action: error.message,
     });
   }
 };

@@ -26,7 +26,8 @@ const searchSymptoms = (req, res) => __awaiter(void 0, void 0, void 0, function*
             .limit(limitValue);
         res.status(200).json({
             success: true,
-            message: "Symptoms fetched successfully",
+            message: "Symptoms retrieved successfully.",
+            action: "searchSymptoms:success",
             data: symptoms,
         });
     }
@@ -34,7 +35,8 @@ const searchSymptoms = (req, res) => __awaiter(void 0, void 0, void 0, function*
         console.error("Error searching symptoms:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to search symptoms",
+            message: "We couldn't search symptoms right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -45,7 +47,8 @@ const getAllUniqueSpecialist = (req, res) => __awaiter(void 0, void 0, void 0, f
         const uniqueSymptoms = yield symptom_model_1.default.distinct('specialist');
         res.status(200).json({
             success: true,
-            message: "Unique specialist fetched successfully",
+            message: "Specialists retrieved successfully.",
+            action: "getAllUniqueSpecialist:success",
             data: uniqueSymptoms,
         });
     }
@@ -53,7 +56,8 @@ const getAllUniqueSpecialist = (req, res) => __awaiter(void 0, void 0, void 0, f
         console.error("Error fetching unique specialist:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch unique specialist",
+            message: "We couldn't fetch the specialist list right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

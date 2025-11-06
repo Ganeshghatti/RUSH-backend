@@ -304,8 +304,11 @@ export const updateClinicDetails = async (
     if (!validation.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error: Invalid data format.",
-        errors: validation.error.errors,
+        message: "Please review the clinic details and try again.",
+        action: "updateClinicDetails:validation-error",
+        data: {
+          errors: validation.error.errors,
+        },
       });
       return;
     }
@@ -314,7 +317,8 @@ export const updateClinicDetails = async (
     if (!doctorId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to update clinic details.",
+        action: "updateClinicDetails:not-authenticated",
       });
       return;
     }
@@ -324,7 +328,8 @@ export const updateClinicDetails = async (
     if (Object.keys(validatedData).length === 0) {
       res.status(400).json({
         success: false,
-        message: "No update data provided.",
+        message: "Please provide fields to update.",
+        action: "updateClinicDetails:no-fields",
       });
       return;
     }
@@ -337,7 +342,8 @@ export const updateClinicDetails = async (
       if (!doctor) {
         res.status(404).json({
           success: false,
-          message: "Doctor profile not found",
+          message: "We couldn't find your doctor profile.",
+          action: "updateClinicDetails:doctor-not-found",
         });
         return;
       }
@@ -347,6 +353,7 @@ export const updateClinicDetails = async (
         res.status(400).json({
           success: false,
           message: "No active subscription found. Please subscribe to a plan.",
+          action: "updateClinicDetails:no-active-subscription",
         });
         return;
       }
@@ -355,7 +362,8 @@ export const updateClinicDetails = async (
       if (!subDoc) {
         res.status(400).json({
           success: false,
-          message: "Subscription plan not found.",
+          message: "We couldn't find the associated subscription plan.",
+          action: "updateClinicDetails:subscription-not-found",
         });
         return;
       }
@@ -363,7 +371,8 @@ export const updateClinicDetails = async (
       if (Array.isArray(validatedData.clinics) && validatedData.clinics.length > maxClinics) {
         res.status(400).json({
           success: false,
-          message: `Your subscription allows only ${maxClinics} clinics. Please upgrade your plan to add more clinics.`,
+          message: `Your subscription allows only ${maxClinics} clinics. Upgrade your plan to add more clinics.`,
+          action: "updateClinicDetails:clinic-limit",
         });
         return;
       }
@@ -382,21 +391,24 @@ export const updateClinicDetails = async (
     if (!updatedDoctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor profile not found",
+        message: "We couldn't find your doctor profile.",
+        action: "updateClinicDetails:doctor-not-found",
       });
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: "Clinic details updated successfully",
+      message: "Clinic details updated successfully.",
+      action: "updateClinicDetails:success",
       data: updatedDoctor.clinicVisit,
     });
   } catch (err) {
     console.error("Error patching clinic details:", err);
     res.status(500).json({
       success: false,
-      message: "An internal server error occurred.",
+      message: "We couldn't update the clinic details.",
+      action: err instanceof Error ? err.message : String(err),
     });
   }
 };
@@ -412,7 +424,8 @@ export const getDoctorClinicAvailability = async (
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       res.status(400).json({
         success: false,
-        message: "Invalid doctor ID",
+        message: "The doctor ID provided is invalid.",
+        action: "getDoctorClinicAvailability:invalid-id",
       });
       return;
     }
@@ -424,7 +437,8 @@ export const getDoctorClinicAvailability = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find that doctor.",
+        action: "getDoctorClinicAvailability:doctor-not-found",
       });
       return;
     }
@@ -433,7 +447,8 @@ export const getDoctorClinicAvailability = async (
     if (!clinicVisit?.isActive) {
       res.status(404).json({
         success: false,
-        message: "Doctor does not offer clinic visits",
+        message: "This doctor does not offer clinic visits.",
+        action: "getDoctorClinicAvailability:no-active-clinic",
       });
       return;
     }
@@ -445,7 +460,8 @@ export const getDoctorClinicAvailability = async (
 
     res.status(200).json({
       success: true,
-      message: "Doctor clinic availability retrieved successfully",
+      message: "Doctor clinic availability retrieved successfully.",
+      action: "getDoctorClinicAvailability:success",
       data: {
         doctor: {
           _id: doctor._id,
@@ -459,7 +475,8 @@ export const getDoctorClinicAvailability = async (
     console.error("Error retrieving doctor clinic availability:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't load the clinic availability.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -474,8 +491,11 @@ export const bookClinicAppointment = async (
     if (!validation.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: validation.error.errors,
+        message: "Please review the clinic appointment details and try again.",
+        action: "bookClinicAppointment:validation-error",
+        data: {
+          errors: validation.error.errors,
+        },
       });
       return;
     }
@@ -486,7 +506,8 @@ export const bookClinicAppointment = async (
     if (!patientUserId) {
       res.status(401).json({
         success: false,
-        message: "Patient User is not authenticated",
+        message: "You must be signed in to book a clinic appointment.",
+        action: "bookClinicAppointment:not-authenticated",
       });
       return;
     }
@@ -496,7 +517,8 @@ export const bookClinicAppointment = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find the selected doctor.",
+        action: "bookClinicAppointment:doctor-not-found",
       });
       return;
     }
@@ -508,7 +530,8 @@ export const bookClinicAppointment = async (
     if (!clinic) {
       res.status(404).json({
         success: false,
-        message: "Clinic not found or inactive",
+        message: "We couldn't find an active clinic for that doctor.",
+        action: "bookClinicAppointment:clinic-not-found",
       });
       return;
     }
@@ -518,7 +541,8 @@ export const bookClinicAppointment = async (
     if (!patientUserDetail) {
       res.status(404).json({
         success: false,
-        message: "Patient user not found",
+        message: "We couldn't find your patient profile.",
+        action: "bookClinicAppointment:patient-not-found",
       });
       return;
     }
@@ -528,7 +552,8 @@ export const bookClinicAppointment = async (
     if (availableBalance < clinic.consultationFee) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "Your wallet balance is too low for this appointment.",
+        action: "bookClinicAppointment:insufficient-balance",
         data: {
           required: clinic.consultationFee,
           available: availableBalance,
@@ -555,7 +580,8 @@ export const bookClinicAppointment = async (
     if (conflictingAppointment) {
       res.status(400).json({
         success: false,
-        message: "Time slot is already booked",
+        message: "This clinic slot is already booked.",
+        action: "bookClinicAppointment:slot-unavailable",
       });
       return;
     }
@@ -591,20 +617,22 @@ export const bookClinicAppointment = async (
     res.status(201).json({
       success: true,
       message: "Clinic appointment booked successfully.",
+      action: "bookClinicAppointment:success",
       data: {
-        appointment: appointment,
+        appointment,
         patientWalletFrozen: clinic.consultationFee,
         patientAvailableBalance: (
           patientUserDetail as any
         ).getAvailableBalance(),
-        note: "Amount will be deducted from wallet when appointment will be completed",
+        note: "Amount will be deducted from the wallet once the appointment is completed.",
       },
     });
   } catch (error) {
     console.error("Error booking clinic appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't book the clinic appointment.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -621,7 +649,8 @@ export const confirmClinicAppointment = async (
     if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "Doctor is not authenticated",
+        message: "You must be signed in to confirm appointments.",
+        action: "confirmClinicAppointment:not-authenticated",
       });
       return;
     }
@@ -631,7 +660,8 @@ export const confirmClinicAppointment = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor profile not found",
+        message: "We couldn't find your doctor profile.",
+        action: "confirmClinicAppointment:doctor-not-found",
       });
       return;
     }
@@ -644,14 +674,16 @@ export const confirmClinicAppointment = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found",
+        message: "We couldn't find that appointment.",
+        action: "confirmClinicAppointment:appointment-not-found",
       });
       return;
     }
     if (appointment.status !== "pending") {
       res.status(400).json({
         success: false,
-        message: "Only pending appointments can be confirmed",
+        message: "Only pending appointments can be confirmed.",
+        action: "confirmClinicAppointment:invalid-status",
       });
       return;
     }
@@ -671,6 +703,7 @@ export const confirmClinicAppointment = async (
     res.status(200).json({
       success: true,
       message: "Appointment confirmed successfully.",
+      action: "confirmClinicAppointment:success",
       data: {
         appointmentId: appointment._id,
         status: appointment.status,
@@ -685,7 +718,8 @@ export const confirmClinicAppointment = async (
     console.error("Error confirming clinic appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't confirm the clinic appointment.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -702,7 +736,8 @@ export const cancelClinicAppointment = async (
     if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to cancel appointments.",
+        action: "cancelClinicAppointment:not-authenticated",
       });
       return;
     }
@@ -712,7 +747,8 @@ export const cancelClinicAppointment = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor profile not found",
+        message: "We couldn't find your doctor profile.",
+        action: "cancelClinicAppointment:doctor-not-found",
       });
       return;
     }
@@ -726,7 +762,8 @@ export const cancelClinicAppointment = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found",
+        message: "We couldn't find that appointment.",
+        action: "cancelClinicAppointment:appointment-not-found",
       });
       return;
     }
@@ -737,7 +774,8 @@ export const cancelClinicAppointment = async (
     ) {
       res.status(400).json({
         success: false,
-        message: "Cannot cancel completed or already cancelled appointments",
+        message: "This appointment is already completed or cancelled.",
+        action: "cancelClinicAppointment:invalid-status",
       });
       return;
     }
@@ -772,7 +810,8 @@ export const cancelClinicAppointment = async (
 
     res.status(200).json({
       success: true,
-      message: "Appointment cancelled successfully",
+      message: "Appointment cancelled successfully.",
+      action: "cancelClinicAppointment:success",
       data: {
         appointmentId: appointment._id,
         status: appointment.status,
@@ -787,7 +826,8 @@ export const cancelClinicAppointment = async (
     console.error("Error cancelling clinic appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't cancel the clinic appointment.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -802,7 +842,8 @@ export const getPatientClinicAppointments = async (
     if (!patientId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to view clinic appointments.",
+        action: "getPatientClinicAppointments:not-authenticated",
       });
       return;
     }
@@ -844,7 +885,8 @@ export const getPatientClinicAppointments = async (
 
     res.status(200).json({
       success: true,
-      message: "Patient clinic appointments retrieved successfully",
+      message: "Patient clinic appointments retrieved successfully.",
+      action: "getPatientClinicAppointments:success",
       data: {
         appointments: appointmentsWithClinicDetails,
       },
@@ -853,7 +895,8 @@ export const getPatientClinicAppointments = async (
     console.error("Error retrieving patient clinic appointments:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't load the patient's clinic appointments.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -868,7 +911,8 @@ export const getDoctorClinicAppointments = async (
     if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to view clinic appointments.",
+        action: "getDoctorClinicAppointments:not-authenticated",
       });
       return;
     }
@@ -878,7 +922,8 @@ export const getDoctorClinicAppointments = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor profile not found",
+        message: "We couldn't find your doctor profile.",
+        action: "getDoctorClinicAppointments:doctor-not-found",
       });
       return;
     }
@@ -912,7 +957,8 @@ export const getDoctorClinicAppointments = async (
 
     res.status(200).json({
       success: true,
-      message: "Doctor clinic appointments retrieved successfully",
+      message: "Doctor clinic appointments retrieved successfully.",
+      action: "getDoctorClinicAppointments:success",
       data: {
         appointments: appointmentsWithClinicDetails,
       },
@@ -921,7 +967,8 @@ export const getDoctorClinicAppointments = async (
     console.error("Error retrieving doctor clinic appointments:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't load the doctor clinic appointments.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -938,7 +985,8 @@ export const getAppointmentOTP = async (
     if (!patientId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to view the OTP.",
+        action: "getAppointmentOTP:not-authenticated",
       });
       return;
     }
@@ -951,7 +999,8 @@ export const getAppointmentOTP = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found",
+        message: "We couldn't find that appointment.",
+        action: "getAppointmentOTP:appointment-not-found",
       });
       return;
     }
@@ -959,7 +1008,8 @@ export const getAppointmentOTP = async (
     if (appointment.status !== "confirmed") {
       res.status(400).json({
         success: false,
-        message: "OTP can only be retrieved for confirmed appointments",
+        message: "OTP is only available for confirmed appointments.",
+        action: "getAppointmentOTP:invalid-status",
       });
       return;
     }
@@ -970,7 +1020,8 @@ export const getAppointmentOTP = async (
     if (!otpData?.code) {
       res.status(400).json({
         success: false,
-        message: "No OTP found for this appointment. Please contact support.",
+        message: "No OTP was generated for this appointment.",
+        action: "getAppointmentOTP:otp-missing",
       });
       return;
     }
@@ -979,8 +1030,8 @@ export const getAppointmentOTP = async (
     if (otpData?.expiresAt && isOTPExpired(otpData.expiresAt)) {
       res.status(400).json({
         success: false,
-        message:
-          "OTP has expired. Please contact your doctor for a new appointment.",
+        message: "This OTP has expired. Please contact your doctor.",
+        action: "getAppointmentOTP:otp-expired",
       });
       return;
     }
@@ -989,7 +1040,8 @@ export const getAppointmentOTP = async (
     if (otpData?.isUsed) {
       res.status(400).json({
         success: false,
-        message: "OTP has already been used",
+        message: "This OTP has already been used.",
+        action: "getAppointmentOTP:otp-used",
       });
       return;
     }
@@ -998,7 +1050,8 @@ export const getAppointmentOTP = async (
 
     res.status(200).json({
       success: true,
-      message: "OTP retrieved successfully",
+      message: "OTP retrieved successfully.",
+      action: "getAppointmentOTP:success",
       data: {
         otp: updatedOtpData?.code,
         expiresAt: updatedOtpData?.expiresAt,
@@ -1008,7 +1061,8 @@ export const getAppointmentOTP = async (
     console.error("Error generating appointment OTP:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't retrieve the appointment OTP.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -1023,8 +1077,11 @@ export const validateVisitOTP = async (
     if (!validation.success) {
       res.status(400).json({
         success: false,
-        message: "OTP validation error",
-        errors: validation.error.errors,
+        message: "Please review the OTP details and try again.",
+        action: "validateVisitOTP:validation-error",
+        data: {
+          errors: validation.error.errors,
+        },
       });
       return;
     }
@@ -1033,7 +1090,8 @@ export const validateVisitOTP = async (
     if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to validate the visit.",
+        action: "validateVisitOTP:not-authenticated",
       });
       return;
     }
@@ -1045,7 +1103,8 @@ export const validateVisitOTP = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor profile not found",
+        message: "We couldn't find your doctor profile.",
+        action: "validateVisitOTP:doctor-not-found",
       });
       return;
     }
@@ -1055,7 +1114,8 @@ export const validateVisitOTP = async (
     if (!doctorUserDetail) {
       res.status(401).json({
         success: false,
-        message: "Doctor User not found",
+        message: "We couldn't find your doctor profile.",
+        action: "validateVisitOTP:doctor-user-not-found",
       });
       return;
     }
@@ -1067,7 +1127,8 @@ export const validateVisitOTP = async (
     if (!activeSub) {
       res.status(400).json({
         success: false,
-        message: "Doctor has no active subscription",
+        message: "The doctor does not have an active subscription.",
+        action: "validateVisitOTP:no-active-subscription",
       });
       return;
     }
@@ -1077,7 +1138,8 @@ export const validateVisitOTP = async (
     if (!subscription) {
       res.status(404).json({
         success: false,
-        message: "Subscription not found",
+        message: "We couldn't find the associated subscription.",
+        action: "validateVisitOTP:subscription-not-found",
       });
       return;
     }
@@ -1092,7 +1154,8 @@ export const validateVisitOTP = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found",
+        message: "We couldn't find that appointment.",
+        action: "validateVisitOTP:appointment-not-found",
       });
       return;
     }
@@ -1100,7 +1163,8 @@ export const validateVisitOTP = async (
     if (appointment.status !== "confirmed") {
       res.status(400).json({
         success: false,
-        message: "Appointment is not in confirmed status",
+        message: "Appointment is not in confirmed status.",
+        action: "validateVisitOTP:invalid-status",
       });
       return;
     }
@@ -1111,7 +1175,8 @@ export const validateVisitOTP = async (
     if (!otpData?.code) {
       res.status(400).json({
         success: false,
-        message: "No OTP generated for this appointment",
+        message: "No OTP was generated for this appointment.",
+        action: "validateVisitOTP:otp-missing",
       });
       return;
     }
@@ -1120,7 +1185,8 @@ export const validateVisitOTP = async (
     if (otpData?.isUsed) {
       res.status(400).json({
         success: false,
-        message: "OTP has already been used",
+        message: "This OTP has already been used.",
+        action: "validateVisitOTP:otp-used",
       });
       return;
     }
@@ -1131,7 +1197,8 @@ export const validateVisitOTP = async (
     ) {
       res.status(400).json({
         success: false,
-        message: "Maximum OTP verification attempts exceeded",
+        message: "Maximum OTP verification attempts exceeded.",
+        action: "validateVisitOTP:max-attempts",
       });
       return;
     }
@@ -1140,7 +1207,8 @@ export const validateVisitOTP = async (
     if (otpData?.expiresAt && isOTPExpired(otpData.expiresAt)) {
       res.status(400).json({
         success: false,
-        message: "OTP has expired",
+        message: "This OTP has expired.",
+        action: "validateVisitOTP:otp-expired",
       });
       return;
     }
@@ -1156,9 +1224,10 @@ export const validateVisitOTP = async (
         (otpData?.maxAttempts || 3) - (appointment.otp as any).attempts;
       res.status(400).json({
         success: false,
-        message: "Invalid OTP",
+        message: "Invalid OTP.",
+        action: "validateVisitOTP:otp-mismatch",
         data: {
-          remainingAttempts: remainingAttempts,
+          remainingAttempts,
         },
       });
       return;
@@ -1196,7 +1265,8 @@ export const validateVisitOTP = async (
         } else {
           res.status(500).json({
             success: false,
-            message: "Failed to process final payment",
+            message: "We couldn't process the final payment.",
+            action: "validateVisitOTP:wallet-deduction-failed",
           });
           return;
         }
@@ -1208,6 +1278,7 @@ export const validateVisitOTP = async (
     res.status(200).json({
       success: true,
       message: "Visit validated successfully. Appointment completed.",
+      action: "validateVisitOTP:success",
       data: {
         appointment: appointment,
       },
@@ -1216,7 +1287,8 @@ export const validateVisitOTP = async (
     console.error("Error validating visit OTP:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: "We couldn't validate the clinic visit.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

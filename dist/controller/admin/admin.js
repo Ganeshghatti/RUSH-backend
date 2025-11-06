@@ -60,7 +60,8 @@ const getAllDoctors = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!users || users.length === 0) {
             res.status(404).json({
                 success: false,
-                message: "No doctor accounts found",
+                message: "We couldn't find any doctor accounts.",
+                action: "getAllDoctors:doctor-not-found",
             });
             return;
         }
@@ -68,7 +69,8 @@ const getAllDoctors = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const usersWithSignedUrls = yield Promise.all(users.map(user => (0, signed_url_1.generateSignedUrlsForUser)(user)));
         res.status(200).json({
             success: true,
-            message: "Doctor accounts fetched successfully",
+            message: "Doctor accounts fetched successfully.",
+            action: "getAllDoctors:success",
             data: usersWithSignedUrls,
         });
     }
@@ -76,7 +78,8 @@ const getAllDoctors = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         console.error("Error fetching doctor accounts:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch doctor accounts",
+            message: "We couldn't load doctor accounts right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -92,7 +95,8 @@ const getAllPatients = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!users || users.length === 0) {
             res.status(404).json({
                 success: false,
-                message: "No patient accounts found",
+                message: "We couldn't find any patient accounts.",
+                action: "getAllPatients:patient-not-found",
             });
             return;
         }
@@ -115,7 +119,8 @@ const getAllPatients = (req, res) => __awaiter(void 0, void 0, void 0, function*
         })));
         res.status(200).json({
             success: true,
-            message: "Patient accounts fetched successfully",
+            message: "Patient accounts fetched successfully.",
+            action: "getAllPatients:success",
             data: usersWithSignedUrls,
         });
     }
@@ -123,7 +128,8 @@ const getAllPatients = (req, res) => __awaiter(void 0, void 0, void 0, function*
         console.error("Error fetching patient accounts:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch patient accounts",
+            message: "We couldn't load patient accounts right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -135,7 +141,8 @@ const updateDoctorStatus = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!["approved", "rejected", "pending"].includes(status)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid status value",
+                message: "Status must be approved, rejected, or pending.",
+                action: "updateDoctorStatus:invalid-status",
             });
             return;
         }
@@ -146,13 +153,15 @@ const updateDoctorStatus = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!updatedDoctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor account not found",
+                message: "We couldn't find that doctor account.",
+                action: "updateDoctorStatus:doctor-not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Doctor status updated successfully",
+            message: "Doctor status updated successfully.",
+            action: "updateDoctorStatus:success",
             data: updatedDoctor,
         });
     }
@@ -160,7 +169,8 @@ const updateDoctorStatus = (req, res) => __awaiter(void 0, void 0, void 0, funct
         console.error("Error updating doctor status:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to update doctor status",
+            message: "We couldn't update the doctor status.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -171,7 +181,8 @@ const updateDocumentVerificationStatus = (req, res) => __awaiter(void 0, void 0,
     if (typeof isDocumentVerified !== "boolean") {
         res.status(400).json({
             success: false,
-            message: "`isDocumentVerified` must be a boolean value.",
+            message: "Document verification flag must be true or false.",
+            action: "updateDocumentVerificationStatus:invalid-flag",
         });
         return;
     }
@@ -180,13 +191,15 @@ const updateDocumentVerificationStatus = (req, res) => __awaiter(void 0, void 0,
         if (!user) {
             res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "We couldn't find that user.",
+                action: "updateDocumentVerificationStatus:user-not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "User verification status updated successfully",
+            message: "User verification status updated successfully.",
+            action: "updateDocumentVerificationStatus:success",
             data: user,
         });
     }
@@ -194,7 +207,8 @@ const updateDocumentVerificationStatus = (req, res) => __awaiter(void 0, void 0,
         console.error("Error updating verification status:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to update document verification status",
+            message: "We couldn't update the document verification status.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
