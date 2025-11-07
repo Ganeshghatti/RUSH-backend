@@ -129,6 +129,22 @@ export const generateSignedUrlsForUser = async (user: any) => {
     );
   }
 
+  // Insurnace image
+  if (
+    Array.isArray(clone?.insuranceDetails) &&
+    clone.insuranceDetails.length > 0
+  ) {
+    clone.insuranceDetails.forEach((insurance: any, index: number) => {
+      if (insurance?.imageProof) {
+        promises.push(
+          safeGetSignedUrl(insurance.imageProof).then((url) => {
+            clone.insuranceDetails[index].imageProof = url;
+          })
+        );
+      }
+    });
+  }
+
   // Doctor role ref
   if (clone?.roleRefs?.doctor) {
     promises.push(
@@ -207,9 +223,11 @@ export const generateSignedUrlsForFamily = async (family: any) => {
   if (Array.isArray(clone?.insurance)) {
     clone.insurance.forEach((ins: any, index: number) => {
       if (ins?.image) {
-        promises.push(safeGetSignedUrl(ins.image).then((url) => {
-          clone.insurance[index].image = url;
-        }));
+        promises.push(
+          safeGetSignedUrl(ins.image).then((url) => {
+            clone.insurance[index].image = url;
+          })
+        );
       }
     });
   }
