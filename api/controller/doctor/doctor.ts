@@ -1105,7 +1105,9 @@ export const getDoctorDashboard = async (
 
     // Process emergency appointments to add presigned URLs
     const processedEmergencyAppointments = await Promise.all(
-      emergencyAppointments.map(async (appointment) => {
+      emergencyAppointments
+      .filter((appointment) => appointment.status !== "completed")
+      .map(async (appointment) => {
         const appointmentObj = appointment.toObject() as any;
 
         // Generate presigned URLs for media array if it exists

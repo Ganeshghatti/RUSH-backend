@@ -110,6 +110,17 @@ const generateSignedUrlsForUser = (user) => __awaiter(void 0, void 0, void 0, fu
             clone.bankDetails.upiQrImage = url;
         }));
     }
+    // Insurnace image
+    if (Array.isArray(clone === null || clone === void 0 ? void 0 : clone.insuranceDetails) &&
+        clone.insuranceDetails.length > 0) {
+        clone.insuranceDetails.forEach((insurance, index) => {
+            if (insurance === null || insurance === void 0 ? void 0 : insurance.imageProof) {
+                promises.push(safeGetSignedUrl(insurance.imageProof).then((url) => {
+                    clone.insuranceDetails[index].imageProof = url;
+                }));
+            }
+        });
+    }
     // Doctor role ref
     if ((_j = clone === null || clone === void 0 ? void 0 : clone.roleRefs) === null || _j === void 0 ? void 0 : _j.doctor) {
         promises.push((0, exports.generateSignedUrlsForDoctor)((_k = clone === null || clone === void 0 ? void 0 : clone.roleRefs) === null || _k === void 0 ? void 0 : _k.doctor).then((urls) => {

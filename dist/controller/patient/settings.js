@@ -173,8 +173,8 @@ exports.updateInsuranceDetails = updateInsuranceDetails;
 const updateBankDetail = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
-        const { bankDetails } = req.body;
-        if (!bankDetails || Object.keys(bankDetails).length === 0) {
+        const updateData = req.body;
+        if (!updateData || Object.keys(updateData).length === 0) {
             res.status(400).json({
                 success: false,
                 message: "Please share the bank details you want to save.",
@@ -182,7 +182,11 @@ const updateBankDetail = (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
             return;
         }
-        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, { $set: { bankDetails } }, { new: true, runValidators: true, select: "-password" });
+        const updateFields = {};
+        for (const [key, value] of Object.entries(updateData)) {
+            updateFields[`bankDetails.${key}`] = value;
+        }
+        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, { $set: updateFields }, { new: true, runValidators: true, select: "-password" });
         if (!updatedUser) {
             res.status(404).json({
                 success: false,
@@ -195,7 +199,7 @@ const updateBankDetail = (req, res) => __awaiter(void 0, void 0, void 0, functio
             success: true,
             message: "Bank details updated successfully",
             action: "updateBankDetail:success",
-            data: updatedUser.bankDetails, // return just bankDetails
+            data: updatedUser.bankDetails,
         });
     }
     catch (error) {

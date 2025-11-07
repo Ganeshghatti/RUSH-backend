@@ -206,8 +206,8 @@ export const updateBankDetail = async (
   try {
     const userId = req.user.id;
 
-    const { bankDetails } = req.body;
-    if (!bankDetails || Object.keys(bankDetails).length === 0) {
+    const updateData = req.body;
+    if (!updateData || Object.keys(updateData).length === 0) {
       res.status(400).json({
         success: false,
         message: "Please share the bank details you want to save.",
@@ -216,9 +216,14 @@ export const updateBankDetail = async (
       return;
     }
 
+    const updateFields: Record<string, any> = {};
+    for (const [key, value] of Object.entries(updateData)) {
+      updateFields[`bankDetails.${key}`] = value;
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { $set: { bankDetails } },
+      { $set: updateFields },
       { new: true, runValidators: true, select: "-password" }
     );
 
@@ -235,7 +240,7 @@ export const updateBankDetail = async (
       success: true,
       message: "Bank details updated successfully",
       action: "updateBankDetail:success",
-      data: updatedUser.bankDetails, // return just bankDetails
+      data: updatedUser.bankDetails, 
     });
   } catch (error: any) {
     console.error("Error updating bank details:", error);
