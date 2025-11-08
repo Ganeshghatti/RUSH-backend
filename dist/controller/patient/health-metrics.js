@@ -30,6 +30,7 @@ const patient_model_1 = __importDefault(require("../../models/user/patient-model
 const family_model_1 = __importDefault(require("../../models/user/family-model"));
 const health_metrics_model_1 = require("../../models/health-metrics-model");
 const validation_1 = require("../../validation/validation");
+const upload_media_1 = require("../../utils/aws_s3/upload-media");
 // get health metrics for patient
 const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -46,8 +47,8 @@ const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         }
         // check if patient has healthMetricsId
         if (!patient.healthMetricsId) {
-            res.status(404).json({
-                success: false,
+            res.status(200).json({
+                success: true,
                 message: "No health metrics are associated with this patient yet.",
                 action: "getHealthMetrics:metrics-missing",
             });
@@ -61,6 +62,24 @@ const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 action: "getHealthMetrics:metrics-not-found",
             });
             return;
+        }
+        if ((healthMetrics === null || healthMetrics === void 0 ? void 0 : healthMetrics.medicalHistory) &&
+            healthMetrics.medicalHistory.length > 0) {
+            const updatedMedicalHistory = yield Promise.all(healthMetrics.medicalHistory.map((history) => __awaiter(void 0, void 0, void 0, function* () {
+                var _a, _b;
+                if (history.reports) {
+                    try {
+                        const signedUrl = yield (0, upload_media_1.GetSignedUrl)(history.reports);
+                        return Object.assign(Object.assign({}, ((_b = (_a = history.toObject) === null || _a === void 0 ? void 0 : _a.call(history)) !== null && _b !== void 0 ? _b : history)), { reports: signedUrl });
+                    }
+                    catch (err) {
+                        console.error("Error generating signed URL:", err);
+                        return history;
+                    }
+                }
+                return history;
+            })));
+            healthMetrics.medicalHistory = updatedMedicalHistory;
         }
         res.status(200).json({
             success: true,
@@ -101,6 +120,24 @@ const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, fun
                 action: "getHealthMetricsById:metrics-not-found",
             });
             return;
+        }
+        if ((healthMetrics === null || healthMetrics === void 0 ? void 0 : healthMetrics.medicalHistory) &&
+            healthMetrics.medicalHistory.length > 0) {
+            const updatedMedicalHistory = yield Promise.all(healthMetrics.medicalHistory.map((history) => __awaiter(void 0, void 0, void 0, function* () {
+                var _a, _b;
+                if (history.reports) {
+                    try {
+                        const signedUrl = yield (0, upload_media_1.GetSignedUrl)(history.reports);
+                        return Object.assign(Object.assign({}, ((_b = (_a = history.toObject) === null || _a === void 0 ? void 0 : _a.call(history)) !== null && _b !== void 0 ? _b : history)), { reports: signedUrl });
+                    }
+                    catch (err) {
+                        console.error("Error generating signed URL:", err);
+                        return history;
+                    }
+                }
+                return history;
+            })));
+            healthMetrics.medicalHistory = updatedMedicalHistory;
         }
         res.status(200).json({
             success: true,

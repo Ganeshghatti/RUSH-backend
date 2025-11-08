@@ -186,7 +186,6 @@ export const addHealthMetricsSchema = z
 export const healthMetricsSchemaZod = z
   .object({
     familyMemberId: z.string().nullable().optional(),
-    reports: z.array(z.string()).nullable().optional(),
     medicalHistory: z
       .array(
         z.object({
@@ -203,7 +202,7 @@ export const healthMetricsSchemaZod = z
             .enum(Object.values(TreatmentStatus) as [string, ...string[]])
             .nullable()
             .optional(),
-          reports: z.array(z.string().nullable()).nullable().optional(),
+          reports: z.string().nullable().optional(),
         })
       )
       .nullable()

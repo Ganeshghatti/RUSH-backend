@@ -5,6 +5,7 @@ import Patient from "../../models/user/patient-model";
 import Family from "../../models/user/family-model";
 import { HealthMetrics } from "../../models/health-metrics-model";
 import { healthMetricsSchemaZod } from "../../validation/validation";
+import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
 
 // get health metrics for patient
 export const getHealthMetrics = async (
@@ -26,8 +27,8 @@ export const getHealthMetrics = async (
 
     // check if patient has healthMetricsId
     if (!patient.healthMetricsId) {
-      res.status(404).json({
-        success: false,
+      res.status(200).json({
+        success: true,
         message: "No health metrics are associated with this patient yet.",
         action: "getHealthMetrics:metrics-missing",
       });
@@ -42,6 +43,29 @@ export const getHealthMetrics = async (
         action: "getHealthMetrics:metrics-not-found",
       });
       return;
+    }
+    if (
+      healthMetrics?.medicalHistory &&
+      healthMetrics.medicalHistory.length > 0
+    ) {
+      const updatedMedicalHistory = await Promise.all(
+        healthMetrics.medicalHistory.map(async (history: any) => {
+          if (history.reports) {
+            try {
+              const signedUrl = await GetSignedUrl(history.reports);
+              return {
+                ...(history.toObject?.() ?? history),
+                reports: signedUrl,
+              };
+            } catch (err) {
+              console.error("Error generating signed URL:", err);
+              return history;
+            }
+          }
+          return history;
+        })
+      );
+      (healthMetrics as any).medicalHistory = updatedMedicalHistory;
     }
 
     res.status(200).json({
@@ -86,6 +110,29 @@ export const getHealthMetricsById = async (
         action: "getHealthMetricsById:metrics-not-found",
       });
       return;
+    }
+    if (
+      healthMetrics?.medicalHistory &&
+      healthMetrics.medicalHistory.length > 0
+    ) {
+      const updatedMedicalHistory = await Promise.all(
+        healthMetrics.medicalHistory.map(async (history: any) => {
+          if (history.reports) {
+            try {
+              const signedUrl = await GetSignedUrl(history.reports);
+              return {
+                ...(history.toObject?.() ?? history),
+                reports: signedUrl,
+              };
+            } catch (err) {
+              console.error("Error generating signed URL:", err);
+              return history;
+            }
+          }
+          return history;
+        })
+      );
+      (healthMetrics as any).medicalHistory = updatedMedicalHistory;
     }
     res.status(200).json({
       success: true,
