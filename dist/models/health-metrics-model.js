@@ -90,7 +90,6 @@ const healthMetricsSchema = new Schema({
         enum: ["Patient", "Family"],
     },
     familyId: { type: Schema.Types.ObjectId, ref: "Family" },
-    reports: [String],
     medicalHistory: [
         {
             condition: {
@@ -103,7 +102,7 @@ const healthMetricsSchema = new Schema({
             },
             ageOfOnset: Number,
             treatmentStatus: { type: String, enum: Object.values(TreatmentStatus) },
-            reports: [String],
+            reports: String,
         },
     ],
     vitals: {

@@ -869,7 +869,9 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
             completed: onlineStats.rejected + emergencyStats.completed, // Including rejected online appointments in completed count
         };
         // Process emergency appointments to add presigned URLs
-        const processedEmergencyAppointments = yield Promise.all(emergencyAppointments.map((appointment) => __awaiter(void 0, void 0, void 0, function* () {
+        const processedEmergencyAppointments = yield Promise.all(emergencyAppointments
+            .filter((appointment) => appointment.status !== "completed")
+            .map((appointment) => __awaiter(void 0, void 0, void 0, function* () {
             var _a, _b;
             const appointmentObj = appointment.toObject();
             // Generate presigned URLs for media array if it exists

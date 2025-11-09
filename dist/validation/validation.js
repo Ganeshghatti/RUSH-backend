@@ -164,7 +164,6 @@ exports.addHealthMetricsSchema = zod_1.z
 exports.healthMetricsSchemaZod = zod_1.z
     .object({
     familyMemberId: zod_1.z.string().nullable().optional(),
-    reports: zod_1.z.array(zod_1.z.string()).nullable().optional(),
     medicalHistory: zod_1.z
         .array(zod_1.z.object({
         condition: zod_1.z
@@ -180,7 +179,7 @@ exports.healthMetricsSchemaZod = zod_1.z
             .enum(Object.values(health_metrics_model_1.TreatmentStatus))
             .nullable()
             .optional(),
-        reports: zod_1.z.array(zod_1.z.string().nullable()).nullable().optional(),
+        reports: zod_1.z.string().nullable().optional(),
     }))
         .nullable()
         .optional(),
