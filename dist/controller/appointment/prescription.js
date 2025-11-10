@@ -134,6 +134,7 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
             });
             return;
         }
+        console.log("hiiii ", appointment);
         let savedPrescription;
         let successMessage;
         let successAction;
@@ -173,6 +174,7 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
         }
         // ***** create new prescription
         else {
+            console.log("Create new prescription");
             successMessage = "Prescription created successfully.";
             successAction = "addPrescription:create-success";
             const newPrescription = new prescription_model_1.Prescription({
@@ -186,9 +188,12 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
                 notes,
                 nextAppointmentDate,
             });
+            console.log("press ", newPrescription);
             savedPrescription = yield newPrescription.save();
             appointment.prescriptionId = savedPrescription._id;
+            console.log("Appointment..... ", appointment);
             yield appointment.save();
+            console.log("Appointment2..... ", appointment);
         }
         res.status(200).json({
             success: true,
