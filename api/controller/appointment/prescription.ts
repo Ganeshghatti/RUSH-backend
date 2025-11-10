@@ -142,6 +142,7 @@ export const addPrescription = async (
       });
       return;
     }
+    console.log("hiiii ",appointment)
 
     let savedPrescription;
     let successMessage: string;
@@ -184,6 +185,7 @@ export const addPrescription = async (
     }
     // ***** create new prescription
     else {
+      console.log("Create new prescription")
       successMessage = "Prescription created successfully.";
       successAction = "addPrescription:create-success";
       const newPrescription = new Prescription({
@@ -197,10 +199,13 @@ export const addPrescription = async (
         notes,
         nextAppointmentDate,
       });
+      console.log("press ",newPrescription)
       savedPrescription = await newPrescription.save();
 
       appointment.prescriptionId = savedPrescription._id;
+      console.log("Appointment..... ",appointment)
       await appointment.save();
+      console.log("Appointment2..... ",appointment)
     }
 
     res.status(200).json({
