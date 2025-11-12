@@ -158,10 +158,19 @@ const getTransactionsByDate = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        // Parse date and get start/end of day
-        const start = new Date(date);
-        const end = new Date(start);
-        end.setHours(23, 59, 59, 999);
+        // Parse date (assumed in IST) and convert to UTC day boundaries
+        const dateString = date;
+        const istStart = new Date(`${dateString}T00:00:00.000+05:30`);
+        if (Number.isNaN(istStart.getTime())) {
+            res.status(400).json({
+                success: false,
+                message: "Please provide a valid date in YYYY-MM-DD format.",
+                action: "getTransactionsByDate:invalid-date",
+            });
+            return;
+        }
+        const start = istStart;
+        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
         // Find users with transactions on that date
         const users = yield user_model_1.default.find({
             transaction_history: {

@@ -1,5 +1,4 @@
 import { razorpayConfig } from "./../../config/razorpay";
-import { razorpayAxios } from "../../config/razorpayX";
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
 import mongoose from "mongoose";

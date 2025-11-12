@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateSignedUrlsForFamilies = exports.generateSignedUrlsForFamily = exports.generateSignedUrlsForSubscriptions = exports.generateSignedUrlsForSubscription = exports.generateSignedUrlsForUser = exports.generateSignedUrlsForDoctor = void 0;
 const upload_media_1 = require("./aws_s3/upload-media");
 const generateSignedUrlsForDoctor = (doctor) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d;
+    var _a, _b;
     const clone = JSON.parse(JSON.stringify(doctor));
     const safeGetSignedUrl = (key) => __awaiter(void 0, void 0, void 0, function* () {
         if (!key || typeof key !== "string" || key.trim() === "")
@@ -46,18 +46,8 @@ const generateSignedUrlsForDoctor = (doctor) => __awaiter(void 0, void 0, void 0
             }));
         }
     }
-    // Subscriptions
-    if (Array === null || Array === void 0 ? void 0 : Array.isArray(clone === null || clone === void 0 ? void 0 : clone.subscriptions)) {
-        for (const sub of clone === null || clone === void 0 ? void 0 : clone.subscriptions) {
-            if ((_a = sub === null || sub === void 0 ? void 0 : sub.paymentDetails) === null || _a === void 0 ? void 0 : _a.paymentImage) {
-                promises.push(safeGetSignedUrl((_b = sub === null || sub === void 0 ? void 0 : sub.paymentDetails) === null || _b === void 0 ? void 0 : _b.paymentImage).then((url) => {
-                    sub.paymentDetails.paymentImage = url;
-                }));
-            }
-        }
-    }
-    if ((_c = clone === null || clone === void 0 ? void 0 : clone.userId) === null || _c === void 0 ? void 0 : _c.profilePic) {
-        promises.push(safeGetSignedUrl((_d = clone === null || clone === void 0 ? void 0 : clone.userId) === null || _d === void 0 ? void 0 : _d.profilePic).then((url) => {
+    if ((_a = clone === null || clone === void 0 ? void 0 : clone.userId) === null || _a === void 0 ? void 0 : _a.profilePic) {
+        promises.push(safeGetSignedUrl((_b = clone === null || clone === void 0 ? void 0 : clone.userId) === null || _b === void 0 ? void 0 : _b.profilePic).then((url) => {
             clone.userId.profilePic = url;
         }));
     }

@@ -76,7 +76,9 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!validator.isEmail(email)) {
+    const normalizedEmail = email.toLowerCase();
+
+    if (!validator.isEmail(normalizedEmail)) {
       res.status(400).json({
         success: false,
         message: "Invalid email format.",
@@ -105,7 +107,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const existingEmail = await User.findOne({ email });
+    const existingEmail = await User.findOne({ email: normalizedEmail });
 
     if (existingEmail && existingEmail.phone !== phone) {
       res.status(400).json({
@@ -197,7 +199,9 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!validator.isEmail(email)) {
+    const normalizedEmail = email.toLowerCase();
+
+    if (!validator.isEmail(normalizedEmail)) {
       res.status(400).json({
         success: false,
         message: "Invalid email format.",
@@ -237,7 +241,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Check if user exists
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
 
     // Hash the password
     const salt = await bcrypt.genSalt(10);
@@ -266,6 +270,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
       // Add the new role
       user.roles.push(role);
+      user.email = normalizedEmail;
 
       // Create role-specific data
       if (role === "doctor") {
@@ -295,7 +300,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     } else {
       // Create a new user with the specified role only
       user = new User({
-        email,
+        email: normalizedEmail,
         roles: [role], // Only assign the requested role
         phone,
         phoneVerified: true,
@@ -385,11 +390,12 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, role } = req.body;
+    const normalizedEmail = typeof email === "string" ? email.toLowerCase() : email;
 
     if (role === "admin") {
-      if (email === "urushdr@gmail.com" && password === "BulletBike$$$") {
+      if (normalizedEmail === "urushdr@gmail.com" && password === "BulletBike$$$") {
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: normalizedEmail });
 
         if (!user) {
           res.status(404).json({
@@ -401,7 +407,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         const token = jwt.sign(
-          { id: user._id, email, role }, 
+          { id: user._id, email: user.email, role }, 
           JWT_SECRET,
           { expiresIn: "24h" }
         );
@@ -430,7 +436,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    if (!email || !password || !role) {
+    if (!normalizedEmail || !password || !role) {
       res.status(400).json({
         success: false,
         message: "Email, password, and role are required.",
@@ -439,7 +445,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!validator.isEmail(email)) {
+    if (!validator.isEmail(normalizedEmail)) {
       res.status(400).json({
         success: false,
         message: "Invalid email format.",
@@ -457,7 +463,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
       res.status(404).json({

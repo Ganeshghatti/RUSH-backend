@@ -43,20 +43,7 @@ export const generateSignedUrlsForDoctor = async (doctor: any) => {
       );
     }
   }
-
-  // Subscriptions
-  if (Array?.isArray(clone?.subscriptions)) {
-    for (const sub of clone?.subscriptions) {
-      if (sub?.paymentDetails?.paymentImage) {
-        promises.push(
-          safeGetSignedUrl(sub?.paymentDetails?.paymentImage).then((url) => {
-            sub.paymentDetails.paymentImage = url;
-          })
-        );
-      }
-    }
-  }
-
+  
   if (clone?.userId?.profilePic) {
     promises.push(
       safeGetSignedUrl(clone?.userId?.profilePic).then((url) => {

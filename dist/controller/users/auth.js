@@ -108,7 +108,8 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        if (!validator_1.default.isEmail(email)) {
+        const normalizedEmail = email.toLowerCase();
+        if (!validator_1.default.isEmail(normalizedEmail)) {
             res.status(400).json({
                 success: false,
                 message: "Invalid email format.",
@@ -134,7 +135,7 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        const existingEmail = yield user_model_1.default.findOne({ email });
+        const existingEmail = yield user_model_1.default.findOne({ email: normalizedEmail });
         if (existingEmail && existingEmail.phone !== phone) {
             res.status(400).json({
                 success: false,
@@ -201,7 +202,8 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        if (!validator_1.default.isEmail(email)) {
+        const normalizedEmail = email.toLowerCase();
+        if (!validator_1.default.isEmail(normalizedEmail)) {
             res.status(400).json({
                 success: false,
                 message: "Invalid email format.",
@@ -236,7 +238,7 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             return;
         }
         // Check if user exists
-        let user = yield user_model_1.default.findOne({ email });
+        let user = yield user_model_1.default.findOne({ email: normalizedEmail });
         // Hash the password
         const salt = yield bcrypt_1.default.genSalt(10);
         const hashedPassword = yield bcrypt_1.default.hash(password.toLowerCase(), salt);
@@ -261,6 +263,7 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             }
             // Add the new role
             user.roles.push(role);
+            user.email = normalizedEmail;
             // Create role-specific data
             if (role === "doctor") {
                 const doctorProfile = yield doctor_model_1.default.create({
@@ -294,7 +297,7 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         else {
             // Create a new user with the specified role only
             user = new user_model_1.default({
-                email,
+                email: normalizedEmail,
                 roles: [role], // Only assign the requested role
                 phone,
                 phoneVerified: true,
@@ -379,9 +382,10 @@ exports.verifyOtp = verifyOtp;
 const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email, password, role } = req.body;
+        const normalizedEmail = typeof email === "string" ? email.toLowerCase() : email;
         if (role === "admin") {
-            if (email === "urushdr@gmail.com" && password === "BulletBike$$$") {
-                const user = yield user_model_1.default.findOne({ email });
+            if (normalizedEmail === "urushdr@gmail.com" && password === "BulletBike$$$") {
+                const user = yield user_model_1.default.findOne({ email: normalizedEmail });
                 if (!user) {
                     res.status(404).json({
                         success: false,
@@ -390,7 +394,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                     });
                     return;
                 }
-                const token = jsonwebtoken_1.default.sign({ id: user._id, email, role }, JWT_SECRET, { expiresIn: "24h" });
+                const token = jsonwebtoken_1.default.sign({ id: user._id, email: user.email, role }, JWT_SECRET, { expiresIn: "24h" });
                 res.cookie("token", token, {
                     httpOnly: true,
                     secure: true,
@@ -414,7 +418,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 return;
             }
         }
-        if (!email || !password || !role) {
+        if (!normalizedEmail || !password || !role) {
             res.status(400).json({
                 success: false,
                 message: "Email, password, and role are required.",
@@ -422,7 +426,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        if (!validator_1.default.isEmail(email)) {
+        if (!validator_1.default.isEmail(normalizedEmail)) {
             res.status(400).json({
                 success: false,
                 message: "Invalid email format.",
@@ -438,7 +442,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        const user = yield user_model_1.default.findOne({ email });
+        const user = yield user_model_1.default.findOne({ email: normalizedEmail });
         if (!user) {
             res.status(404).json({
                 success: false,
