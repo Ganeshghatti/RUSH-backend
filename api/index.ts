@@ -50,6 +50,9 @@ app.use(
       "http://localhost",
       "https://localhost",
       "capacitor://localhost",
+      "ionic://localhost",
+      "app://rushdr",
+      "app://com.rushdr.rushdr"
     ],
     credentials: true,
   })
