@@ -40,21 +40,27 @@ app.set("trust proxy", 1);
 app.use(
   cors({
     origin: [
-      "https://app.rushdr.com",
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "https://admin.rushdr.com",
-      "https://rushdr.com",
-      "https://www.rushdr.com",
-      "http://localhost",
-      "https://localhost",
+      "app://rushdr",
+      "app://com.rushdr.rushdr",
       "capacitor://localhost",
       "ionic://localhost",
-      "app://rushdr",
-      "app://com.rushdr.rushdr"
+      "https://app.rushdr.com",
+      "https://rushdr.com",
+      "https://www.rushdr.com",
+      "https://admin.rushdr.com",
+      "http://localhost",
+      "http://localhost:3000",
+      "http://localhost:5173"
     ],
     credentials: true,
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   })
 );
 
