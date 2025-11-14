@@ -10,7 +10,6 @@ export const getMyRatings = async (
   res: Response
 ): Promise<void> => {
   try {
-    console.log("Hi");
     const userId = req.user.id;
 
     const doctor = await Doctor.findOne({ userId });
@@ -34,8 +33,6 @@ export const getMyRatings = async (
         },
       })
       .sort({ createdAt: -1 });
-
-    console.log("Ratings ", ratings);
 
     res.status(200).json({
       success: true,
@@ -91,8 +88,6 @@ export const getRatingsByDoctorId = async (
         },
       })
       .sort({ createdAt: -1 });
-
-    console.log("Ratings ", ratings);
 
     res.status(200).json({
       success: true,
@@ -165,7 +160,7 @@ export const addRating = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     if (
-      !appointment.patientId.equals(patient.userId) ||
+      !appointment.patientId.equals(patient._id) ||
       !appointment.doctorId.equals(doctor._id)
     ) {
       res.status(403).json({
@@ -313,7 +308,6 @@ export const getRatingById = async (
       });
       return;
     }
-    console.log("Rating ", rating);
 
     res.status(200).json({
       success: true,

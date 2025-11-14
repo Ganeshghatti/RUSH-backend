@@ -21,7 +21,7 @@ const online_appointment_model_1 = __importDefault(require("../../models/appoint
 const clinic_appointment_model_1 = __importDefault(require("../../models/appointment/clinic-appointment-model"));
 const emergency_appointment_model_1 = __importDefault(require("../../models/appointment/emergency-appointment-model"));
 const homevisit_appointment_model_1 = __importDefault(require("../../models/appointment/homevisit-appointment-model"));
-const user_model_1 = __importDefault(require("../../models/user/user-model"));
+const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const appointmentModels = {
     OnlineAppointment: online_appointment_model_1.default,
     ClinicAppointment: clinic_appointment_model_1.default,
@@ -106,8 +106,8 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
             return;
         }
         // patient User detail
-        const patientUser = yield user_model_1.default.findById(patientId);
-        if (!patientUser) {
+        const patient = yield patient_model_1.default.findById(patientId);
+        if (!patient) {
             res.status(400).json({
                 success: false,
                 message: "We couldn't find the patient record.",
@@ -134,7 +134,6 @@ const addPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function
             });
             return;
         }
-        console.log("hiiii ", appointment);
         let savedPrescription;
         let successMessage;
         let successAction;
