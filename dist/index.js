@@ -52,13 +52,17 @@ app.use((0, cors_1.default)({
         "app://com.rushdr.rushdr",
         "capacitor://localhost",
         "ionic://localhost",
+        "http://localhost",
+        "https://localhost",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://10.0.2.2",
+        "http://10.0.2.2:8080",
         "https://app.rushdr.com",
         "https://rushdr.com",
         "https://www.rushdr.com",
-        "https://admin.rushdr.com",
-        "http://localhost",
-        "http://localhost:3000",
-        "http://localhost:5173"
+        "https://admin.rushdr.com"
     ],
     credentials: true,
 }));
