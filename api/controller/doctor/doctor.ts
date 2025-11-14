@@ -101,7 +101,8 @@ export const doctorOnboardV2 = async (
     if (!user) {
       res.status(404).json({
         success: false,
-        message: "We couldn't find the user or they are not registered as a doctor.",
+        message:
+          "We couldn't find the user or they are not registered as a doctor.",
         action: "doctorOnboardV2:user-not-found",
       });
       return;
@@ -549,8 +550,7 @@ export const verifyPaymentSubscription = async (
     ) {
       res.status(400).json({
         success: false,
-        message:
-          "Please provide all payment verification details.",
+        message: "Please provide all payment verification details.",
         action: "doctorVerifyPaymentSubscription:validate-input",
       });
       return;
@@ -951,10 +951,10 @@ export const getDoctorAppointmentStats = async (
       (app) => app.status === "pending"
     ).length;
     const acceptedConfirmedCount = allAppointments.filter(
-      (app) => app.status === "accepted" || app.status === "confirmed"
+      (app) => app.status === "accepted"
     ).length;
     const rejectedCancelledCount = allAppointments.filter(
-      (app) => app.status === "rejected" || app.status === "cancelled"
+      (app) => app.status === "rejected"
     ).length;
     const completedCount = allAppointments.filter(
       (app) => app.status === "completed"
@@ -1106,52 +1106,52 @@ export const getDoctorDashboard = async (
     // Process emergency appointments to add presigned URLs
     const processedEmergencyAppointments = await Promise.all(
       emergencyAppointments
-      .filter((appointment) => appointment.status !== "completed")
-      .map(async (appointment) => {
-        const appointmentObj = appointment.toObject() as any;
+        .filter((appointment) => appointment.status !== "completed")
+        .map(async (appointment) => {
+          const appointmentObj = appointment.toObject() as any;
 
-        // Generate presigned URLs for media array if it exists
-        if (Array.isArray(appointmentObj.media)) {
-          appointmentObj.media = await Promise.all(
-            appointmentObj.media.map(async (mediaKey: any) => {
-              if (
-                mediaKey &&
-                typeof mediaKey === "string" &&
-                mediaKey.trim() !== ""
-              ) {
-                try {
-                  return await GetSignedUrl(mediaKey);
-                } catch (error) {
-                  console.warn(
-                    "Could not generate signed URL for media:",
-                    mediaKey,
-                    error
-                  );
-                  return mediaKey;
+          // Generate presigned URLs for media array if it exists
+          if (Array.isArray(appointmentObj.media)) {
+            appointmentObj.media = await Promise.all(
+              appointmentObj.media.map(async (mediaKey: any) => {
+                if (
+                  mediaKey &&
+                  typeof mediaKey === "string" &&
+                  mediaKey.trim() !== ""
+                ) {
+                  try {
+                    return await GetSignedUrl(mediaKey);
+                  } catch (error) {
+                    console.warn(
+                      "Could not generate signed URL for media:",
+                      mediaKey,
+                      error
+                    );
+                    return mediaKey;
+                  }
                 }
-              }
-              return mediaKey;
-            })
-          );
-        }
-
-        // Generate presigned URL for patient's profile picture if it exists
-        if (appointmentObj.patientId?.userId?.profilePic) {
-          try {
-            appointmentObj.patientId.userId.profilePic = await GetSignedUrl(
-              appointmentObj.patientId.userId.profilePic
-            );
-          } catch (error) {
-            console.warn(
-              "Could not generate signed URL for profile picture:",
-              appointmentObj.patientId.userId.profilePic,
-              error
+                return mediaKey;
+              })
             );
           }
-        }
 
-        return appointmentObj;
-      })
+          // Generate presigned URL for patient's profile picture if it exists
+          if (appointmentObj.patientId?.userId?.profilePic) {
+            try {
+              appointmentObj.patientId.userId.profilePic = await GetSignedUrl(
+                appointmentObj.patientId.userId.profilePic
+              );
+            } catch (error) {
+              console.warn(
+                "Could not generate signed URL for profile picture:",
+                appointmentObj.patientId.userId.profilePic,
+                error
+              );
+            }
+          }
+
+          return appointmentObj;
+        })
     );
 
     // Prepare dashboard data
@@ -1265,7 +1265,9 @@ export const updateDoctorActiveStatus = async (
     res.status(200).json({
       success: true,
       message: `Doctor status updated to ${isActive ? "active" : "inactive"}${
-        isActive ? ". The system will automatically set it to inactive soon." : ""
+        isActive
+          ? ". The system will automatically set it to inactive soon."
+          : ""
       }`,
       action: "updateDoctorActiveStatus:success",
       data: {

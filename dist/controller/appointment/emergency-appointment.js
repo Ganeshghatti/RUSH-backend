@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateEmergencyAppointmentExpiredStatus = exports.finalPayment = exports.createEmergencyRoomAccessToken = exports.acceptEmergencyAppointment = exports.getPatientEmergencyAppointments = exports.getAllEmergencyAppointments = exports.createEmergencyAppointment = exports.convertMediaKeysToUrls = void 0;
+exports.updateEmergencyStatusCron = exports.finalPayment = exports.createEmergencyRoomAccessToken = exports.acceptEmergencyAppointment = exports.getPatientEmergencyAppointments = exports.getAllEmergencyAppointments = exports.createEmergencyAppointment = exports.convertMediaKeysToUrls = void 0;
 const emergency_appointment_model_1 = __importDefault(require("../../models/appointment/emergency-appointment-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
@@ -59,7 +59,7 @@ const convertMediaKeysToUrls = (appointments) => __awaiter(void 0, void 0, void 
     })));
 });
 exports.convertMediaKeysToUrls = convertMediaKeysToUrls;
-/* create emergency appointment when patient requests + freeze 2500*/
+/* step-1 create emergency appointment when patient requests + freeze 2500*/
 const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Validate request body
@@ -255,7 +255,7 @@ const getPatientEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, 
     }
 });
 exports.getPatientEmergencyAppointments = getPatientEmergencyAppointments;
-/* doctor accepts emergency appointment + emergency online room is created */
+/* step-2 doctor accepts emergency appointment + emergency online room is created */
 const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
@@ -356,9 +356,7 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
     try {
         const { roomName } = req.body;
         if (!roomName) {
-            res
-                .status(400)
-                .json({
+            res.status(400).json({
                 success: false,
                 message: "Room name is required.",
                 action: "createEmergencyRoomAccessToken:missing-room-name",
@@ -413,7 +411,6 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
             });
             return;
         }
-        console.log("The user who joined is ", whoJoined);
         // creating token for this identity.
         const token = new AccessToken(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_API_KEY, process.env.TWILIO_API_SECRET, { identity: `${whoJoined}_${identity}` });
         const videoGrant = new VideoGrant({ room: roomName });
@@ -434,9 +431,7 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
     }
     catch (err) {
         console.error("Failed to generate  twilio access token:", err);
-        res
-            .status(500)
-            .json({
+        res.status(500).json({
             success: false,
             message: "We couldn't generate the room access token.",
             action: err instanceof Error ? err.message : String(err),
@@ -444,7 +439,7 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
     }
 });
 exports.createEmergencyRoomAccessToken = createEmergencyRoomAccessToken;
-/* doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
+/* step-3 doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
     try {
@@ -576,21 +571,89 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     }
 });
 exports.finalPayment = finalPayment;
-// Update expired clinic appointments - for cron job
-const updateEmergencyAppointmentExpiredStatus = () => __awaiter(void 0, void 0, void 0, function* () {
+//***** script for cron job
+const updateEmergencyStatusCron = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const now = new Date();
-        // Find appointments that should be expired (end time has passed and status is still pending/confirmed)
-        const expiredAppointments = yield emergency_appointment_model_1.default.updateMany({
-            createdAt: { $lt: now },
-            status: { $in: ["pending", "confirmed"] },
-        }, {
-            $set: { status: "expired" },
+        // subtract 3 hours (check until 3:30 UTC(9pm IST))
+        const cutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+        const appointments = yield emergency_appointment_model_1.default.find({
+            "slot.time.end": { $lt: cutoff },
+            status: { $in: ["pending", "in-progress"] },
         });
-        console.log(`Updated ${expiredAppointments.modifiedCount} expired clinic appointments`);
+        if (appointments.length === 0) {
+            return {
+                success: true,
+                message: "No emergency appointments to update.",
+                summary: { expired: 0, completed: 0, unattended: 0 },
+            };
+        }
+        let expired = 0;
+        let completed = 0;
+        let unattended = 0;
+        // loop through all the appointments
+        for (const appt of appointments) {
+            const { status, paymentDetails, patientId } = appt;
+            if (!status || !paymentDetails || !patientId) {
+                console.warn("Skipping appointment due to missing fields:", appt._id);
+                continue;
+            }
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": patientId,
+            });
+            if (!patientUserDetail) {
+                console.warn("Patient user not found for appointment:", appt._id);
+                continue;
+            }
+            // pending -> expired
+            if (status === "pending") {
+                appt.status = "expired";
+                const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                if (!unFreezeSuccess) {
+                    console.warn("Unfreeze failed for appointment:", appt._id);
+                    continue;
+                }
+                yield patientUserDetail.save();
+                if (appt.paymentDetails) {
+                    appt.paymentDetails.patientWalletFrozen = 0;
+                }
+                expired++;
+            }
+            // in-progress → completed or unattended
+            else if (status === "in-progress") {
+                if ((paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.paymentStatus) === "completed") {
+                    appt.status = "completed";
+                    completed++;
+                }
+                else {
+                    appt.status = "unattended";
+                    const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                    if (!unFreezeSuccess) {
+                        console.warn("Unfreeze failed for appointment:", appt._id);
+                        continue;
+                    }
+                    yield patientUserDetail.save();
+                    if (appt.paymentDetails) {
+                        appt.paymentDetails.patientWalletFrozen = 0;
+                    }
+                    unattended++;
+                }
+            }
+            yield appt.save();
+        }
+        return {
+            success: true,
+            message: "Emergency Statuses updated.",
+            summary: { expired, completed, unattended },
+        };
     }
     catch (error) {
-        console.error("Error updating expired clinic appointments:", error);
+        console.error("Cron job error in updateEmergencyStatusCron:", error);
+        return {
+            success: false,
+            message: "Cron job failed to update emergency appointments.",
+            error: error.message,
+        };
     }
 });
-exports.updateEmergencyAppointmentExpiredStatus = updateEmergencyAppointmentExpiredStatus;
+exports.updateEmergencyStatusCron = updateEmergencyStatusCron;

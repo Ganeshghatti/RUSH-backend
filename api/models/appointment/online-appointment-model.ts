@@ -9,7 +9,7 @@ const onlineAppointmentSchema = new Schema({
   },
   patientId: {
     type: Schema.Types.ObjectId,
-    ref: "User",
+    ref: "Patient",
     required: true,
   },
   slot: {
@@ -39,7 +39,7 @@ const onlineAppointmentSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ["pending", "accepted", "rejected", "completed", "expired"],
+    enum: ["pending", "accepted", "rejected", "completed", "expired", "unattended"],
     default: "pending",
   },
   roomName: { type: String },

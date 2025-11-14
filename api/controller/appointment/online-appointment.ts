@@ -10,7 +10,7 @@ import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 import DoctorSubscription from "../../models/doctor-subscription";
 
-/* Book appointment by patient + Amount freeze*/
+/* step 1 - Book appointment by patient + Amount freeze*/
 export const bookOnlineAppointment = async (
   req: Request,
   res: Response
@@ -45,6 +45,29 @@ export const bookOnlineAppointment = async (
       return;
     }
 
+    // Check if patient user exists
+    const patientUserDetail = await User.findById(patientUserId);
+    if (!patientUserDetail) {
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find your patient's user profile.",
+        action: "bookOnlineAppointment:patientUser-not-found",
+      });
+      return;
+    }
+
+    // check if patient exists
+    const patient = await Patient.findOne({ userId: patientUserId });
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find your patient profile.",
+        action: "bookOnlineAppointment:patient-not-found",
+      });
+      return;
+    }
+    const patientId = patient._id;
+
     // Check if doctor exists
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
@@ -52,17 +75,6 @@ export const bookOnlineAppointment = async (
         success: false,
         message: "We couldn't find the selected doctor.",
         action: "bookOnlineAppointment:doctor-not-found",
-      });
-      return;
-    }
-
-    // Check if patient user exists
-    const patientUserDetail = await User.findById(patientUserId);
-    if (!patientUserDetail) {
-      res.status(404).json({
-        success: false,
-        message: "We couldn't find your patient profile.",
-        action: "bookOnlineAppointment:patient-not-found",
       });
       return;
     }
@@ -130,7 +142,7 @@ export const bookOnlineAppointment = async (
     // Create new appointment
     const newAppointment = new OnlineAppointment({
       doctorId,
-      patientId: patientUserId,
+      patientId,
       slot: {
         day: new Date(slot.day),
         duration: slot.duration,
@@ -156,7 +168,11 @@ export const bookOnlineAppointment = async (
     )
       .populate({
         path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .populate({
         path: "doctorId",
@@ -189,10 +205,9 @@ export const getDoctorAppointments = async (
   res: Response
 ): Promise<void> => {
   try {
-    const doctorId = req.user.id; // Assuming the logged-in user is a doctor
+    const doctorUserId = req.user.id;
 
-    const doctor = await Doctor.findOne({ userId: doctorId });
-
+    const doctor = await Doctor.findOne({ userId: doctorUserId });
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -201,34 +216,19 @@ export const getDoctorAppointments = async (
       });
       return;
     }
+    const doctorId = doctor._id;
 
-    const now = new Date();
-
-    // Helper function to update appointment statuses
-    const updateStatuses = async (appointments: any[], Model: any) => {
-      const updates = appointments.map(async (appt) => {
-        const endDate = new Date(appt.slot?.time?.end); // assuming slot.time.end exists
-        if (endDate && endDate < now) {
-          if (appt.status === "pending") {
-            appt.status = "expired";
-            await Model.updateOne({ _id: appt._id }, { status: "cancelled" });
-          } else if (appt.status === "accepted") {
-            appt.status = "completed";
-            await Model.updateOne({ _id: appt._id }, { status: "completed" });
-          }
-        }
-        return appt;
-      });
-      return Promise.all(updates);
-    };
-
-    // Find all online appointments for this doctor
+    /***** Find all online appointments for this doctor ******/
     let onlineAppointments = await OnlineAppointment.find({
-      doctorId: doctor._id,
+      doctorId,
     })
       .populate({
         path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .populate({
         path: "doctorId",
@@ -238,16 +238,11 @@ export const getDoctorAppointments = async (
           select: "firstName lastName countryCode gender email profilePic",
         },
       })
-      .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
-
-    onlineAppointments = await updateStatuses(
-      onlineAppointments,
-      OnlineAppointment
-    );
+      .sort({ "slot.day": 1, "slot.time.start": 1 });
 
     // Find all emergency appointments for this doctor
     let emergencyAppointments = await EmergencyAppointment.find({
-      doctorId: doctor._id,
+      doctorId,
     })
       .populate({
         path: "patientId",
@@ -266,17 +261,20 @@ export const getDoctorAppointments = async (
           select: "firstName lastName countryCode gender email profilePic",
         },
       })
-      .sort({ createdAt: -1 }); // Sort by most recent created first
-
-    emergencyAppointments = await updateStatuses(
-      emergencyAppointments,
-      EmergencyAppointment
-    );
+      .sort({ createdAt: -1 });
 
     // Find all clinic appointments for this doctor
     let clinicAppointments = await ClinicAppointment.find({
-      doctorId: doctor._id,
+      doctorId,
     })
+      .populate({
+        path: "patientId",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
       .populate({
         path: "doctorId",
         select: "userId specialization clinicVisit",
@@ -285,24 +283,19 @@ export const getDoctorAppointments = async (
           select: "firstName lastName profilePic",
         },
       })
-      .populate({
-        path: "patientId",
-        select: "firstName lastName profilePic phone",
-      })
-      .sort({ "slot.day": -1 });
-
-    clinicAppointments = await updateStatuses(
-      clinicAppointments,
-      ClinicAppointment
-    );
+      .sort({ "slot.day": -1, "slot.time.start": -1 });
 
     // Find all home visit appointments for this doctor
     let homeVisitAppointments = await HomeVisitAppointment.find({
-      doctorId: doctor._id,
+      doctorId,
     })
       .populate({
         path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .populate({
         path: "doctorId",
@@ -313,11 +306,6 @@ export const getDoctorAppointments = async (
         },
       })
       .sort({ "slot.day": -1, "slot.time.start": -1 });
-
-    homeVisitAppointments = await updateStatuses(
-      homeVisitAppointments,
-      HomeVisitAppointment
-    );
 
     res.status(200).json({
       success: true,
@@ -346,11 +334,10 @@ export const getPatientAppointments = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user.id; // Assuming the logged-in user is a patient
+    const userId = req.user.id;
 
     // Find the patient record
     const patient = await Patient.findOne({ userId });
-
     if (!patient) {
       res.status(404).json({
         success: false,
@@ -359,34 +346,19 @@ export const getPatientAppointments = async (
       });
       return;
     }
-
-    const now = new Date();
-
-    // Helper function to update appointment statuses
-    const updateStatuses = async (appointments: any[], Model: any) => {
-      const updates = appointments.map(async (appt) => {
-        const endDate = new Date(appt.slot?.time?.end); // assuming slot.time.end exists
-        if (endDate && endDate < now) {
-          if (appt.status === "pending") {
-            appt.status = "expired";
-            await Model.updateOne({ _id: appt._id }, { status: "cancelled" });
-          } else if (appt.status === "accepted") {
-            appt.status = "completed";
-            await Model.updateOne({ _id: appt._id }, { status: "completed" });
-          }
-        }
-        return appt;
-      });
-      return Promise.all(updates);
-    };
+    const patientId = patient._id;
 
     // Find all online appointments for this patient (patientId references User)
     let onlineAppointments = await OnlineAppointment.find({
-      patientId: userId,
+      patientId,
     })
       .populate({
         path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .populate({
         path: "doctorId",
@@ -396,24 +368,18 @@ export const getPatientAppointments = async (
           select: "firstName lastName countryCode gender email profilePic",
         },
       })
-      .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
-
-    onlineAppointments = await updateStatuses(
-      onlineAppointments,
-      OnlineAppointment
-    );
+      .sort({ "slot.day": 1, "slot.time.start": 1 }); 
 
     // Find all emergency appointments for this patient (patientId references Patient)
     let emergencyAppointments = await EmergencyAppointment.find({
-      patientId: patient._id,
+      patientId,
     })
       .populate({
         path: "patientId",
-        select: "userId healthMetrics insurance mapLocation",
+        select: "userId",
         populate: {
           path: "userId",
-          select:
-            "firstName lastName countryCode gender email profilePic phone dob address wallet",
+          select: "firstName lastName countryCode gender email profilePic",
         },
       })
       .populate({
@@ -424,39 +390,41 @@ export const getPatientAppointments = async (
           select: "firstName lastName countryCode gender email profilePic",
         },
       })
-      .sort({ createdAt: -1 }); // Sort by most recent created first
-
-    emergencyAppointments = await updateStatuses(
-      emergencyAppointments,
-      EmergencyAppointment
-    );
+      .sort({ createdAt: -1 });
 
     // Find all clinic appointments for this patient
     let clinicAppointments = await ClinicAppointment.find({
-      patientId: userId,
-    })
-      .populate("doctorId", "userId specialization clinicVisit")
-      .populate({
-        path: "doctorId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName profilePic",
-        },
-      })
-      .sort({ "slot.day": -1 });
-
-    clinicAppointments = await updateStatuses(
-      clinicAppointments,
-      ClinicAppointment
-    );
-
-    // Find all home visit appointments for this patient
-    let homeVisitAppointments = await HomeVisitAppointment.find({
-      patientId: userId,
+      patientId,
     })
       .populate({
         path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
+      .populate({
+        path: "doctorId",
+        select: "qualifications specialization userId clinicVisit",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
+      })
+      .sort({ "slot.day": 1, "slot.time.start": 1 });
+
+    // Find all home visit appointments for this patient
+    let homeVisitAppointments = await HomeVisitAppointment.find({
+      patientId,
+    })
+      .populate({
+        path: "patientId",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .populate({
         path: "doctorId",
@@ -467,11 +435,6 @@ export const getPatientAppointments = async (
         },
       })
       .sort({ "slot.day": -1, "slot.time.start": -1 });
-
-    homeVisitAppointments = await updateStatuses(
-      homeVisitAppointments,
-      HomeVisitAppointment
-    );
 
     res.status(200).json({
       success: true,
@@ -494,7 +457,7 @@ export const getPatientAppointments = async (
   }
 };
 
-/* Update appointment status by doctor (if accept -> create twilio room, if reject -> unfreeze amount) */
+/* step 2 - Update appointment status by doctor (if accept -> create twilio room, if reject -> unfreeze amount) */
 export const updateAppointmentStatus = async (
   req: Request,
   res: Response
@@ -540,32 +503,32 @@ export const updateAppointmentStatus = async (
     }
 
     // if status is reject unfreeze the amount from patient's user wallet.
-    if (status === "rejected" || status === "cancel") {
-      const patientUserId = appointment.patientId;
-      const patientUserDetail = await User.findById(patientUserId);
-      if (!patientUserDetail) {
-        res.status(400).json({
-          success: false,
-          message: "We couldn't find the patient profile.",
-          action: "updateAppointmentStatus:patient-not-found",
-        });
-        return;
-      }
+    // if (status === "rejected" || status === "cancel") {
+    //   const patientUserId = appointment.patientId;
+    //   const patientUserDetail = await User.findById(patientUserId);
+    //   if (!patientUserDetail) {
+    //     res.status(400).json({
+    //       success: false,
+    //       message: "We couldn't find the patient profile.",
+    //       action: "updateAppointmentStatus:patient-not-found",
+    //     });
+    //     return;
+    //   }
 
-      const amount = appointment.paymentDetails?.patientWalletFrozen;
+    //   const amount = appointment.paymentDetails?.patientWalletFrozen;
 
-      const unfreezeSuccess = (patientUserDetail as any).unfreezeAmount(amount);
-      if (unfreezeSuccess) {
-        await patientUserDetail.save();
-      } else {
-        res.status(400).json({
-          success: false,
-          message: "We couldn't restore the reserved wallet amount.",
-          action: "updateAppointmentStatus:unfreeze-failed",
-        });
-        return;
-      }
-    }
+    //   const unfreezeSuccess = (patientUserDetail as any).unfreezeAmount(amount);
+    //   if (unfreezeSuccess) {
+    //     await patientUserDetail.save();
+    //   } else {
+    //     res.status(400).json({
+    //       success: false,
+    //       message: "We couldn't restore the reserved wallet amount.",
+    //       action: "updateAppointmentStatus:unfreeze-failed",
+    //     });
+    //     return;
+    //   }
+    // }
 
     // if status is accepted create room
     const client = twilio(
@@ -579,7 +542,6 @@ export const updateAppointmentStatus = async (
         type: "group",
         maxParticipants: 2,
       });
-      console.log("Room created:", roomName);
       appointment.roomName = room.uniqueName;
     }
 
@@ -591,7 +553,11 @@ export const updateAppointmentStatus = async (
     const updatedAppointment = await OnlineAppointment.findById(appointment._id)
       .populate({
         path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
+        select: "userId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName countryCode gender email profilePic",
+        },
       })
       .populate({
         path: "doctorId",
@@ -692,13 +658,11 @@ export const createRoomAccessToken = async (
   try {
     const { roomName } = req.body;
     if (!roomName) {
-      res
-        .status(400)
-        .json({
-          success: false,
-          message: "Room name is required.",
-          action: "createRoomAccessToken:missing-room-name",
-        });
+      res.status(400).json({
+        success: false,
+        message: "Room name is required.",
+        action: "createRoomAccessToken:missing-room-name",
+      });
       return;
     }
 
@@ -706,7 +670,6 @@ export const createRoomAccessToken = async (
 
     // finding the appointment using rommName
     const appointment: any = await OnlineAppointment.findOne({ roomName });
-    // if (!appointment) {
     if (!appointment || appointment?.status !== "accepted") {
       res.status(400).json({
         success: false,
@@ -716,19 +679,31 @@ export const createRoomAccessToken = async (
       return;
     }
     const doctorId = appointment?.doctorId;
-    const patientUserId = appointment?.patientId;
+    const patientId = appointment?.patientId;
 
     // doctor's user id
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       res.status(400).json({
         success: false,
-        message: "We couldn't find the doctor profile.",
-        action: "createRoomAccessToken:doctor-not-found",
+        message: "We couldn't find the doctor's user profile.",
+        action: "createRoomAccessToken:doctorUser-not-found",
       });
       return;
     }
     const doctorUserId = doctor?.userId;
+
+    // patient's user id
+    const patient = await Patient.findById(patientId);
+    if (!patient) {
+      res.status(400).json({
+        success: false,
+        message: "We couldn't find the patient's user profile.",
+        action: "createRoomAccessToken:patientUser-not-found",
+      });
+      return;
+    }
+    const patientUserId = patient?.userId;
 
     let whoJoined = "";
     if (identity == doctorUserId) whoJoined = "doctor";
@@ -767,17 +742,15 @@ export const createRoomAccessToken = async (
     });
   } catch (err) {
     console.error("Failed to generate Twilio access token:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "We couldn't generate the room access token.",
-        action: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      success: false,
+      message: "We couldn't generate the room access token.",
+      action: err instanceof Error ? err.message : String(err),
+    });
   }
 };
 
-/* doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
+/* step 3 - doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 export const finalPayment = async (
   req: Request,
   res: Response
@@ -793,7 +766,6 @@ export const finalPayment = async (
       });
       return;
     }
-    console.log('ROOM NAME ',roomName)
 
     // find the appointment with this room name
     const appointment = await OnlineAppointment.findOne({ roomName });
@@ -809,8 +781,11 @@ export const finalPayment = async (
     // check payment status of this appointment
     const paymentStatus = appointment.paymentDetails?.paymentStatus;
     if (paymentStatus === "pending") {
-      const patientUserDetail = await User.findById(appointment.patientId);
-      if (!patientUserDetail) {
+      const patient = await Patient.findById(appointment.patientId);
+      const patientUserDetail = await User.findOne({
+        "roleRefs.patient": appointment.patientId,
+      });
+      if (!patientUserDetail || !patient) {
         res.status(400).json({
           sucess: false,
           message: "We couldn't find the patient profile.",
@@ -871,8 +846,8 @@ export const finalPayment = async (
           ? subscription.opsExpenseOnline[slotKey]!.figure
           : 0;
       // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
-      if(!platformFee) platformFee = 0;
-      if(!opsExpense) opsExpense = 0;
+      if (!platformFee) platformFee = 0;
+      if (!opsExpense) opsExpense = 0;
 
       if (appointment.paymentDetails) {
         const deductAmount = appointment.paymentDetails.patientWalletFrozen;
@@ -1039,31 +1014,98 @@ export const getAllPatients = async (
   }
 };
 
-// script for cron job
-export const updateAppointmentExpiredStatus = async () => {
+//***** script for cron job
+export const updateOnlineStatusCron = async () => {
   try {
     const now = new Date();
 
-    // Find appointments that have passed their slot end time and are still pending or accepted
-    const expiredAppointments = await OnlineAppointment.find({
+    // run the cron at 6:30 PM UTC(12:00 AM IST)
+    const appointments = await OnlineAppointment.find({
       "slot.time.end": { $lt: now },
       status: { $in: ["pending", "accepted"] },
     });
-
-    if (expiredAppointments.length > 0) {
-      const updateResult = await OnlineAppointment.updateMany(
-        {
-          "slot.time.end": { $lt: now },
-          status: { $in: ["pending", "accepted"] },
-        },
-        {
-          $set: { status: "expired" },
-        }
-      );
-
-      console.log(`Updated ${updateResult.modifiedCount} expired appointments`);
+    if (appointments.length === 0) {
+      return {
+        success: true,
+        message: "No online appointments to update.",
+        summary: { expired: 0, completed: 0, unattended: 0 },
+      };
     }
-  } catch (error: any) {
-    console.error("Error updating expired appointments:", error.message);
+
+    let expired = 0;
+    let completed = 0;
+    let unattended = 0;
+
+    // loop through all the appointments
+    for (const appt of appointments) {
+      const { status, paymentDetails, patientId } = appt;
+      if (!status || !paymentDetails || !patientId) {
+        console.warn("Skipping appointment due to missing fields:", appt._id);
+        continue;
+      }
+
+      const patientUserDetail = await User.findOne({
+        "roleRefs.patient": patientId,
+      });
+      if (!patientUserDetail) {
+        console.warn("Patient user not found for appointment:", appt._id);
+        continue;
+      }
+
+      // pending -> expired
+      if (status === "pending") {
+        appt.status = "expired";
+
+        const unFreezeSuccess = (patientUserDetail as any).unfreezeAmount(
+          paymentDetails?.patientWalletFrozen
+        );
+        if (!unFreezeSuccess) {
+          console.warn("Unfreeze failed for appointment:", appt._id);
+          continue;
+        }
+
+        await patientUserDetail.save();
+        if (appt.paymentDetails) {
+          appt.paymentDetails.patientWalletFrozen = 0;
+        }
+        expired++;
+      }
+      // accepted → completed or unattended
+      else if (status === "accepted") {
+        if (paymentDetails?.paymentStatus === "completed") {
+          appt.status = "completed";
+          completed++;
+        } else {
+          appt.status = "unattended";
+          const unFreezeSuccess = (patientUserDetail as any).unfreezeAmount(
+            paymentDetails?.patientWalletFrozen
+          );
+          if (!unFreezeSuccess) {
+            console.warn("Unfreeze failed for appointment:", appt._id);
+            continue;
+          }
+          await patientUserDetail.save();
+          if (appt.paymentDetails) {
+            appt.paymentDetails.patientWalletFrozen = 0;
+          }
+          unattended++;
+        }
+      }
+
+      await appt.save();
+    }
+
+    return {
+      success: true,
+      message: "Online Statuses updated.",
+      summary: { expired, completed, unattended },
+    };
+  } catch (error) {
+    console.error("Cron job error in updateOnlineStatusCron:", error);
+    return {
+      success: false,
+      message: "Cron job failed to update online appointments.",
+      error: (error as Error).message,
+    };
   }
 };

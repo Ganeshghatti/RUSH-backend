@@ -6,7 +6,7 @@ import {
   acceptHomeVisitRequest,
   confirmHomeVisitAppointment,
   completeHomeVisitAppointment,
-  cancelHomeVisitAppointment,
+  // cancelHomeVisitAppointment,
   getDoctorHomeVisitAppointmentByDate,
   updateHomeVisitConfig,
 } from "../../controller/appointment/homevisit-appointment";
@@ -46,11 +46,11 @@ router.put(
 );
 
 // Patient or Doctor: cancel
-router.put(
-  "/appointment/homevisit/:appointmentId/cancel",
-  verifyToken as RequestHandler,
-  cancelHomeVisitAppointment as RequestHandler
-);
+// router.put(
+//   "/appointment/homevisit/:appointmentId/cancel",
+//   verifyToken as RequestHandler,
+//   cancelHomeVisitAppointment as RequestHandler
+// );
 
 // Doctor: appointments by date
 router.post(

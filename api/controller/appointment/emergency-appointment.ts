@@ -61,7 +61,7 @@ export const convertMediaKeysToUrls = async (appointments: any[]) => {
   );
 };
 
-/* create emergency appointment when patient requests + freeze 2500*/
+/* step-1 create emergency appointment when patient requests + freeze 2500*/
 export const createEmergencyAppointment = async (
   req: Request,
   res: Response
@@ -286,7 +286,7 @@ export const getPatientEmergencyAppointments = async (
   }
 };
 
-/* doctor accepts emergency appointment + emergency online room is created */
+/* step-2 doctor accepts emergency appointment + emergency online room is created */
 export const acceptEmergencyAppointment = async (
   req: Request,
   res: Response
@@ -399,13 +399,11 @@ export const createEmergencyRoomAccessToken = async (
   try {
     const { roomName } = req.body;
     if (!roomName) {
-      res
-        .status(400)
-        .json({
-          success: false,
-          message: "Room name is required.",
-          action: "createEmergencyRoomAccessToken:missing-room-name",
-        });
+      res.status(400).json({
+        success: false,
+        message: "Room name is required.",
+        action: "createEmergencyRoomAccessToken:missing-room-name",
+      });
       return;
     }
 
@@ -416,7 +414,8 @@ export const createEmergencyRoomAccessToken = async (
     if (!appointment || appointment.status !== "in-progress") {
       res.status(404).json({
         success: false,
-        message: "We couldn't find an active emergency appointment for this room.",
+        message:
+          "We couldn't find an active emergency appointment for this room.",
         action: "createEmergencyRoomAccessToken:appointment-not-found",
       });
       return;
@@ -458,7 +457,6 @@ export const createEmergencyRoomAccessToken = async (
       });
       return;
     }
-    console.log("The user who joined is ", whoJoined);
 
     // creating token for this identity.
     const token = new AccessToken(
@@ -487,17 +485,15 @@ export const createEmergencyRoomAccessToken = async (
     });
   } catch (err) {
     console.error("Failed to generate  twilio access token:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "We couldn't generate the room access token.",
-        action: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      success: false,
+      message: "We couldn't generate the room access token.",
+      action: err instanceof Error ? err.message : String(err),
+    });
   }
 };
 
-/* doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
+/* step-3 doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 export const finalPayment = async (
   req: Request,
   res: Response
@@ -581,8 +577,8 @@ export const finalPayment = async (
       let platformFee = subscription.platformFeeEmergency?.figure || 0;
       let opsExpense = subscription.opsExpenseEmergency?.figure || 0;
       // these two are added becasue if doctor subscription does not have platformFeeOnline and expense key(old data) these two will be undefined.
-      if(!platformFee) platformFee = 0;
-      if(!opsExpense) opsExpense = 0;
+      if (!platformFee) platformFee = 0;
+      if (!opsExpense) opsExpense = 0;
 
       if (appointment.paymentDetails) {
         const deductAmount = appointment.paymentDetails.patientWalletFrozen;
@@ -638,27 +634,98 @@ export const finalPayment = async (
   }
 };
 
-// Update expired clinic appointments - for cron job
-export const updateEmergencyAppointmentExpiredStatus =
-  async (): Promise<void> => {
-    try {
-      const now = new Date();
-
-      // Find appointments that should be expired (end time has passed and status is still pending/confirmed)
-      const expiredAppointments = await EmergencyAppointment.updateMany(
-        {
-          createdAt: { $lt: now },
-          status: { $in: ["pending", "confirmed"] },
-        },
-        {
-          $set: { status: "expired" },
-        }
-      );
-
-      console.log(
-        `Updated ${expiredAppointments.modifiedCount} expired clinic appointments`
-      );
-    } catch (error) {
-      console.error("Error updating expired clinic appointments:", error);
+//***** script for cron job
+export const updateEmergencyStatusCron = async () => {
+  try {
+    const now = new Date();
+    // subtract 3 hours (check until 3:30 UTC(9pm IST))
+    const cutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+    const appointments = await EmergencyAppointment.find({
+      "slot.time.end": { $lt: cutoff },
+      status: { $in: ["pending", "in-progress"] },
+    });
+    if (appointments.length === 0) {
+      return {
+        success: true,
+        message: "No emergency appointments to update.",
+        summary: { expired: 0, completed: 0, unattended: 0 },
+      };
     }
-  };
+
+    let expired = 0;
+    let completed = 0;
+    let unattended = 0;
+
+    // loop through all the appointments
+    for (const appt of appointments) {
+      const { status, paymentDetails, patientId } = appt;
+      if (!status || !paymentDetails || !patientId) {
+        console.warn("Skipping appointment due to missing fields:", appt._id);
+        continue;
+      }
+
+      const patientUserDetail = await User.findOne({
+        "roleRefs.patient": patientId,
+      });
+      if (!patientUserDetail) {
+        console.warn("Patient user not found for appointment:", appt._id);
+        continue;
+      }
+
+      // pending -> expired
+      if (status === "pending") {
+        appt.status = "expired";
+
+        const unFreezeSuccess = (patientUserDetail as any).unfreezeAmount(
+          paymentDetails?.patientWalletFrozen
+        );
+        if (!unFreezeSuccess) {
+          console.warn("Unfreeze failed for appointment:", appt._id);
+          continue;
+        }
+
+        await patientUserDetail.save();
+        if (appt.paymentDetails) {
+          appt.paymentDetails.patientWalletFrozen = 0;
+        }
+        expired++;
+      }
+      // in-progress → completed or unattended
+      else if (status === "in-progress") {
+        if (paymentDetails?.paymentStatus === "completed") {
+          appt.status = "completed";
+          completed++;
+        } else {
+          appt.status = "unattended";
+          const unFreezeSuccess = (patientUserDetail as any).unfreezeAmount(
+            paymentDetails?.patientWalletFrozen
+          );
+          if (!unFreezeSuccess) {
+            console.warn("Unfreeze failed for appointment:", appt._id);
+            continue;
+          }
+          await patientUserDetail.save();
+          if (appt.paymentDetails) {
+            appt.paymentDetails.patientWalletFrozen = 0;
+          }
+          unattended++;
+        }
+      }
+
+      await appt.save();
+    }
+
+    return {
+      success: true,
+      message: "Emergency Statuses updated.",
+      summary: { expired, completed, unattended },
+    };
+  } catch (error) {
+    console.error("Cron job error in updateEmergencyStatusCron:", error);
+    return {
+      success: false,
+      message: "Cron job failed to update emergency appointments.",
+      error: (error as Error).message,
+    };
+  }
+};

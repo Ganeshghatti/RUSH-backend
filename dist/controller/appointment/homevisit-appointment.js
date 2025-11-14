@@ -12,10 +12,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateHomeVisitAppointmentExpiredStatus = exports.updateHomeVisitConfig = exports.getDoctorHomeVisitAppointmentByDate = exports.cancelHomeVisitAppointment = exports.completeHomeVisitAppointment = exports.confirmHomeVisitAppointment = exports.acceptHomeVisitRequest = exports.bookHomeVisitAppointment = void 0;
+exports.updateHomeStatusCron = exports.updateHomeVisitConfig = exports.getDoctorHomeVisitAppointmentByDate = exports.completeHomeVisitAppointment = exports.confirmHomeVisitAppointment = exports.acceptHomeVisitRequest = exports.bookHomeVisitAppointment = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const homevisit_appointment_model_1 = __importDefault(require("../../models/appointment/homevisit-appointment-model"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
+const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const otp_utils_1 = require("../../utils/otp-utils");
 const validation_1 = require("../../validation/validation");
@@ -27,7 +28,11 @@ const doctor_subscription_1 = __importDefault(require("../../models/doctor-subsc
 const populateAppointment = (id) => homevisit_appointment_model_1.default.findById(id)
     .populate({
     path: "patientId",
-    select: "firstName lastName countryCode gender email profilePic",
+    select: "userId",
+    populate: {
+        path: "userId",
+        select: "firstName lastName countryCode gender email profilePic",
+    },
 })
     .populate({
     path: "doctorId",
@@ -91,7 +96,15 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             });
             return;
         }
-        // (Field presence/shape already enforced by Zod schema)
+        const patientUserDetail = yield user_model_1.default.findById(patientUserId);
+        if (!patientUserDetail) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find your patient's user profile.",
+                action: "bookHomeVisitAppointment:patientUser-not-found",
+            });
+            return;
+        }
         // Check if doctor exists and has home visit enabled
         const doctor = yield doctor_model_1.default.findById(doctorId);
         if (!doctor) {
@@ -111,7 +124,7 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             return;
         }
         // Check if patient exists
-        const patient = yield user_model_1.default.findById(patientUserId);
+        const patient = yield patient_model_1.default.findOne({ userId: patientUserId });
         if (!patient) {
             res.status(404).json({
                 success: false,
@@ -120,6 +133,7 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             });
             return;
         }
+        const patientId = patient._id;
         // Get fixed cost from doctor's home visit configuration
         const fixedCost = ((_b = doctor.homeVisit) === null || _b === void 0 ? void 0 : _b.fixedPrice) || 0;
         if (fixedCost <= 0) {
@@ -130,7 +144,6 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             });
             return;
         }
-        // Distance not used anymore
         // Check if the slot is already booked
         const existingAppointment = yield homevisit_appointment_model_1.default.findOne({
             doctorId,
@@ -155,10 +168,40 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             type: "Point",
             coordinates: patientAddress.location.coordinates,
         };
+        // check if patient user profile have fixed cost in available balance, if yes freeze it
+        const availableBalance = patientUserDetail.getAvailableBalance();
+        if (availableBalance < fixedCost) {
+            res.status(400).json({
+                success: false,
+                message: "Your wallet balance is too low to send request for this appointment.",
+                action: "bookHomeVisitAppointment:insufficient-balance",
+                data: {
+                    required: fixedCost,
+                    available: availableBalance,
+                    totalWallet: patientUserDetail.wallet,
+                    frozenAmount: patientUserDetail.frozenAmount,
+                },
+            });
+            return;
+        }
+        const freezeSuccess = patientUserDetail.freezeAmount(fixedCost);
+        if (!freezeSuccess) {
+            res.status(400).json({
+                success: false,
+                message: "We couldn't freeze the amount.",
+                action: "bookHomeVisitAppointment:freeze-failed",
+                data: {
+                    required: fixedCost,
+                    available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
+                    totalWallet: patientUserDetail.wallet,
+                },
+            });
+        }
+        yield patientUserDetail.save();
         // Create new appointment with only fixed cost
         const newAppointment = new homevisit_appointment_model_1.default({
             doctorId,
-            patientId: patientUserId,
+            patientId,
             slot: {
                 day: new Date(slot.day),
                 duration: slot.duration,
@@ -188,8 +231,8 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             },
             paymentDetails: {
                 amount: fixedCost,
-                walletDeducted: 0,
-                walletFrozen: 0,
+                patientWalletDeducted: 0,
+                patientWalletFrozen: fixedCost,
                 paymentStatus: "pending",
             },
             patientIp,
@@ -197,19 +240,7 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         });
         yield newAppointment.save();
         // Populate the response
-        const populatedAppointment = yield homevisit_appointment_model_1.default.findById(newAppointment._id)
-            .populate({
-            path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
-        })
-            .populate({
-            path: "doctorId",
-            select: "qualifications specialization userId homeVisit",
-            populate: {
-                path: "userId",
-                select: "firstName lastName countryCode gender email profilePic",
-            },
-        });
+        const populatedAppointment = populateAppointment(newAppointment._id);
         res.status(201).json({
             success: true,
             message: "Home visit request created successfully.",
@@ -245,8 +276,8 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             return;
         }
         const { travelCost } = parsed.data;
-        const doctorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        if (!doctorId) {
+        const doctorUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        if (!doctorUserId) {
             res.status(401).json({
                 success: false,
                 message: "You must be signed in to accept requests.",
@@ -254,8 +285,7 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             });
             return;
         }
-        // (travelCost validated by schema)
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId });
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
         if (!doctor) {
             res.status(404).json({
                 success: false,
@@ -264,10 +294,11 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             });
             return;
         }
+        const doctorId = doctor._id;
         // Find the appointment
         const appointment = yield homevisit_appointment_model_1.default.findOne({
             _id: appointmentId,
-            doctorId: doctor._id,
+            doctorId,
             status: "pending",
         });
         if (!appointment) {
@@ -314,9 +345,9 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
     }
 });
 exports.acceptHomeVisitRequest = acceptHomeVisitRequest;
-/* Step 3: Patient confirms the appointment and totalCost frozen in wallet */
+/* Step 3: Patient confirms the appointment and totalCost=fixedCost+travelCost frozen in wallet */
 const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c, _d;
     try {
         const { appointmentId } = req.params;
         // No body fields to validate here besides param; schema for confirm not needed (retained symmetry)
@@ -329,10 +360,20 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
             });
             return;
         }
+        const patient = yield patient_model_1.default.findOne({ userId: patientUserId });
+        if (!patient) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find your patient profile.",
+                action: "confirmHomeVisitAppointment:patient-not-found",
+            });
+            return;
+        }
+        const patientId = patient._id;
         // Find the appointment
         const appointment = yield homevisit_appointment_model_1.default.findOne({
             _id: appointmentId,
-            patientId: patientUserId,
+            patientId,
             status: "doctor_accepted",
         });
         if (!appointment) {
@@ -352,26 +393,28 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
             });
             return;
         }
-        const totalCost = ((_b = appointment.pricing) === null || _b === void 0 ? void 0 : _b.totalCost) || 0;
+        const fixedCost = ((_b = appointment.pricing) === null || _b === void 0 ? void 0 : _b.fixedCost) || 0;
+        const travelCost = ((_c = appointment.pricing) === null || _c === void 0 ? void 0 : _c.travelCost) || 0;
+        const totalCost = ((_d = appointment.pricing) === null || _d === void 0 ? void 0 : _d.totalCost) || 0;
         // find patient's user details
         const patientUserDetail = yield user_model_1.default.findById(patientUserId);
         if (!patientUserDetail) {
             res.status(404).json({
                 success: false,
-                message: "We couldn't find your patient profile.",
-                action: "confirmHomeVisitAppointment:patient-not-found",
+                message: "We couldn't find your patient's user profile.",
+                action: "confirmHomeVisitAppointment:patientUser-not-found",
             });
             return;
         }
         //***** Check wallet balance - getAvailableBalance excludes frozen amount from wallet *****\\
         const availableBalance = patientUserDetail.getAvailableBalance();
-        if (availableBalance < totalCost) {
+        if (availableBalance < travelCost) {
             res.status(400).json({
                 success: false,
                 message: "Your wallet balance is too low to confirm this appointment.",
                 action: "confirmHomeVisitAppointment:insufficient-balance",
                 data: {
-                    required: totalCost,
+                    required: travelCost,
                     available: availableBalance,
                     totalWallet: patientUserDetail.wallet,
                     frozenAmount: patientUserDetail.frozenAmount || 0,
@@ -379,14 +422,14 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
             });
             return;
         }
-        const freezeSuccess = patientUserDetail.freezeAmount(totalCost);
+        const freezeSuccess = patientUserDetail.freezeAmount(travelCost);
         if (!freezeSuccess) {
             res.status(400).json({
                 success: false,
                 message: "We couldn't reserve the appointment amount.",
                 action: "confirmHomeVisitAppointment:freeze-failed",
                 data: {
-                    required: totalCost,
+                    required: travelCost,
                     available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
                     totalWallet: patientUserDetail.wallet,
                 },
@@ -397,9 +440,9 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
         const otpCode = (0, otp_utils_1.generateOTP)();
         // Update appointment
         appointment.status = "patient_confirmed";
-        appointment.paymentDetails.walletDeducted = 0;
-        appointment.paymentDetails.walletFrozen = totalCost;
-        appointment.paymentDetails.paymentStatus = "frozen";
+        appointment.paymentDetails.patientWalletDeducted = 0;
+        appointment.paymentDetails.patientWalletFrozen = totalCost;
+        appointment.paymentDetails.paymentStatus = "pending";
         appointment.otp = {
             code: otpCode,
             generatedAt: new Date(),
@@ -429,7 +472,7 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
 exports.confirmHomeVisitAppointment = confirmHomeVisitAppointment;
 /* Step 4: Doctor completes appointment with OTP validation */
 const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d;
     try {
         const { appointmentId } = req.params;
         const parsed = validation_1.homeVisitAppointmentCompleteSchema.safeParse(req.body);
@@ -462,16 +505,6 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
             });
             return;
         }
-        // find doctor
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
-        if (!doctor) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find your doctor profile.",
-                action: "completeHomeVisitAppointment:doctor-not-found",
-            });
-            return;
-        }
         // Find doctor user detail to increment amount in the doctor user wallet
         const doctorUserDetail = yield user_model_1.default.findById(doctorUserId);
         if (!doctorUserDetail) {
@@ -479,6 +512,16 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
                 success: false,
                 message: "We couldn't find your doctor profile.",
                 action: "completeHomeVisitAppointment:doctor-user-not-found",
+            });
+            return;
+        }
+        // find doctor
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
+        if (!doctor) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find your doctor profile.",
+                action: "completeHomeVisitAppointment:doctor-not-found",
             });
             return;
         }
@@ -527,7 +570,6 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
             });
             return;
         }
-        // No OTP expiry check; OTP is permanent for this appointment
         if ((0, otp_utils_1.isMaxAttemptsReached)(appointment.otp.attempts, appointment.otp.maxAttempts)) {
             res.status(400).json({
                 success: false,
@@ -553,9 +595,10 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
         appointment.status = "completed";
         appointment.otp.isUsed = true;
         //***** convert frozen amount to actual deduction *****\\
-        if (((_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.paymentStatus) === "pending" ||
-            ((_e = appointment.paymentDetails) === null || _e === void 0 ? void 0 : _e.paymentStatus) === "frozen") {
-            const patientUserDetail = yield user_model_1.default.findById(appointment.patientId);
+        if (((_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.paymentStatus) === "pending") {
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": appointment.patientId,
+            });
             if (!patientUserDetail) {
                 res.status(400).json({
                     success: false,
@@ -569,9 +612,9 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
             const deductSuccess = patientUserDetail.deductFrozenAmount(deductAmount);
             if (deductSuccess && deductAmount) {
                 yield patientUserDetail.save();
-                appointment.paymentDetails.walletDeducted = deductAmount;
-                if (appointment.paymentDetails.walletFrozen) {
-                    appointment.paymentDetails.walletFrozen -= deductAmount;
+                appointment.paymentDetails.patientWalletDeducted = deductAmount;
+                if (appointment.paymentDetails.patientWalletFrozen) {
+                    appointment.paymentDetails.patientWalletFrozen -= deductAmount;
                 }
                 appointment.paymentDetails.paymentStatus = "completed";
                 // increment in doctor user
@@ -611,91 +654,97 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
 });
 exports.completeHomeVisitAppointment = completeHomeVisitAppointment;
 // Cancel appointment (by patient or doctor)
-const cancelHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    try {
-        const { appointmentId } = req.params;
-        const parsed = validation_1.homeVisitAppointmentCancelSchema.safeParse(req.body || {});
-        if (!parsed.success) {
-            res.status(400).json({
-                success: false,
-                message: "Please review the cancellation details and try again.",
-                action: "cancelHomeVisitAppointment:validation-error",
-                data: {
-                    errors: parsed.error.errors,
-                },
-            });
-            return;
-        }
-        // reason currently unused (no persistence field) – intentionally ignored to avoid lint warning
-        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        if (!userId) {
-            res.status(401).json({
-                success: false,
-                message: "You must be signed in to cancel this appointment.",
-                action: "cancelHomeVisitAppointment:not-authenticated",
-            });
-            return;
-        }
-        // Find the appointment
-        const appointment = yield homevisit_appointment_model_1.default.findById(appointmentId);
-        if (!appointment) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find that appointment.",
-                action: "cancelHomeVisitAppointment:appointment-not-found",
-            });
-            return;
-        }
-        // Check if user is patient or doctor of this appointment
-        const doctor = yield doctor_model_1.default.findOne({ userId });
-        const isDoctor = doctor && doctor._id.toString() === appointment.doctorId.toString();
-        const isPatient = appointment.patientId.toString() === userId;
-        if (!isDoctor && !isPatient) {
-            res.status(403).json({
-                success: false,
-                message: "You are not authorised to cancel this appointment.",
-                action: "cancelHomeVisitAppointment:unauthorised",
-            });
-            return;
-        }
-        // Check if appointment can be cancelled
-        if (appointment.status === "completed" ||
-            appointment.status === "cancelled") {
-            res.status(400).json({
-                success: false,
-                message: "This appointment is already completed or cancelled.",
-                action: "cancelHomeVisitAppointment:invalid-status",
-            });
-            return;
-        }
-        // No refund handling required since we didn't deduct wallet on confirm
-        // Update appointment status
-        appointment.status = "cancelled";
-        if (appointment.paymentDetails) {
-            appointment.paymentDetails.paymentStatus = "failed";
-            appointment.paymentDetails.walletDeducted = 0;
-        }
-        yield appointment.save();
-        // Populate the response
-        const cancelledAppointment = yield populateAppointment(appointment._id);
-        res.status(200).json({
-            success: true,
-            message: "Home visit appointment cancelled successfully.",
-            action: "cancelHomeVisitAppointment:success",
-            data: cancelledAppointment,
-        });
-    }
-    catch (error) {
-        console.error("Error cancelling home visit appointment:", error);
-        res.status(500).json({
-            success: false,
-            message: "We couldn't cancel the home visit appointment.",
-            action: error.message,
-        });
-    }
-});
-exports.cancelHomeVisitAppointment = cancelHomeVisitAppointment;
+// export const cancelHomeVisitAppointment = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const { appointmentId } = req.params;
+//     const parsed = homeVisitAppointmentCancelSchema.safeParse(req.body || {});
+//     if (!parsed.success) {
+//       res.status(400).json({
+//         success: false,
+//         message: "Please review the cancellation details and try again.",
+//         action: "cancelHomeVisitAppointment:validation-error",
+//         data: {
+//           errors: parsed.error.errors,
+//         },
+//       });
+//       return;
+//     }
+//     // reason currently unused (no persistence field) – intentionally ignored to avoid lint warning
+//     const userId = (req as any).user?.id;
+//     if (!userId) {
+//       res.status(401).json({
+//         success: false,
+//         message: "You must be signed in to cancel this appointment.",
+//         action: "cancelHomeVisitAppointment:not-authenticated",
+//       });
+//       return;
+//     }
+//     // Find the appointment
+//     const appointment = await HomeVisitAppointment.findById(appointmentId);
+//     if (!appointment) {
+//       res.status(404).json({
+//         success: false,
+//         message: "We couldn't find that appointment.",
+//         action: "cancelHomeVisitAppointment:appointment-not-found",
+//       });
+//       return;
+//     }
+//     // Check if user is patient or doctor of this appointment
+//     const doctor = await Doctor.findOne({ userId });
+//     const isDoctor =
+//       doctor && doctor._id.toString() === appointment.doctorId.toString();
+//     const patient = await Patient.findOne({ userId });
+//     const isPatient =
+//       patient && patient._id.toString() === appointment.patientId.toString();
+//     if (!isDoctor && !isPatient) {
+//       res.status(403).json({
+//         success: false,
+//         message: "You are not authorised to cancel this appointment.",
+//         action: "cancelHomeVisitAppointment:unauthorised",
+//       });
+//       return;
+//     }
+//     // Check if appointment can be cancelled
+//     if (
+//       appointment.status === "completed" ||
+//       appointment.status === "doctor_rejected" ||
+//       appointment.status === "patient_cancelled"
+//     ) {
+//       res.status(400).json({
+//         success: false,
+//         message: "This appointment is already completed or cancelled.",
+//         action: "cancelHomeVisitAppointment:invalid-status",
+//       });
+//       return;
+//     }
+//     // No refund handling required since we didn't deduct wallet on confirm
+//     // Update appointment status
+//     appointment.status = "cancelled";
+//     if (appointment.paymentDetails) {
+//       appointment.paymentDetails.paymentStatus = "failed";
+//       appointment.paymentDetails.walletDeducted = 0;
+//     }
+//     await appointment.save();
+//     // Populate the response
+//     const cancelledAppointment = await populateAppointment(appointment._id);
+//     res.status(200).json({
+//       success: true,
+//       message: "Home visit appointment cancelled successfully.",
+//       action: "cancelHomeVisitAppointment:success",
+//       data: cancelledAppointment,
+//     });
+//   } catch (error: any) {
+//     console.error("Error cancelling home visit appointment:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "We couldn't cancel the home visit appointment.",
+//       action: error.message,
+//     });
+//   }
+// };
 // Get doctor appointments by date
 const getDoctorHomeVisitAppointmentByDate = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -841,27 +890,87 @@ const updateHomeVisitConfig = (req, res) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.updateHomeVisitConfig = updateHomeVisitConfig;
-// Cron function to update expired appointments
-const updateHomeVisitAppointmentExpiredStatus = () => __awaiter(void 0, void 0, void 0, function* () {
+//***** script for cron job
+const updateHomeStatusCron = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const now = new Date();
-        // Find appointments that should be expired
-        const expiredAppointments = yield homevisit_appointment_model_1.default.find({
-            status: { $in: ["pending", "doctor_accepted", "patient_confirmed"] },
+        const appointments = yield homevisit_appointment_model_1.default.find({
             "slot.time.end": { $lt: now },
+            status: { $in: ["pending", "doctor_accepted", "patient_confirmed"] },
         });
-        for (const appointment of expiredAppointments) {
-            appointment.status = "expired";
-            if (appointment.paymentDetails) {
-                appointment.paymentDetails.paymentStatus = "failed";
-                appointment.paymentDetails.walletDeducted = 0;
-            }
-            yield appointment.save();
+        if (appointments.length === 0) {
+            return {
+                success: true,
+                message: "No home appointments to update.",
+                summary: { expired: 0, completed: 0, unattended: 0 },
+            };
         }
-        console.log(`Updated ${expiredAppointments.length} expired home visit appointments`);
+        let expired = 0;
+        let completed = 0;
+        let unattended = 0;
+        // loop through all the appointments
+        for (const appt of appointments) {
+            const { status, paymentDetails, patientId } = appt;
+            if (!status || !paymentDetails || !patientId) {
+                console.warn("Skipping appointment due to missing fields:", appt._id);
+                continue;
+            }
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": patientId,
+            });
+            if (!patientUserDetail) {
+                console.warn("Patient user not found for appointment:", appt._id);
+                continue;
+            }
+            // pending, doctor_accepted -> expired
+            if (status === "pending" || status === "doctor_accepted") {
+                appt.status = "expired";
+                const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                if (!unFreezeSuccess) {
+                    console.warn("Unfreeze failed for appointment:", appt._id);
+                    continue;
+                }
+                yield patientUserDetail.save();
+                if (appt.paymentDetails) {
+                    appt.paymentDetails.patientWalletFrozen = 0;
+                }
+                expired++;
+            }
+            // patient_confirmed → completed or unattended
+            else if (status === "patient_confirmed") {
+                if ((paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.paymentStatus) === "completed") {
+                    appt.status = "completed";
+                    completed++;
+                }
+                else {
+                    appt.status = "unattended";
+                    const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                    if (!unFreezeSuccess) {
+                        console.warn("Unfreeze failed for appointment:", appt._id);
+                        continue;
+                    }
+                    yield patientUserDetail.save();
+                    if (appt.paymentDetails) {
+                        appt.paymentDetails.patientWalletFrozen = 0;
+                    }
+                    unattended++;
+                }
+            }
+            yield appt.save();
+        }
+        return {
+            success: true,
+            message: "Home Statuses updated.",
+            summary: { expired, completed, unattended },
+        };
     }
     catch (error) {
-        console.error("Error updating expired home visit appointments:", error);
+        console.error("Cron job error in updateHomeStatusCron:", error);
+        return {
+            success: false,
+            message: "Cron job failed to update home appointments.",
+            error: error.message,
+        };
     }
 });
-exports.updateHomeVisitAppointmentExpiredStatus = updateHomeVisitAppointmentExpiredStatus;
+exports.updateHomeStatusCron = updateHomeStatusCron;

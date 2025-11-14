@@ -12,9 +12,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateClinicAppointmentExpiredStatus = exports.validateVisitOTP = exports.getAppointmentOTP = exports.getDoctorClinicAppointments = exports.getPatientClinicAppointments = exports.cancelClinicAppointment = exports.confirmClinicAppointment = exports.bookClinicAppointment = exports.getDoctorClinicAvailability = exports.updateClinicDetails = void 0;
+exports.updateClinicStatusCron = exports.validateVisitOTP = exports.getAppointmentOTP = exports.getDoctorClinicAppointments = exports.getPatientClinicAppointments = exports.acceptClinicAppointment = exports.bookClinicAppointment = exports.getDoctorClinicAvailability = exports.updateClinicDetails = void 0;
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
+const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const clinic_appointment_model_1 = __importDefault(require("../../models/appointment/clinic-appointment-model"));
 const validation_1 = require("../../validation/validation");
 const mongoose_1 = __importDefault(require("mongoose"));
@@ -300,7 +301,9 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
                 return;
             }
             // Find the latest/active subscription (assuming last is active)
-            const activeSub = doctor.subscriptions && doctor.subscriptions.length > 0 ? doctor.subscriptions[doctor.subscriptions.length - 1] : null;
+            const activeSub = doctor.subscriptions && doctor.subscriptions.length > 0
+                ? doctor.subscriptions[doctor.subscriptions.length - 1]
+                : null;
             if (!activeSub || !activeSub.SubscriptionId) {
                 res.status(400).json({
                     success: false,
@@ -320,7 +323,8 @@ const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, func
                 return;
             }
             const maxClinics = subDoc.no_of_clinics || 0;
-            if (Array.isArray(validatedData.clinics) && validatedData.clinics.length > maxClinics) {
+            if (Array.isArray(validatedData.clinics) &&
+                validatedData.clinics.length > maxClinics) {
                 res.status(400).json({
                     success: false,
                     message: `Your subscription allows only ${maxClinics} clinics. Upgrade your plan to add more clinics.`,
@@ -417,7 +421,7 @@ const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void
     }
 });
 exports.getDoctorClinicAvailability = getDoctorClinicAvailability;
-// Book clinic appointment by patient + freeze amount
+// Step1 - Book clinic appointment by patient + freeze amount
 const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -454,6 +458,17 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
+        // Validate patient
+        const patient = yield patient_model_1.default.findOne({ userId: patientUserId });
+        if (!patient) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find your patient profile.",
+                action: "bookClinicAppointment:patient-not-found",
+            });
+            return;
+        }
+        const patientId = patient._id;
         //***** Validate clinic *****\\
         const clinicVisit = doctor.clinicVisit;
         const clinic = ((clinicVisit === null || clinicVisit === void 0 ? void 0 : clinicVisit.clinics) || []).find((c) => c._id.toString() === clinicId && c.isActive);
@@ -470,8 +485,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!patientUserDetail) {
             res.status(404).json({
                 success: false,
-                message: "We couldn't find your patient profile.",
-                action: "bookClinicAppointment:patient-not-found",
+                message: "We couldn't find your patient's User profile.",
+                action: "bookClinicAppointment:patientUser-not-found",
             });
             return;
         }
@@ -517,9 +532,9 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         yield patientUserDetail.save();
         // Create appointment
         const appointment = new clinic_appointment_model_1.default({
-            doctorId: doctor._id,
-            patientId: patientUserId,
-            clinicId: clinicId,
+            doctorId,
+            patientId,
+            clinicId,
             slot: {
                 day: appointmentDay,
                 duration: slot.duration,
@@ -543,9 +558,10 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             action: "bookClinicAppointment:success",
             data: {
                 appointment,
-                patientWalletFrozen: clinic.consultationFee,
-                patientAvailableBalance: patientUserDetail.getAvailableBalance(),
-                note: "Amount will be deducted from the wallet once the appointment is completed.",
+                // patientAvailableBalance: (
+                //   patientUserDetail as any
+                // ).getAvailableBalance(),
+                // note: "Amount will be deducted from the wallet once the appointment is completed.",
             },
         });
     }
@@ -559,8 +575,8 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.bookClinicAppointment = bookClinicAppointment;
-// Confirm clinic appointment by Doctor + generate otp
-const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+// Step2 - Accept clinic appointment by Doctor + generate otp
+const acceptClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c, _d;
     try {
         const { appointmentId } = req.params;
@@ -568,8 +584,8 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         if (!doctorUserId) {
             res.status(401).json({
                 success: false,
-                message: "You must be signed in to confirm appointments.",
-                action: "confirmClinicAppointment:not-authenticated",
+                message: "You must be signed in to accept appointments.",
+                action: "acceptClinicAppointment:not-authenticated",
             });
             return;
         }
@@ -579,7 +595,7 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             res.status(404).json({
                 success: false,
                 message: "We couldn't find your doctor profile.",
-                action: "confirmClinicAppointment:doctor-not-found",
+                action: "acceptClinicAppointment:doctor-not-found",
             });
             return;
         }
@@ -592,20 +608,20 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             res.status(404).json({
                 success: false,
                 message: "We couldn't find that appointment.",
-                action: "confirmClinicAppointment:appointment-not-found",
+                action: "acceptClinicAppointment:appointment-not-found",
             });
             return;
         }
         if (appointment.status !== "pending") {
             res.status(400).json({
                 success: false,
-                message: "Only pending appointments can be confirmed.",
-                action: "confirmClinicAppointment:invalid-status",
+                message: "Only pending appointments can be accepted.",
+                action: "acceptClinicAppointment:invalid-status",
             });
             return;
         }
-        // Update appointment status to confirmed and generate OTP
-        appointment.status = "confirmed";
+        // Update appointment status to accepted and generate OTP
+        appointment.status = "accepted";
         appointment.otp = {
             code: (0, otp_utils_1.generateOTP)(),
             generatedAt: new Date(),
@@ -617,8 +633,8 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         yield appointment.save();
         res.status(200).json({
             success: true,
-            message: "Appointment confirmed successfully.",
-            action: "confirmClinicAppointment:success",
+            message: "Appointment accepted successfully.",
+            action: "acceptClinicAppointment:success",
             data: {
                 appointmentId: appointment._id,
                 status: appointment.status,
@@ -630,107 +646,111 @@ const confirmClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         });
     }
     catch (error) {
-        console.error("Error confirming clinic appointment:", error);
+        console.error("Error accepting clinic appointment:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't confirm the clinic appointment.",
+            message: "We couldn't accept the clinic appointment.",
             action: error instanceof Error ? error.message : String(error),
         });
     }
 });
-exports.confirmClinicAppointment = confirmClinicAppointment;
+exports.acceptClinicAppointment = acceptClinicAppointment;
 // Cancel/Reject clinic appointment (Doctor only)
-const cancelClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
-    try {
-        const { appointmentId } = req.params;
-        const doctorUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        if (!doctorUserId) {
-            res.status(401).json({
-                success: false,
-                message: "You must be signed in to cancel appointments.",
-                action: "cancelClinicAppointment:not-authenticated",
-            });
-            return;
-        }
-        // Find doctor by userId
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
-        if (!doctor) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find your doctor profile.",
-                action: "cancelClinicAppointment:doctor-not-found",
-            });
-            return;
-        }
-        // Find appointment
-        const appointment = yield clinic_appointment_model_1.default.findOne({
-            _id: appointmentId,
-            doctorId: doctor._id,
-        });
-        if (!appointment) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find that appointment.",
-                action: "cancelClinicAppointment:appointment-not-found",
-            });
-            return;
-        }
-        if (appointment.status === "completed" ||
-            appointment.status === "cancelled") {
-            res.status(400).json({
-                success: false,
-                message: "This appointment is already completed or cancelled.",
-                action: "cancelClinicAppointment:invalid-status",
-            });
-            return;
-        }
-        // Handle refunds based on payment status
-        let refundAmount = 0;
-        if (((_b = appointment.paymentDetails) === null || _b === void 0 ? void 0 : _b.patientWalletDeducted) &&
-            appointment.paymentDetails.patientWalletDeducted > 0) {
-            const patient = yield user_model_1.default.findById(appointment.patientId);
-            if (patient) {
-                refundAmount = appointment.paymentDetails.patientWalletDeducted;
-                if (appointment.paymentDetails.paymentStatus === "pending") {
-                    // If amount was frozen, unfreeze it using helper method
-                    patient.unfreezeAmount(refundAmount);
-                }
-                else if (appointment.paymentDetails.paymentStatus === "completed") {
-                    // If amount was already deducted, refund to wallet
-                    patient.wallet += refundAmount;
-                }
-                yield patient.save();
-            }
-        }
-        // Update appointment status to cancelled
-        appointment.status = "cancelled";
-        // Note: Cancellation reason removed since history field is removed
-        yield appointment.save();
-        res.status(200).json({
-            success: true,
-            message: "Appointment cancelled successfully.",
-            action: "cancelClinicAppointment:success",
-            data: {
-                appointmentId: appointment._id,
-                status: appointment.status,
-                refunded: refundAmount,
-                refundType: ((_c = appointment.paymentDetails) === null || _c === void 0 ? void 0 : _c.paymentStatus) === "frozen"
-                    ? "unfrozen"
-                    : "refunded",
-            },
-        });
-    }
-    catch (error) {
-        console.error("Error cancelling clinic appointment:", error);
-        res.status(500).json({
-            success: false,
-            message: "We couldn't cancel the clinic appointment.",
-            action: error instanceof Error ? error.message : String(error),
-        });
-    }
-});
-exports.cancelClinicAppointment = cancelClinicAppointment;
+// export const cancelClinicAppointment = async (
+//   req: AuthRequest,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const { appointmentId } = req.params;
+//     const doctorUserId = req.user?.id;
+//     if (!doctorUserId) {
+//       res.status(401).json({
+//         success: false,
+//         message: "You must be signed in to cancel appointments.",
+//         action: "cancelClinicAppointment:not-authenticated",
+//       });
+//       return;
+//     }
+//     // Find doctor by userId
+//     const doctor = await Doctor.findOne({ userId: doctorUserId });
+//     if (!doctor) {
+//       res.status(404).json({
+//         success: false,
+//         message: "We couldn't find your doctor profile.",
+//         action: "cancelClinicAppointment:doctor-not-found",
+//       });
+//       return;
+//     }
+//     // Find appointment
+//     const appointment = await ClinicAppointment.findOne({
+//       _id: appointmentId,
+//       doctorId: doctor._id,
+//     });
+//     if (!appointment) {
+//       res.status(404).json({
+//         success: false,
+//         message: "We couldn't find that appointment.",
+//         action: "cancelClinicAppointment:appointment-not-found",
+//       });
+//       return;
+//     }
+//     if (
+//       appointment.status === "completed" ||
+//       appointment.status === "cancelled"
+//     ) {
+//       res.status(400).json({
+//         success: false,
+//         message: "This appointment is already completed or cancelled.",
+//         action: "cancelClinicAppointment:invalid-status",
+//       });
+//       return;
+//     }
+//     // Handle refunds based on payment status
+//     let refundAmount = 0;
+//     if (
+//       appointment.paymentDetails?.patientWalletDeducted &&
+//       appointment.paymentDetails.patientWalletDeducted > 0
+//     ) {
+//       const patient = await User.findById(appointment.patientId);
+//       if (patient) {
+//         refundAmount = appointment.paymentDetails.patientWalletDeducted;
+//         if (appointment.paymentDetails.paymentStatus === "pending") {
+//           // If amount was frozen, unfreeze it using helper method
+//           (patient as any).unfreezeAmount(refundAmount);
+//         } else if (appointment.paymentDetails.paymentStatus === "completed") {
+//           // If amount was already deducted, refund to wallet
+//           patient.wallet += refundAmount;
+//         }
+//         await patient.save();
+//       }
+//     }
+//     // Update appointment status to cancelled
+//     appointment.status = "cancelled";
+//     // Note: Cancellation reason removed since history field is removed
+//     await appointment.save();
+//     res.status(200).json({
+//       success: true,
+//       message: "Appointment cancelled successfully.",
+//       action: "cancelClinicAppointment:success",
+//       data: {
+//         appointmentId: appointment._id,
+//         status: appointment.status,
+//         refunded: refundAmount,
+//         refundType:
+//           appointment.paymentDetails?.paymentStatus === "frozen"
+//             ? "unfrozen"
+//             : "refunded",
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error cancelling clinic appointment:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "We couldn't cancel the clinic appointment.",
+//       action: error instanceof Error ? error.message : String(error),
+//     });
+//   }
+// };
 // Get patient's clinic appointments
 const getPatientClinicAppointments = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -877,10 +897,10 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
             });
             return;
         }
-        if (appointment.status !== "confirmed") {
+        if (appointment.status !== "accepted") {
             res.status(400).json({
                 success: false,
-                message: "OTP is only available for confirmed appointments.",
+                message: "OTP is only available for accpeted appointments.",
                 action: "getAppointmentOTP:invalid-status",
             });
             return;
@@ -934,9 +954,9 @@ const getAppointmentOTP = (req, res) => __awaiter(void 0, void 0, void 0, functi
     }
 });
 exports.getAppointmentOTP = getAppointmentOTP;
-// Validate OTP and complete appointment
+// Step3 - Validate OTP and complete appointment
 const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d;
     try {
         const validation = validation_1.otpValidationSchema.safeParse(req.body);
         if (!validation.success) {
@@ -950,6 +970,7 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
             return;
         }
+        const { appointmentId, otp } = validation.data;
         const doctorUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
         if (!doctorUserId) {
             res.status(401).json({
@@ -959,7 +980,6 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
             return;
         }
-        const { appointmentId, otp } = validation.data;
         // Find doctor
         const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
         if (!doctor) {
@@ -1015,10 +1035,10 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
             return;
         }
-        if (appointment.status !== "confirmed") {
+        if (appointment.status !== "accepted") {
             res.status(400).json({
                 success: false,
-                message: "Appointment is not in confirmed status.",
+                message: "Appointment is not in accepted status.",
                 action: "validateVisitOTP:invalid-status",
             });
             return;
@@ -1080,9 +1100,10 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         appointment.status = "completed";
         appointment.otp.isUsed = true;
         //***** convert frozen amount to actual deduction *****\\
-        if (((_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.paymentStatus) === "pending" ||
-            ((_e = appointment.paymentDetails) === null || _e === void 0 ? void 0 : _e.paymentStatus) === "frozen") {
-            const patientUserDetail = yield user_model_1.default.findById(appointment.patientId);
+        if (((_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.paymentStatus) === "pending") {
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": appointment.patientId,
+            });
             if (patientUserDetail) {
                 const deductAmount = appointment.paymentDetails.amount;
                 // Deduct from frozen amount using helper method - (deduct from user.frozenAmount + deduct from user.wallet)
@@ -1108,6 +1129,14 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
                     return;
                 }
             }
+            else {
+                res.status(401).json({
+                    success: false,
+                    message: "We couldn't find patient's user profile.",
+                    action: "finalizePayment:patientUser-not-found",
+                });
+                return;
+            }
         }
         yield appointment.save();
         res.status(200).json({
@@ -1129,21 +1158,87 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.validateVisitOTP = validateVisitOTP;
-// Update expired clinic appointments - for cron job
-const updateClinicAppointmentExpiredStatus = () => __awaiter(void 0, void 0, void 0, function* () {
+//***** script for cron job
+const updateClinicStatusCron = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const now = new Date();
-        // Find appointments that should be expired (end time has passed and status is still pending/confirmed)
-        const expiredAppointments = yield clinic_appointment_model_1.default.updateMany({
+        const appointments = yield clinic_appointment_model_1.default.find({
             "slot.time.end": { $lt: now },
-            status: { $in: ["pending", "confirmed"] },
-        }, {
-            $set: { status: "expired" },
+            status: { $in: ["pending", "accepted"] },
         });
-        console.log(`Updated ${expiredAppointments.modifiedCount} expired clinic appointments`);
+        if (appointments.length === 0) {
+            return {
+                success: true,
+                message: "No clinic appointments to update.",
+                summary: { expired: 0, completed: 0, unattended: 0 },
+            };
+        }
+        let expired = 0;
+        let completed = 0;
+        let unattended = 0;
+        // loop through all the appointments
+        for (const appt of appointments) {
+            const { status, paymentDetails, patientId } = appt;
+            if (!status || !paymentDetails || !patientId) {
+                console.warn("Skipping appointment due to missing fields:", appt._id);
+                continue;
+            }
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": patientId,
+            });
+            if (!patientUserDetail) {
+                console.warn("Patient user not found for appointment:", appt._id);
+                continue;
+            }
+            // pending -> expired
+            if (status === "pending") {
+                appt.status = "expired";
+                const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                if (!unFreezeSuccess) {
+                    console.warn("Unfreeze failed for appointment:", appt._id);
+                    continue;
+                }
+                yield patientUserDetail.save();
+                if (appt.paymentDetails) {
+                    appt.paymentDetails.patientWalletFrozen = 0;
+                }
+                expired++;
+            }
+            // accepted → completed or unattended
+            else if (status === "accepted") {
+                if ((paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.paymentStatus) === "completed") {
+                    appt.status = "completed";
+                    completed++;
+                }
+                else {
+                    appt.status = "unattended";
+                    const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                    if (!unFreezeSuccess) {
+                        console.warn("Unfreeze failed for appointment:", appt._id);
+                        continue;
+                    }
+                    yield patientUserDetail.save();
+                    if (appt.paymentDetails) {
+                        appt.paymentDetails.patientWalletFrozen = 0;
+                    }
+                    unattended++;
+                }
+            }
+            yield appt.save();
+        }
+        return {
+            success: true,
+            message: "Clinic Statuses updated.",
+            summary: { expired, completed, unattended },
+        };
     }
     catch (error) {
-        console.error("Error updating expired clinic appointments:", error);
+        console.error("Cron job error in updateClinicStatusCron:", error);
+        return {
+            success: false,
+            message: "Cron job failed to update clinic appointments.",
+            error: error.message,
+        };
     }
 });
-exports.updateClinicAppointmentExpiredStatus = updateClinicAppointmentExpiredStatus;
+exports.updateClinicStatusCron = updateClinicStatusCron;

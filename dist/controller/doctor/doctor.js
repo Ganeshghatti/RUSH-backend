@@ -749,8 +749,8 @@ const getDoctorAppointmentStats = (req, res) => __awaiter(void 0, void 0, void 0
         ];
         // Calculate counts by status for all appointments
         const pendingCount = allAppointments.filter((app) => app.status === "pending").length;
-        const acceptedConfirmedCount = allAppointments.filter((app) => app.status === "accepted" || app.status === "confirmed").length;
-        const rejectedCancelledCount = allAppointments.filter((app) => app.status === "rejected" || app.status === "cancelled").length;
+        const acceptedConfirmedCount = allAppointments.filter((app) => app.status === "accepted").length;
+        const rejectedCancelledCount = allAppointments.filter((app) => app.status === "rejected").length;
         const completedCount = allAppointments.filter((app) => app.status === "completed").length;
         const totalCount = allAppointments.length;
         // Generate signed URLs for patient profile pictures
@@ -990,7 +990,9 @@ const updateDoctorActiveStatus = (req, res) => __awaiter(void 0, void 0, void 0,
         }
         res.status(200).json({
             success: true,
-            message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". The system will automatically set it to inactive soon." : ""}`,
+            message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive
+                ? ". The system will automatically set it to inactive soon."
+                : ""}`,
             action: "updateDoctorActiveStatus:success",
             data: {
                 isActive: updatedDoctor.isActive,

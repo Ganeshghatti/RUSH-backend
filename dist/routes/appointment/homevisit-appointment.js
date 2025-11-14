@@ -13,7 +13,11 @@ router.put("/appointment/homevisit/:appointmentId/confirm", auth_middleware_1.ve
 // Doctor: complete with OTP (Step 4)
 router.put("/appointment/homevisit/:appointmentId/complete", auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), homevisit_appointment_1.completeHomeVisitAppointment);
 // Patient or Doctor: cancel
-router.put("/appointment/homevisit/:appointmentId/cancel", auth_middleware_1.verifyToken, homevisit_appointment_1.cancelHomeVisitAppointment);
+// router.put(
+//   "/appointment/homevisit/:appointmentId/cancel",
+//   verifyToken as RequestHandler,
+//   cancelHomeVisitAppointment as RequestHandler
+// );
 // Doctor: appointments by date
 router.post("/appointment/homevisit/doctor/by-date", auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), homevisit_appointment_1.getDoctorHomeVisitAppointmentByDate);
 // Doctor: update home visit configuration
