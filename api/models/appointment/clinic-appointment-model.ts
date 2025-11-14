@@ -10,7 +10,7 @@ const clinicAppointmentSchema = new Schema(
     },
     patientId: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Patient",
       required: true,
     },
     clinicId: {
@@ -40,7 +40,7 @@ const clinicAppointmentSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "confirmed", "completed", "cancelled", "expired"],
+      enum: ["pending", "accepted", "rejected", "completed", "expired", "unattended"],
       default: "pending",
     },
     otp: {
@@ -57,7 +57,7 @@ const clinicAppointmentSchema = new Schema(
       patientWalletFrozen: { type: Number, required: true },
       paymentStatus: {
         type: String,
-        enum: ["pending", "frozen", "completed", "failed"],
+        enum: ["pending", "completed"],
         default: "pending",
       },
     },

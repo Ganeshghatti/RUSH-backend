@@ -13,7 +13,7 @@ const homeVisitAppointmentSchema = new Schema({
     },
     patientId: {
         type: Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Patient",
         required: true,
     },
     slot: {
@@ -55,10 +55,12 @@ const homeVisitAppointmentSchema = new Schema({
         enum: [
             "pending",
             "doctor_accepted",
+            "doctor_rejected",
             "patient_confirmed",
+            "patient_cancelled",
             "completed",
-            "cancelled",
             "expired",
+            "unattended"
         ],
         default: "pending",
     },
@@ -76,11 +78,11 @@ const homeVisitAppointmentSchema = new Schema({
     },
     paymentDetails: {
         amount: { type: Number },
-        walletDeducted: { type: Number },
-        walletFrozen: { type: Number },
+        patientWalletDeducted: { type: Number },
+        patientWalletFrozen: { type: Number },
         paymentStatus: {
             type: String,
-            enum: ["pending", "frozen", "completed", "failed"],
+            enum: ["pending", "completed"],
             default: "pending",
         },
     },

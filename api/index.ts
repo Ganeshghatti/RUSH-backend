@@ -23,9 +23,10 @@ import ratingRoute from "./routes/appointment/rating-route";
 
 import { sendSMSV3 } from "./controller/users/auth";
 import cron from "node-cron";
-import { updateAppointmentExpiredStatus } from "./controller/appointment/online-appointment";
-import { updateClinicAppointmentExpiredStatus } from "./controller/appointment/clinic-appointment";
-import { updateHomeVisitAppointmentExpiredStatus } from "./controller/appointment/homevisit-appointment";
+import { updateOnlineStatusCron } from "./controller/appointment/online-appointment";
+import { updateEmergencyStatusCron } from "./controller/appointment/emergency-appointment";
+import { updateClinicStatusCron } from "./controller/appointment/clinic-appointment";
+import { updateHomeStatusCron } from "./controller/appointment/homevisit-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -126,12 +127,27 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-// Cron job to update expired appointments
-// Runs once every 24 hours at midnight to check for expired appointments
+// Cron job to update appointments status
+cron.schedule("30 18 * * *", async () => {
+  console.log("Running daily cron at 18:30 UTC");
+  try {
+    const onlineResult = await updateOnlineStatusCron();
+    console.log("Online Appointment Cron:", onlineResult);
 
-// cron.schedule("0 0 * * *", async () => {
-//   console.log("Running cron job to update expired appointments...");
-//   await updateAppointmentExpiredStatus();
-//   await updateClinicAppointmentExpiredStatus();
-//   await updateHomeVisitAppointmentExpiredStatus();
-// });
+    const emergencyResult = await updateEmergencyStatusCron();
+    console.log("Emergency Appointment Cron:", emergencyResult);
+
+    const clinicResult = await updateClinicStatusCron();
+    console.log("Clinic Appointment Cron:", clinicResult);
+
+    const homeVisitResult = await updateHomeStatusCron();
+    console.log("Home Visit Appointment Cron:", homeVisitResult);
+
+    console.log(
+      "All cron jobs completed successfully at",
+      new Date().toISOString()
+    );
+  } catch (err) {
+    console.error("Error triggering APIs:", err);
+  }
+});

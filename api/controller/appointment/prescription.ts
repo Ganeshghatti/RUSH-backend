@@ -7,7 +7,7 @@ import OnlineAppointment from "../../models/appointment/online-appointment-model
 import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
 import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
 import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
-import User from "../../models/user/user-model";
+import Patient from "../../models/user/patient-model";
 const appointmentModels: Record<string, mongoose.Model<any>> = {
   OnlineAppointment,
   ClinicAppointment,
@@ -112,8 +112,8 @@ export const addPrescription = async (
     }
 
     // patient User detail
-    const patientUser = await User.findById(patientId);
-    if (!patientUser) {
+    const patient = await Patient.findById(patientId);
+    if (!patient) {
       res.status(400).json({
         success: false,
         message: "We couldn't find the patient record.",
@@ -142,7 +142,6 @@ export const addPrescription = async (
       });
       return;
     }
-    console.log("hiiii ",appointment)
 
     let savedPrescription;
     let successMessage: string;

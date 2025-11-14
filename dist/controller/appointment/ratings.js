@@ -20,7 +20,6 @@ const patient_model_1 = __importDefault(require("../../models/user/patient-model
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const getMyRatings = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        console.log("Hi");
         const userId = req.user.id;
         const doctor = yield doctor_model_1.default.findOne({ userId });
         if (!doctor) {
@@ -42,7 +41,6 @@ const getMyRatings = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             },
         })
             .sort({ createdAt: -1 });
-        console.log("Ratings ", ratings);
         res.status(200).json({
             success: true,
             message: "Doctor ratings fetched successfully.",
@@ -94,7 +92,6 @@ const getRatingsByDoctorId = (req, res) => __awaiter(void 0, void 0, void 0, fun
             },
         })
             .sort({ createdAt: -1 });
-        console.log("Ratings ", ratings);
         res.status(200).json({
             success: true,
             message: "Ratings fetched successfully.",
@@ -161,7 +158,7 @@ const addRating = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        if (!appointment.patientId.equals(patient.userId) ||
+        if (!appointment.patientId.equals(patient._id) ||
             !appointment.doctorId.equals(doctor._id)) {
             res.status(403).json({
                 success: false,
@@ -291,7 +288,6 @@ const getRatingById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
             return;
         }
-        console.log("Rating ", rating);
         res.status(200).json({
             success: true,
             message: "Rating fetched successfully.",

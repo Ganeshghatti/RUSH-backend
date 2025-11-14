@@ -31,7 +31,7 @@ router
 // Confirm appointment (Doctor only)
 router
     .route("/appointment/clinic/:appointmentId/confirm")
-    .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), clinic_appointment_1.confirmClinicAppointment);
+    .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), clinic_appointment_1.acceptClinicAppointment);
 // Cancel appointment (Doctor only)
 // router
 //   .route("/appointment/clinic/:appointmentId/cancel")
