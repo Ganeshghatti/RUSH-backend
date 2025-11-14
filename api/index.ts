@@ -54,14 +54,6 @@ app.use(
       "http://localhost:5173"
     ],
     credentials: true,
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "Accept",
-      "Origin"
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   })
 );
 
