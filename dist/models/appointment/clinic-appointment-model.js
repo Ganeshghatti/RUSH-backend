@@ -43,7 +43,14 @@ const clinicAppointmentSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ["pending", "accepted", "rejected", "completed", "expired", "unattended"],
+        enum: [
+            "pending",
+            "accepted",
+            "rejected",
+            "completed",
+            "expired",
+            "unattended",
+        ],
         default: "pending",
     },
     otp: {
@@ -63,9 +70,12 @@ const clinicAppointmentSchema = new Schema({
             enum: ["pending", "completed"],
             default: "pending",
         },
+        doctorPlatformFee: { type: Number },
+        doctorOpsExpense: { type: Number },
+        doctorEarning: { type: Number }
     },
     prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
-    ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" }
+    ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" },
 }, {
     timestamps: true,
 });

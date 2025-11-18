@@ -1272,16 +1272,23 @@ export const validateVisitOTP = async (
         );
         if (deductSuccess) {
           await patientUserDetail.save();
-          appointment.paymentDetails.patientWalletDeducted = deductAmount;
-          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
-          appointment.paymentDetails.paymentStatus = "completed";
 
           // increment in doctor user
           let incrementAmount =
             deductAmount - platformFee - (deductAmount * opsExpense) / 100;
-          if (incrementAmount < 0) incrementAmount = 0;
+            if (incrementAmount < 0) incrementAmount = 0;
           doctorUserDetail.wallet += incrementAmount;
           await doctorUserDetail.save();
+
+          appointment.paymentDetails.patientWalletDeducted = deductAmount;
+          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+          appointment.paymentDetails.paymentStatus = "completed";
+
+          appointment.paymentDetails.doctorPlatformFee = platformFee;
+          appointment.paymentDetails.doctorOpsExpense = opsExpense;
+          appointment.paymentDetails.doctorEarning = incrementAmount;
+
+          await appointment.save();
         } else {
           res.status(500).json({
             success: false,
@@ -1299,8 +1306,6 @@ export const validateVisitOTP = async (
         return;
       }
     }
-
-    await appointment.save();
 
     res.status(200).json({
       success: true,

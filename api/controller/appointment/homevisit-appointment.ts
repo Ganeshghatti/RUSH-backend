@@ -665,11 +665,6 @@ export const completeHomeVisitAppointment = async (
       );
       if (deductSuccess && deductAmount) {
         await patientUserDetail.save();
-        appointment.paymentDetails.patientWalletDeducted = deductAmount;
-        if (appointment.paymentDetails.patientWalletFrozen) {
-          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
-        }
-        appointment.paymentDetails.paymentStatus = "completed";
 
         // increment in doctor user
         let incrementAmount =
@@ -677,6 +672,18 @@ export const completeHomeVisitAppointment = async (
         if (incrementAmount < 0) incrementAmount = 0;
         doctorUserDetail.wallet += incrementAmount;
         await doctorUserDetail.save();
+
+        appointment.paymentDetails.patientWalletDeducted = deductAmount;
+        if (appointment.paymentDetails.patientWalletFrozen) {
+          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+        }
+        appointment.paymentDetails.paymentStatus = "completed";
+
+        appointment.paymentDetails.doctorPlatformFee = platformFee;
+        appointment.paymentDetails.doctorOpsExpense = opsExpense;
+        appointment.paymentDetails.doctorEarning = incrementAmount;
+
+        await appointment.save();
       } else {
         res.status(500).json({
           success: false,
@@ -686,7 +693,6 @@ export const completeHomeVisitAppointment = async (
         return;
       }
     }
-    await appointment.save();
 
     // Populate the response
     const completedAppointment = await populateAppointment(appointment._id);

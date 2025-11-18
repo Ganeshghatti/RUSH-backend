@@ -612,17 +612,21 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
             const deductSuccess = patientUserDetail.deductFrozenAmount(deductAmount);
             if (deductSuccess && deductAmount) {
                 yield patientUserDetail.save();
-                appointment.paymentDetails.patientWalletDeducted = deductAmount;
-                if (appointment.paymentDetails.patientWalletFrozen) {
-                    appointment.paymentDetails.patientWalletFrozen -= deductAmount;
-                }
-                appointment.paymentDetails.paymentStatus = "completed";
                 // increment in doctor user
                 let incrementAmount = deductAmount - platformFee - (deductAmount * opsExpense) / 100;
                 if (incrementAmount < 0)
                     incrementAmount = 0;
                 doctorUserDetail.wallet += incrementAmount;
                 yield doctorUserDetail.save();
+                appointment.paymentDetails.patientWalletDeducted = deductAmount;
+                if (appointment.paymentDetails.patientWalletFrozen) {
+                    appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+                }
+                appointment.paymentDetails.paymentStatus = "completed";
+                appointment.paymentDetails.doctorPlatformFee = platformFee;
+                appointment.paymentDetails.doctorOpsExpense = opsExpense;
+                appointment.paymentDetails.doctorEarning = incrementAmount;
+                yield appointment.save();
             }
             else {
                 res.status(500).json({
@@ -633,7 +637,6 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
                 return;
             }
         }
-        yield appointment.save();
         // Populate the response
         const completedAppointment = yield populateAppointment(appointment._id);
         res.status(200).json({

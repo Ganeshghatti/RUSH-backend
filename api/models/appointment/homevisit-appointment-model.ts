@@ -57,7 +57,7 @@ const homeVisitAppointmentSchema = new Schema(
         "patient_cancelled",
         "completed",
         "expired",
-        "unattended"
+        "unattended",
       ],
       default: "pending",
     },
@@ -82,6 +82,9 @@ const homeVisitAppointmentSchema = new Schema(
         enum: ["pending", "completed"],
         default: "pending",
       },
+      doctorPlatformFee: { type: Number },
+      doctorOpsExpense: { type: Number },
+      doctorEarning: { type: Number }
     },
     doctorIp: String,
     patientIp: String,
@@ -90,7 +93,7 @@ const homeVisitAppointmentSchema = new Schema(
       coordinates: [Number],
     },
     prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
-    ratingId: {type: Schema.Types.ObjectId, ref: "RatingModel"}
+    ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" },
   },
   {
     timestamps: true,

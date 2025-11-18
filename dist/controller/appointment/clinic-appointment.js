@@ -1110,15 +1110,19 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 const deductSuccess = patientUserDetail.deductFrozenAmount(deductAmount);
                 if (deductSuccess) {
                     yield patientUserDetail.save();
-                    appointment.paymentDetails.patientWalletDeducted = deductAmount;
-                    appointment.paymentDetails.patientWalletFrozen -= deductAmount;
-                    appointment.paymentDetails.paymentStatus = "completed";
                     // increment in doctor user
                     let incrementAmount = deductAmount - platformFee - (deductAmount * opsExpense) / 100;
                     if (incrementAmount < 0)
                         incrementAmount = 0;
                     doctorUserDetail.wallet += incrementAmount;
                     yield doctorUserDetail.save();
+                    appointment.paymentDetails.patientWalletDeducted = deductAmount;
+                    appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+                    appointment.paymentDetails.paymentStatus = "completed";
+                    appointment.paymentDetails.doctorPlatformFee = platformFee;
+                    appointment.paymentDetails.doctorOpsExpense = opsExpense;
+                    appointment.paymentDetails.doctorEarning = incrementAmount;
+                    yield appointment.save();
                 }
                 else {
                     res.status(500).json({
@@ -1138,7 +1142,6 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 return;
             }
         }
-        yield appointment.save();
         res.status(200).json({
             success: true,
             message: "Visit validated successfully. Appointment completed.",
