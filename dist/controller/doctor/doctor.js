@@ -610,14 +610,14 @@ const getDoctorById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
 exports.getDoctorById = getDoctorById;
 const getAllPatientsForDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const doctorId = req.user.id; // Get doctor's user ID from auth middleware
+        const doctorUserId = req.user.id;
         // Find the doctor document using userId
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId });
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "We couldn't find your doctor profile.",
-                action: "getAllPatientsForDoctor:doctor-not-found",
+                message: "We couldn't find your doctor's user profile.",
+                action: "getAllPatientsForDoctor:doctorUser-not-found",
             });
             return;
         }
@@ -627,9 +627,13 @@ const getAllPatientsForDoctor = (req, res) => __awaiter(void 0, void 0, void 0, 
         })
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode phone gender email profilePic dob address",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode phone gender email profilePic dob address",
+            },
         })
-            .sort({ "slot.day": -1 }); // Sort by most recent appointments first
+            .sort({ "slot.day": -1 });
         if (!appointments || appointments.length === 0) {
             res.status(200).json({
                 success: true,
@@ -662,10 +666,10 @@ const getAllPatientsForDoctor = (req, res) => __awaiter(void 0, void 0, void 0, 
         const patientsArray = Array.from(uniquePatients.values());
         // Generate signed URLs for profile pictures if they exist
         const patientsWithSignedUrls = yield Promise.all(patientsArray.map((patient) => __awaiter(void 0, void 0, void 0, function* () {
-            if (patient.profilePic) {
+            if (patient.userId.profilePic) {
                 try {
-                    const signedUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(patient);
-                    return signedUrls;
+                    const signedUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(patient.userId);
+                    return Object.assign(Object.assign({}, patient), { userId: signedUrls });
                 }
                 catch (error) {
                     console.warn("Failed to generate signed URL for patient profile pic:", error);
