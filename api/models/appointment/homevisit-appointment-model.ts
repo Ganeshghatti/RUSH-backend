@@ -42,10 +42,10 @@ const homeVisitAppointmentSchema = new Schema(
       city: { type: String, required: true },
       pincode: { type: String, required: true },
       country: { type: String, required: true, default: "India" },
-      location: {
-        type: { type: String, enum: ["Point"], default: "Point" },
-        coordinates: { type: [Number], required: true },
-      },
+      // location: {
+      //   type: { type: String, enum: ["Point"], default: "Point" },
+      //   coordinates: { type: [Number], required: true },
+      // },
     },
     status: {
       type: String,
@@ -86,12 +86,12 @@ const homeVisitAppointmentSchema = new Schema(
       doctorOpsExpense: { type: Number },
       doctorEarning: { type: Number }
     },
-    doctorIp: String,
-    patientIp: String,
-    patientGeo: {
-      type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: [Number],
-    },
+    // doctorIp: String,
+    // patientIp: String,
+    // patientGeo: {
+    //   type: { type: String, enum: ["Point"], default: "Point" },
+    //   coordinates: [Number],
+    // },
     prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
     ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" },
   },
@@ -104,7 +104,7 @@ const homeVisitAppointmentSchema = new Schema(
 homeVisitAppointmentSchema.index({ doctorId: 1, "slot.day": 1 });
 homeVisitAppointmentSchema.index({ patientId: 1, "slot.day": 1 });
 homeVisitAppointmentSchema.index({ status: 1 });
-homeVisitAppointmentSchema.index({ patientGeo: "2dsphere" });
+// homeVisitAppointmentSchema.index({ patientGeo: "2dsphere" });
 
 const HomeVisitAppointment = mongoose.model(
   "HomeVisitAppointment",

@@ -13,7 +13,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateHomeStatusCron = exports.updateHomeVisitConfig = exports.getDoctorHomeVisitAppointmentByDate = exports.completeHomeVisitAppointment = exports.confirmHomeVisitAppointment = exports.acceptHomeVisitRequest = exports.bookHomeVisitAppointment = void 0;
-const mongoose_1 = __importDefault(require("mongoose"));
 const homevisit_appointment_model_1 = __importDefault(require("../../models/appointment/homevisit-appointment-model"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -21,9 +20,6 @@ const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const otp_utils_1 = require("../../utils/otp-utils");
 const validation_1 = require("../../validation/validation");
 const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
-// NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
-// Removing local AuthRequest avoids duplicated type drift.
-// Distance, doctor geolocation are not required for home visit logic anymore
 // Common population helper
 const populateAppointment = (id) => homevisit_appointment_model_1.default.findById(id)
     .populate({
@@ -41,33 +37,6 @@ const populateAppointment = (id) => homevisit_appointment_model_1.default.findBy
         path: "userId",
         select: "firstName lastName countryCode gender email profilePic",
     },
-});
-// Extract client IP (basic; respects x-forwarded-for first entry)
-const getClientIp = (req) => {
-    const fwd = req.headers["x-forwarded-for"] || "";
-    if (fwd)
-        return fwd.split(",")[0].trim();
-    return req.ip || (req.socket && req.socket.remoteAddress) || undefined;
-};
-// Helper: compute total amount frozen in other home visit appointments for a patient
-const getFrozenHomeVisitAmount = (patientId) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    const frozen = yield homevisit_appointment_model_1.default.aggregate([
-        {
-            $match: {
-                patientId: new mongoose_1.default.Types.ObjectId(patientId),
-                status: "patient_confirmed",
-                "paymentDetails.paymentStatus": "frozen",
-            },
-        },
-        {
-            $group: {
-                _id: null,
-                total: { $sum: { $ifNull: ["$pricing.totalCost", 0] } },
-            },
-        },
-    ]);
-    return ((_a = frozen === null || frozen === void 0 ? void 0 : frozen[0]) === null || _a === void 0 ? void 0 : _a.total) || 0;
 });
 /* Step 1: Patient creates home visit request with fixed cost only */
 const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -160,14 +129,6 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             });
             return;
         }
-        // Get patient IP (keep only patient IP and patient location for potential logistics)
-        const patientIp = req.ip ||
-            req.connection.remoteAddress ||
-            req.headers["x-forwarded-for"];
-        const patientGeo = {
-            type: "Point",
-            coordinates: patientAddress.location.coordinates,
-        };
         // check if patient user profile have fixed cost in available balance, if yes freeze it
         const availableBalance = patientUserDetail.getAvailableBalance();
         if (availableBalance < fixedCost) {
@@ -218,10 +179,6 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
                 city: patientAddress.city,
                 pincode: patientAddress.pincode,
                 country: patientAddress.country || "India",
-                location: {
-                    type: "Point",
-                    coordinates: patientAddress.location.coordinates,
-                },
             },
             status: "pending",
             pricing: {
@@ -235,12 +192,10 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
                 patientWalletFrozen: fixedCost,
                 paymentStatus: "pending",
             },
-            patientIp,
-            patientGeo,
         });
         yield newAppointment.save();
         // Populate the response
-        const populatedAppointment = populateAppointment(newAppointment._id);
+        const populatedAppointment = yield populateAppointment(newAppointment._id);
         res.status(201).json({
             success: true,
             message: "Home visit request created successfully.",
@@ -323,8 +278,6 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
         appointment.pricing.travelCost = travelCost;
         appointment.pricing.totalCost = totalCost;
         appointment.paymentDetails.amount = totalCost;
-        // Get doctor IP only (no geolocation persisted for doctor)
-        appointment.doctorIp = getClientIp(req);
         yield appointment.save();
         // Populate the response
         const updatedAppointment = yield populateAppointment(appointment._id);
@@ -837,7 +790,7 @@ const updateHomeVisitConfig = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        const { isActive, fixedPrice, availability, location } = parsed.data;
+        const { isActive, fixedPrice, availability } = parsed.data;
         if (!doctorId) {
             res.status(401).json({
                 success: false,
@@ -865,12 +818,6 @@ const updateHomeVisitConfig = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (availability && doctor.homeVisit) {
             // Cast because Mongoose DocumentArray typing may differ from plain parsed array
             doctor.homeVisit.availability = availability;
-        }
-        if (location && location.coordinates && doctor.homeVisit) {
-            doctor.homeVisit.location = {
-                type: "Point",
-                coordinates: location.coordinates,
-            };
         }
         if (doctor.homeVisit) {
             doctor.homeVisit.updatedAt = new Date();

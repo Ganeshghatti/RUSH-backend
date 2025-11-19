@@ -605,12 +605,12 @@ export const homeVisitAppointmentBookSchema = z.object({
     city: z.string().min(1, "City is required"),
     pincode: z.string().min(1, "Pincode is required"),
     country: z.string().default("India"),
-    location: z.object({
-      type: z.literal("Point").default("Point"),
-      coordinates: z
-        .array(z.number())
-        .length(2, "Coordinates must be [longitude, latitude]"),
-    }),
+    // location: z.object({
+    //   type: z.literal("Point").default("Point"),
+    //   coordinates: z
+    //     .array(z.number())
+    //     .length(2, "Coordinates must be [longitude, latitude]"),
+    // }),
   }),
 });
 
@@ -638,14 +638,14 @@ export const homeVisitConfigUpdateSchema = z.object({
       })
     )
     .optional(),
-  location: z
-    .object({
-      type: z.literal("Point").default("Point"),
-      coordinates: z
-        .array(z.number())
-        .length(2, "Coordinates must be [longitude, latitude]"),
-    })
-    .optional(),
+  // location: z
+  //   .object({
+  //     type: z.literal("Point").default("Point"),
+  //     coordinates: z
+  //       .array(z.number())
+  //       .length(2, "Coordinates must be [longitude, latitude]"),
+  //   })
+  //   .optional(),
 });
 
 export const homeVisitAppointmentAcceptSchema = z.object({
