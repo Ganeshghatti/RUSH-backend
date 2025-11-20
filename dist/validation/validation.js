@@ -559,12 +559,12 @@ exports.homeVisitAppointmentBookSchema = zod_1.z.object({
         city: zod_1.z.string().min(1, "City is required"),
         pincode: zod_1.z.string().min(1, "Pincode is required"),
         country: zod_1.z.string().default("India"),
-        location: zod_1.z.object({
-            type: zod_1.z.literal("Point").default("Point"),
-            coordinates: zod_1.z
-                .array(zod_1.z.number())
-                .length(2, "Coordinates must be [longitude, latitude]"),
-        }),
+        // location: z.object({
+        //   type: z.literal("Point").default("Point"),
+        //   coordinates: z
+        //     .array(z.number())
+        //     .length(2, "Coordinates must be [longitude, latitude]"),
+        // }),
     }),
 });
 exports.homeVisitConfigUpdateSchema = zod_1.z.object({
@@ -587,14 +587,14 @@ exports.homeVisitConfigUpdateSchema = zod_1.z.object({
         })),
     }))
         .optional(),
-    location: zod_1.z
-        .object({
-        type: zod_1.z.literal("Point").default("Point"),
-        coordinates: zod_1.z
-            .array(zod_1.z.number())
-            .length(2, "Coordinates must be [longitude, latitude]"),
-    })
-        .optional(),
+    // location: z
+    //   .object({
+    //     type: z.literal("Point").default("Point"),
+    //     coordinates: z
+    //       .array(z.number())
+    //       .length(2, "Coordinates must be [longitude, latitude]"),
+    //   })
+    //   .optional(),
 });
 exports.homeVisitAppointmentAcceptSchema = zod_1.z.object({
     travelCost: zod_1.z.number().min(0, "Travel cost must be non-negative"),

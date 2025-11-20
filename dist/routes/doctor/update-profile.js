@@ -4,6 +4,7 @@ const express_1 = require("express");
 const auth_middleware_1 = require("../../middleware/auth-middleware");
 const update_profile_1 = require("../../controller/doctor/update-profile");
 const doctor_1 = require("../../controller/doctor/doctor");
+const earning_1 = require("../../controller/doctor/earning");
 const router = (0, express_1.Router)();
 // Route for updating doctor profile (uses req.user.id, no file upload needed)
 router
@@ -28,4 +29,8 @@ router
 router
     .route("/doctor/active-status")
     .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), doctor_1.updateDoctorActiveStatus);
+// Route for getting doctor earnings
+router
+    .route("/doctor/earnings")
+    .get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), earning_1.getDoctorEarnings);
 exports.default = router;

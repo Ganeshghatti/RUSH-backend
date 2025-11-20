@@ -349,9 +349,10 @@ export const getPatientAppointments = async (
     const patientId = patient._id;
 
     // Find all online appointments for this patient (patientId references User)
-    let onlineAppointments = await OnlineAppointment.find({
-      patientId,
-    })
+    let onlineAppointments = await OnlineAppointment.find({ patientId })
+      .select(
+        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
+      )
       .populate({
         path: "patientId",
         select: "userId",
@@ -368,12 +369,13 @@ export const getPatientAppointments = async (
           select: "firstName lastName countryCode gender email profilePic",
         },
       })
-      .sort({ "slot.day": 1, "slot.time.start": 1 }); 
+      .sort({ "slot.day": 1, "slot.time.start": 1 });
 
     // Find all emergency appointments for this patient (patientId references Patient)
-    let emergencyAppointments = await EmergencyAppointment.find({
-      patientId,
-    })
+    let emergencyAppointments = await EmergencyAppointment.find({ patientId })
+      .select(
+        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
+      )
       .populate({
         path: "patientId",
         select: "userId",
@@ -393,9 +395,10 @@ export const getPatientAppointments = async (
       .sort({ createdAt: -1 });
 
     // Find all clinic appointments for this patient
-    let clinicAppointments = await ClinicAppointment.find({
-      patientId,
-    })
+    let clinicAppointments = await ClinicAppointment.find({ patientId })
+      .select(
+        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
+      )
       .populate({
         path: "patientId",
         select: "userId",
@@ -415,9 +418,10 @@ export const getPatientAppointments = async (
       .sort({ "slot.day": 1, "slot.time.start": 1 });
 
     // Find all home visit appointments for this patient
-    let homeVisitAppointments = await HomeVisitAppointment.find({
-      patientId,
-    })
+    let homeVisitAppointments = await HomeVisitAppointment.find({ patientId })
+      .select(
+        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
+      )
       .populate({
         path: "patientId",
         select: "userId",
@@ -869,6 +873,11 @@ export const finalPayment = async (
           appointment.paymentDetails.paymentStatus = "completed";
           appointment.paymentDetails.patientWalletDeducted = deductAmount;
           appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+
+          appointment.paymentDetails.doctorPlatformFee = platformFee;
+          appointment.paymentDetails.doctorOpsExpense = opsExpense;
+          appointment.paymentDetails.doctorEarning = incrementAmount;
+
           await appointment.save();
         } else {
           res.status(500).json({

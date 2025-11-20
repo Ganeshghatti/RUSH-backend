@@ -330,9 +330,8 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
         }
         const patientId = patient._id;
         // Find all online appointments for this patient (patientId references User)
-        let onlineAppointments = yield online_appointment_model_1.default.find({
-            patientId,
-        })
+        let onlineAppointments = yield online_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
             .populate({
             path: "patientId",
             select: "userId",
@@ -351,9 +350,8 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
         })
             .sort({ "slot.day": 1, "slot.time.start": 1 });
         // Find all emergency appointments for this patient (patientId references Patient)
-        let emergencyAppointments = yield emergency_appointment_model_1.default.find({
-            patientId,
-        })
+        let emergencyAppointments = yield emergency_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
             .populate({
             path: "patientId",
             select: "userId",
@@ -372,9 +370,8 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
         })
             .sort({ createdAt: -1 });
         // Find all clinic appointments for this patient
-        let clinicAppointments = yield clinic_appointment_model_1.default.find({
-            patientId,
-        })
+        let clinicAppointments = yield clinic_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
             .populate({
             path: "patientId",
             select: "userId",
@@ -393,9 +390,8 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
         })
             .sort({ "slot.day": 1, "slot.time.start": 1 });
         // Find all home visit appointments for this patient
-        let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
-            patientId,
-        })
+        let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
             .populate({
             path: "patientId",
             select: "userId",
@@ -792,6 +788,9 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                     appointment.paymentDetails.paymentStatus = "completed";
                     appointment.paymentDetails.patientWalletDeducted = deductAmount;
                     appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+                    appointment.paymentDetails.doctorPlatformFee = platformFee;
+                    appointment.paymentDetails.doctorOpsExpense = opsExpense;
+                    appointment.paymentDetails.doctorEarning = incrementAmount;
                     yield appointment.save();
                 }
                 else {

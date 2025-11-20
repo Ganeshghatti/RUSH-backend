@@ -11,6 +11,7 @@ import {
   getDoctorDashboard,
   updateDoctorActiveStatus,
 } from "../../controller/doctor/doctor";
+import { getDoctorEarnings } from "../../controller/doctor/earning";
 
 const router = Router();
 
@@ -65,6 +66,15 @@ router
     verifyToken as RequestHandler,
     checkRole("doctor") as RequestHandler,
     updateDoctorActiveStatus as RequestHandler
+  );
+
+// Route for getting doctor earnings
+router
+  .route("/doctor/earnings")
+  .get(
+    verifyToken as RequestHandler,
+    checkRole("doctor") as RequestHandler,
+    getDoctorEarnings as RequestHandler
   );
 
 export default router;

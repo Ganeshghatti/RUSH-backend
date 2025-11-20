@@ -14,11 +14,6 @@ import {
 } from "../../validation/validation";
 import DoctorSubscription from "../../models/doctor-subscription";
 
-// NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
-// Removing local AuthRequest avoids duplicated type drift.
-
-// Distance, doctor geolocation are not required for home visit logic anymore
-
 // Common population helper
 const populateAppointment = (id: any) =>
   HomeVisitAppointment.findById(id)
@@ -38,33 +33,6 @@ const populateAppointment = (id: any) =>
         select: "firstName lastName countryCode gender email profilePic",
       },
     });
-
-// Extract client IP (basic; respects x-forwarded-for first entry)
-const getClientIp = (req: Request): string | undefined => {
-  const fwd = (req.headers["x-forwarded-for"] as string) || "";
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.ip || (req.socket && req.socket.remoteAddress) || undefined;
-};
-
-// Helper: compute total amount frozen in other home visit appointments for a patient
-const getFrozenHomeVisitAmount = async (patientId: any): Promise<number> => {
-  const frozen = await HomeVisitAppointment.aggregate([
-    {
-      $match: {
-        patientId: new mongoose.Types.ObjectId(patientId),
-        status: "patient_confirmed",
-        "paymentDetails.paymentStatus": "frozen",
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        total: { $sum: { $ifNull: ["$pricing.totalCost", 0] } },
-      },
-    },
-  ]);
-  return frozen?.[0]?.total || 0;
-};
 
 /* Step 1: Patient creates home visit request with fixed cost only */
 export const bookHomeVisitAppointment = async (
@@ -165,16 +133,6 @@ export const bookHomeVisitAppointment = async (
       return;
     }
 
-    // Get patient IP (keep only patient IP and patient location for potential logistics)
-    const patientIp =
-      req.ip ||
-      req.connection.remoteAddress ||
-      (req.headers["x-forwarded-for"] as string);
-    const patientGeo = {
-      type: "Point" as const,
-      coordinates: patientAddress.location.coordinates,
-    };
-
     // check if patient user profile have fixed cost in available balance, if yes freeze it
     const availableBalance = (patientUserDetail as any).getAvailableBalance();
     if (availableBalance < fixedCost) {
@@ -227,10 +185,6 @@ export const bookHomeVisitAppointment = async (
         city: patientAddress.city,
         pincode: patientAddress.pincode,
         country: patientAddress.country || "India",
-        location: {
-          type: "Point",
-          coordinates: patientAddress.location.coordinates,
-        },
       },
       status: "pending",
       pricing: {
@@ -244,12 +198,10 @@ export const bookHomeVisitAppointment = async (
         patientWalletFrozen: fixedCost,
         paymentStatus: "pending",
       },
-      patientIp,
-      patientGeo,
     });
     await newAppointment.save();
     // Populate the response
-    const populatedAppointment = populateAppointment(newAppointment._id);
+    const populatedAppointment = await populateAppointment(newAppointment._id);
 
     res.status(201).json({
       success: true,
@@ -338,9 +290,6 @@ export const acceptHomeVisitRequest = async (
     appointment.pricing.travelCost = travelCost;
     appointment.pricing.totalCost = totalCost;
     appointment.paymentDetails.amount = totalCost;
-
-    // Get doctor IP only (no geolocation persisted for doctor)
-    appointment.doctorIp = getClientIp(req);
 
     await appointment.save();
 
@@ -665,11 +614,6 @@ export const completeHomeVisitAppointment = async (
       );
       if (deductSuccess && deductAmount) {
         await patientUserDetail.save();
-        appointment.paymentDetails.patientWalletDeducted = deductAmount;
-        if (appointment.paymentDetails.patientWalletFrozen) {
-          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
-        }
-        appointment.paymentDetails.paymentStatus = "completed";
 
         // increment in doctor user
         let incrementAmount =
@@ -677,6 +621,18 @@ export const completeHomeVisitAppointment = async (
         if (incrementAmount < 0) incrementAmount = 0;
         doctorUserDetail.wallet += incrementAmount;
         await doctorUserDetail.save();
+
+        appointment.paymentDetails.patientWalletDeducted = deductAmount;
+        if (appointment.paymentDetails.patientWalletFrozen) {
+          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+        }
+        appointment.paymentDetails.paymentStatus = "completed";
+
+        appointment.paymentDetails.doctorPlatformFee = platformFee;
+        appointment.paymentDetails.doctorOpsExpense = opsExpense;
+        appointment.paymentDetails.doctorEarning = incrementAmount;
+
+        await appointment.save();
       } else {
         res.status(500).json({
           success: false,
@@ -686,7 +642,6 @@ export const completeHomeVisitAppointment = async (
         return;
       }
     }
-    await appointment.save();
 
     // Populate the response
     const completedAppointment = await populateAppointment(appointment._id);
@@ -913,7 +868,7 @@ export const updateHomeVisitConfig = async (
       });
       return;
     }
-    const { isActive, fixedPrice, availability, location } = parsed.data;
+    const { isActive, fixedPrice, availability } = parsed.data;
 
     if (!doctorId) {
       res.status(401).json({
@@ -944,12 +899,6 @@ export const updateHomeVisitConfig = async (
     if (availability && doctor.homeVisit) {
       // Cast because Mongoose DocumentArray typing may differ from plain parsed array
       (doctor.homeVisit as any).availability = availability as any;
-    }
-    if (location && location.coordinates && doctor.homeVisit) {
-      doctor.homeVisit.location = {
-        type: "Point",
-        coordinates: location.coordinates,
-      };
     }
 
     if (doctor.homeVisit) {
