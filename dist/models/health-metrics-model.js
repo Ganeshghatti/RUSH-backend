@@ -83,7 +83,7 @@ exports.StressLevel = StressLevel;
 // ***** final schema
 const healthMetricsSchema = new Schema({
     // this is ID of the patient(this health metrices can be of this patient or their family)
-    patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    patientId: { type: Schema.Types.ObjectId, ref: "Patient", required: true },
     ownerType: {
         type: String,
         required: true,
@@ -163,3 +163,4 @@ const healthMetricsSchema = new Schema({
     },
 }, { timestamps: true });
 exports.HealthMetrics = mongoose_1.default.model("HealthMetrics", healthMetricsSchema);
+exports.default = exports.HealthMetrics;

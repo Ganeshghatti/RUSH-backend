@@ -36,9 +36,11 @@ export const doctorOnboardV2 = async (
       });
       return;
     }
+    console.log("Hello Ji ",data)
 
     // Parse JSON string from `data` field
     const parsedData = typeof data === "string" ? JSON.parse(data) : data;
+    console.log("Parsed data ",parsedData)
 
     // Destructure fields from parsedData
     const {
@@ -57,8 +59,6 @@ export const doctorOnboardV2 = async (
       specialization,
       taxProof,
     } = parsedData;
-
-    console.log("Parsed data:", parsedData);
 
     // Parse JSON strings if sent as strings (for nested objects)
     const parsedQualifications =
@@ -363,6 +363,7 @@ export const doctorOnboardV2 = async (
     };
 
     console.log(" main data to update", doctorUpdateData);
+    console.log("user to update ",userUpdateData)
 
     // Update both user and doctor using discriminator model
     const [updatedUser, updatedDoctor] = await Promise.all([

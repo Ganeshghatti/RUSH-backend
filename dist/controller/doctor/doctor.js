@@ -43,11 +43,12 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             });
             return;
         }
+        console.log("Hello Ji ", data);
         // Parse JSON string from `data` field
         const parsedData = typeof data === "string" ? JSON.parse(data) : data;
+        console.log("Parsed data ", parsedData);
         // Destructure fields from parsedData
         const { prefix, firstName, lastName, gender, dob, address, personalIdProof, addressProof, bankDetails, qualifications, registration, experience, specialization, taxProof, } = parsedData;
-        console.log("Parsed data:", parsedData);
         // Parse JSON strings if sent as strings (for nested objects)
         const parsedQualifications = typeof qualifications === "string"
             ? JSON.parse(qualifications)
@@ -273,6 +274,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
                 ? Object.assign(Object.assign({}, parsedTaxProof), { image: taxProofImageUrl }) : undefined,
         };
         console.log(" main data to update", doctorUpdateData);
+        console.log("user to update ", userUpdateData);
         // Update both user and doctor using discriminator model
         const [updatedUser, updatedDoctor] = yield Promise.all([
             user_model_1.default.findByIdAndUpdate(userId, { $set: userUpdateData }, {

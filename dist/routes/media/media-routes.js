@@ -20,17 +20,19 @@ const upload_media_1 = require("../../utils/aws_s3/upload-media");
 const delete_media_1 = require("../../utils/aws_s3/delete-media");
 const auth_middleware_1 = require("../../middleware/auth-middleware");
 const upload_media_2 = require("../../utils/aws_s3/upload-media");
+// @ts-ignore
+const upload_paths_js_1 = __importDefault(require("./upload-paths.js"));
 const storage = multer_1.default.memoryStorage();
 // Set up multer with basic configuration
 exports.upload = (0, multer_1.default)({
-    storage: storage
+    storage: storage,
 });
 // Route for uploading a single image
 const router = express_1.default.Router();
-router.post('/upload/v1', auth_middleware_1.verifyToken, exports.upload.single('image'), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post("/upload/v1", auth_middleware_1.verifyToken, exports.upload.single("image"), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         if (!req.file) {
-            res.status(400).json({ success: false, message: 'No file uploaded' });
+            res.status(400).json({ success: false, message: "No file uploaded" });
             return;
         }
         // Generate a unique file name with timestamp
@@ -41,66 +43,74 @@ router.post('/upload/v1', auth_middleware_1.verifyToken, exports.upload.single('
         // Create the S3 key (filepath in S3)
         // const userId = req.user.id; // From auth middleware
         const key = `uploads/${fileName}`;
-        console.log('File Name ', fileName);
-        console.log('Key ', key);
-        // console.log("this is the file buffer", req.file.buffer);
         // Upload to S3
         const fileUrl = yield (0, upload_media_1.UploadImgToS3)({
             key,
             fileBuffer: req.file.buffer,
             fileName: originalName,
         });
-        console.log("File URL ", fileUrl);
-        // console.log("this is the file url", fileUrl);
         res.status(200).json({
             success: true,
-            message: 'Image uploaded successfully',
+            message: "Image uploaded successfully",
             data: {
                 url: fileUrl,
                 key,
-                fileName
-            }
+                fileName,
+            },
         });
     }
     catch (error) {
-        console.error('Upload error:', error);
+        console.error("Upload error:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to upload image',
-            error: error.message
+            message: "Failed to upload image",
+            error: error.message,
         });
     }
 }));
 // Route for uploading multiple images with optional key deletion
-router.post('/upload', auth_middleware_1.verifyToken, exports.upload.array('images'), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post("/upload", auth_middleware_1.verifyToken, exports.upload.array("images"), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
         const files = req.files;
-        // Get s3Keys from form data and parse if it's a string
+        const { pathType, familyId } = req.body;
+        if (!pathType || !upload_paths_js_1.default[pathType]) {
+            res.status(400).json({
+                success: false,
+                message: "Invalid or missing pathType.",
+            });
+            return;
+        }
+        const userId = req.user.id;
+        const prefix = familyId
+            ? upload_paths_js_1.default[pathType](userId, familyId)
+            : upload_paths_js_1.default[pathType](userId);
+        // get s3Keys from form data and parse if it's a string
         let s3Keys = [];
         if ((_a = req === null || req === void 0 ? void 0 : req.body) === null || _a === void 0 ? void 0 : _a.s3Keys) {
-            s3Keys = typeof req.body.s3Keys === 'string' ? JSON.parse(req.body.s3Keys) : req.body.s3Keys;
+            s3Keys =
+                typeof req.body.s3Keys === "string"
+                    ? JSON.parse(req.body.s3Keys)
+                    : req.body.s3Keys;
         }
-        console.log('Files to upload ', files);
-        console.log("Keys to delete ", s3Keys);
         // generate the key from pre-signed url if user profiled s3 key with pesgned url thena convert to key
         const parsedS3Keys = yield Promise.all(s3Keys === null || s3Keys === void 0 ? void 0 : s3Keys.map((key) => __awaiter(void 0, void 0, void 0, function* () {
-            if (key.includes('https://')) {
+            if (key.includes("https://")) {
                 const parsedKey = yield (0, upload_media_2.getKeyFromSignedUrl)(key);
                 return parsedKey;
             }
             return key;
         })));
-        console.log("this is the parsed s3 keys", parsedS3Keys);
         // Upload all images using Promise.all
         const uploadPromises = files === null || files === void 0 ? void 0 : files.map((file) => {
             const timestamp = Date.now();
             const originalName = file.originalname;
             const extension = path_1.default.extname(originalName);
-            const fileName = `${path_1.default.basename(originalName, extension)}_${timestamp}${extension}`;
-            const key = `${originalName}`;
+            const cleanName = path_1.default.basename(originalName, extension);
+            const finalName = `${cleanName}_${timestamp}${extension}`;
+            const finalKey = `${prefix}${finalName}`;
             return (0, upload_media_1.UploadImgToS3)({
-                key,
+                key: finalKey,
                 fileBuffer: file.buffer,
                 fileName: originalName,
             });
@@ -113,51 +123,55 @@ router.post('/upload', auth_middleware_1.verifyToken, exports.upload.array('imag
             yield Promise.all(deletePromises);
         }
         // Prepare response data using the same logic as upload
-        const uploadedFiles = files.map((file, index) => {
-            const timestamp = Date.now();
-            const originalName = file.originalname;
-            const extension = path_1.default.extname(originalName);
-            const fileName = `${path_1.default.basename(originalName, extension)}_${timestamp}${extension}`;
-            return {
-                key: uploadedKeys[index],
-                fileName: originalName,
-                uploadedFileName: fileName
-            };
-        });
+        // const uploadedFiles = files.map((file, index) => {
+        //   const timestamp = Date.now();
+        //   const originalName = file.originalname;
+        //   const extension = path.extname(originalName);
+        //   const fileName = `${path.basename(originalName, extension)}_${timestamp}${extension}`;
+        //   return {
+        //     key: uploadedKeys[index],
+        //     fileName: originalName,
+        //     uploadedFileName: fileName
+        //   };
+        // });
+        const uploadedFiles = files.map((file, i) => ({
+            key: uploadedKeys[i],
+            originalName: file.originalname,
+        }));
         res.status(200).json({
             success: true,
-            message: 'Images uploaded successfully',
+            message: "Images uploaded successfully",
             data: uploadedFiles,
-            deletedKeys: s3Keys
+            deletedKeys: parsedS3Keys,
         });
     }
     catch (error) {
-        console.error('Upload error:', error);
+        console.error("Upload error:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to upload images',
-            error: error.message
+            message: "Failed to upload images",
+            error: error.message,
         });
     }
 }));
 // Route for deleting an image from S3
-router.delete('/delete', auth_middleware_1.verifyToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.delete("/delete", auth_middleware_1.verifyToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const authReq = req;
     try {
         const { key } = req.body;
         if (!key) {
-            res.status(400).json({ success: false, message: 'No file key provided' });
+            res.status(400).json({ success: false, message: "No file key provided" });
             return;
         }
         // Verify the user has permission to delete this file
         const userId = authReq.user.id;
         // const userId = req.user.id;
-        const keyParts = key.split('/');
+        const keyParts = key.split("/");
         // Basic security check to ensure the user can only delete their own files
         if (keyParts.length >= 2 && keyParts[1] !== userId) {
             res.status(403).json({
                 success: false,
-                message: 'You are not authorized to delete this file'
+                message: "You are not authorized to delete this file",
             });
             return;
         }
@@ -165,15 +179,15 @@ router.delete('/delete', auth_middleware_1.verifyToken, (req, res) => __awaiter(
         yield (0, delete_media_1.DeleteMediaFromS3)({ key });
         res.status(200).json({
             success: true,
-            message: 'Image deleted successfully'
+            message: "Image deleted successfully",
         });
     }
     catch (error) {
-        console.error('Delete error:', error);
+        console.error("Delete error:", error);
         res.status(500).json({
             success: false,
-            message: 'Failed to delete image',
-            error: error.message
+            message: "Failed to delete image",
+            error: error.message,
         });
     }
 }));

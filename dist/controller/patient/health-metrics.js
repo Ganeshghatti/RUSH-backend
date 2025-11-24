@@ -207,7 +207,7 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             // if family already has a linked health metrices update it
             if (family.healthMetricsId) {
                 const updated = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(family.healthMetricsId, {
-                    $set: Object.assign(Object.assign({}, payload), { ownerType, patientId: patient._id, familyMemberId }),
+                    $set: Object.assign(Object.assign({}, payload), { ownerType, patientId: patient._id, familyId: familyMemberId }),
                 }, { new: true, runValidators: true });
                 if (!updated) {
                     res.status(500).json({
@@ -226,8 +226,7 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 return;
             }
             // if not the create a new health metrices document
-            const newMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id, ownerType,
-                familyMemberId }, payload));
+            const newMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id, ownerType, familyId: familyMemberId }, payload));
             const saved = yield newMetrics.save();
             // update the healthMetricesId key in the family document
             family.healthMetricsId = saved._id;
