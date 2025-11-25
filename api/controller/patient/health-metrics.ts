@@ -216,7 +216,7 @@ export const addHealthMetrics = async (
               ...payload,
               ownerType,
               patientId: patient._id,
-              familyMemberId,
+              familyId: familyMemberId,
             },
           },
           { new: true, runValidators: true }
@@ -243,7 +243,7 @@ export const addHealthMetrics = async (
       const newMetrics = new HealthMetrics({
         patientId: patient._id,
         ownerType,
-        familyMemberId,
+        familyId: familyMemberId,
         ...payload,
       });
       const saved = await newMetrics.save();

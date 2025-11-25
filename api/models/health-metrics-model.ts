@@ -75,7 +75,7 @@ const StressLevel = {
 const healthMetricsSchema = new Schema(
   {
     // this is ID of the patient(this health metrices can be of this patient or their family)
-    patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    patientId: { type: Schema.Types.ObjectId, ref: "Patient", required: true },
     ownerType: {
       type: String,
       required: true,
@@ -171,3 +171,5 @@ export const HealthMetrics = mongoose.model(
   "HealthMetrics",
   healthMetricsSchema
 );
+
+export default HealthMetrics;
