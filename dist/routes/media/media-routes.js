@@ -20,8 +20,7 @@ const upload_media_1 = require("../../utils/aws_s3/upload-media");
 const delete_media_1 = require("../../utils/aws_s3/delete-media");
 const auth_middleware_1 = require("../../middleware/auth-middleware");
 const upload_media_2 = require("../../utils/aws_s3/upload-media");
-// @ts-ignore
-const upload_paths_js_1 = __importDefault(require("./upload-paths.js"));
+const upload_paths_1 = __importDefault(require("./upload-paths"));
 const storage = multer_1.default.memoryStorage();
 // Set up multer with basic configuration
 exports.upload = (0, multer_1.default)({
@@ -74,7 +73,7 @@ router.post("/upload", auth_middleware_1.verifyToken, exports.upload.array("imag
     try {
         const files = req.files;
         const { pathType, familyId } = req.body;
-        if (!pathType || !upload_paths_js_1.default[pathType]) {
+        if (!pathType || !(pathType in upload_paths_1.default)) {
             res.status(400).json({
                 success: false,
                 message: "Invalid or missing pathType.",
@@ -82,9 +81,24 @@ router.post("/upload", auth_middleware_1.verifyToken, exports.upload.array("imag
             return;
         }
         const userId = req.user.id;
-        const prefix = familyId
-            ? upload_paths_js_1.default[pathType](userId, familyId)
-            : upload_paths_js_1.default[pathType](userId);
+        const typedPathType = pathType;
+        // Path types that require familyId
+        const familyPathTypes = [
+            "familyIdProof",
+            "familyInsurance",
+            "healthMetricsFamily",
+        ];
+        const requiresFamilyId = familyPathTypes.includes(typedPathType);
+        if (requiresFamilyId && !familyId) {
+            res.status(400).json({
+                success: false,
+                message: "familyId is required for this pathType.",
+            });
+            return;
+        }
+        const prefix = requiresFamilyId && familyId
+            ? upload_paths_1.default[typedPathType](userId, familyId)
+            : upload_paths_1.default[typedPathType](userId);
         // get s3Keys from form data and parse if it's a string
         let s3Keys = [];
         if ((_a = req === null || req === void 0 ? void 0 : req.body) === null || _a === void 0 ? void 0 : _a.s3Keys) {
