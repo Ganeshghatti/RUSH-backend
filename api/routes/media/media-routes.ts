@@ -6,8 +6,7 @@ import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
 import { verifyToken } from "../../middleware/auth-middleware";
 import { Request, Response } from "express";
 import { getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
-// @ts-ignore
-import uploadPathMap from "./upload-paths.js";
+import uploadPathMap, { type UploadPathType } from "./upload-paths";
 
 interface AuthRequest extends Request {
   user?: any; // Made optional to align with Express.Request
@@ -89,7 +88,7 @@ router.post(
       const files = req.files as Express.Multer.File[];
 
       const { pathType, familyId } = req.body;
-      if (!pathType || !uploadPathMap[pathType]) {
+      if (!pathType || !(pathType in uploadPathMap)) {
         res.status(400).json({
           success: false,
           message: "Invalid or missing pathType.",
@@ -98,9 +97,28 @@ router.post(
       }
 
       const userId = req.user.id;
-      const prefix = familyId
-        ? uploadPathMap[pathType](userId, familyId)
-        : uploadPathMap[pathType](userId);
+      const typedPathType = pathType as UploadPathType;
+      
+      // Path types that require familyId
+      const familyPathTypes: UploadPathType[] = [
+        "familyIdProof",
+        "familyInsurance",
+        "healthMetricsFamily",
+      ];
+      
+      const requiresFamilyId = familyPathTypes.includes(typedPathType);
+      
+      if (requiresFamilyId && !familyId) {
+        res.status(400).json({
+          success: false,
+          message: "familyId is required for this pathType.",
+        });
+        return;
+      }
+
+      const prefix = requiresFamilyId && familyId
+        ? (uploadPathMap[typedPathType] as (userId: string, familyId: string) => string)(userId, familyId)
+        : (uploadPathMap[typedPathType] as (userId: string) => string)(userId);
 
       // get s3Keys from form data and parse if it's a string
       let s3Keys: string[] = [];
