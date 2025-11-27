@@ -27,6 +27,7 @@ const emergency_appointment_model_1 = __importDefault(require("../../models/appo
 const crypto_1 = __importDefault(require("crypto"));
 const razorpay_1 = require("../../config/razorpay");
 const rating_model_1 = require("../../models/appointment/rating-model");
+const upload_paths_1 = __importDefault(require("../../routes/media/upload-paths"));
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map();
 const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -109,12 +110,19 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             return;
         }
         // Helper function to generate unique file name and S3 key
-        const generateS3Key = (file) => {
+        const generateS3Key = (file, pathType) => {
+            console.log("path type ", pathType);
+            console.log("locc ", upload_paths_1.default[pathType]);
+            const prefix = upload_paths_1.default[pathType](userId);
+            console.log("PREFIXXX ", prefix);
             const timestamp = Date.now();
             const originalName = file.originalname;
             const extension = path_1.default.extname(originalName);
+            const cleanName = path_1.default.basename(originalName, extension);
+            const finalName = `${cleanName}_${timestamp}${extension}`;
             const fileName = `${path_1.default.basename(originalName, extension)}_${timestamp}${extension}`;
-            const key = `uploads/${fileName}`;
+            const key = `${prefix}${finalName}`;
+            console.log("KEY ", key);
             return { key, fileName };
         };
         // Upload degreeImages and map to qualifications
@@ -122,7 +130,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         let degreeImageUrls = [];
         if (degreeImages.length > 0) {
             const degreeImagePromises = degreeImages.map((file) => {
-                const { key, fileName } = generateS3Key(file);
+                const { key, fileName } = generateS3Key(file, "doctorQualification");
                 return (0, upload_media_1.UploadImgToS3)({
                     key,
                     fileBuffer: file.buffer,
@@ -144,7 +152,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         let licenseImageUrls = [];
         if (licenseImages.length > 0) {
             const licenseImagePromises = licenseImages.map((file) => {
-                const { key, fileName } = generateS3Key(file);
+                const { key, fileName } = generateS3Key(file, "doctorLicense");
                 return (0, upload_media_1.UploadImgToS3)({
                     key,
                     fileBuffer: file.buffer,
@@ -165,7 +173,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         const singleImageUploads = [];
         const singleImageKeys = [];
         if ((_a = files["signatureImage"]) === null || _a === void 0 ? void 0 : _a[0]) {
-            const { key, fileName } = generateS3Key(files["signatureImage"][0]);
+            const { key, fileName } = generateS3Key(files["signatureImage"][0], "doctorSignature");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["signatureImage"][0].buffer,
@@ -174,7 +182,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("signatureImage");
         }
         if ((_b = files["upiqrImage"]) === null || _b === void 0 ? void 0 : _b[0]) {
-            const { key, fileName } = generateS3Key(files["upiqrImage"][0]);
+            const { key, fileName } = generateS3Key(files["upiqrImage"][0], "bankingQR");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["upiqrImage"][0].buffer,
@@ -183,7 +191,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("upiqrImage");
         }
         if ((_c = files["profilePic"]) === null || _c === void 0 ? void 0 : _c[0]) {
-            const { key, fileName } = generateS3Key(files["profilePic"][0]);
+            const { key, fileName } = generateS3Key(files["profilePic"][0], "userProfilePic");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["profilePic"][0].buffer,
@@ -192,7 +200,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("profilePic");
         }
         if ((_d = files["personalIdProofImage"]) === null || _d === void 0 ? void 0 : _d[0]) {
-            const { key, fileName } = generateS3Key(files["personalIdProofImage"][0]);
+            const { key, fileName } = generateS3Key(files["personalIdProofImage"][0], "personalIdProof");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["personalIdProofImage"][0].buffer,
@@ -201,7 +209,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("personalIdProofImage");
         }
         if ((_e = files["addressProofImage"]) === null || _e === void 0 ? void 0 : _e[0]) {
-            const { key, fileName } = generateS3Key(files["addressProofImage"][0]);
+            const { key, fileName } = generateS3Key(files["addressProofImage"][0], "addressProof");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["addressProofImage"][0].buffer,
@@ -210,7 +218,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("addressProofImage");
         }
         if ((_f = files["taxImage"]) === null || _f === void 0 ? void 0 : _f[0]) {
-            const { key, fileName } = generateS3Key(files["taxImage"][0]);
+            const { key, fileName } = generateS3Key(files["taxImage"][0], "taxProof");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["taxImage"][0].buffer,

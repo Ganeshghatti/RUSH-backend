@@ -98,7 +98,7 @@ router.post(
 
       const userId = req.user.id;
       const typedPathType = pathType as UploadPathType;
-      
+
       // Path types that require familyId
       const familyPathTypes: UploadPathType[] = [
         "familyIdProof",
