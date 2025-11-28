@@ -89,25 +89,76 @@ router.post(
 
       const { pathType, familyId } = req.body;
       if (!pathType || !(pathType in uploadPathMap)) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid or missing pathType.",
+        // res.status(400).json({
+        //   success: false,
+        //   message: "Invalid or missing pathType.",
+        // });
+        // return;
+
+        // get s3Keys from form data and parse if it's a string
+        let s3Keys: string[] = [];
+        if (req?.body?.s3Keys) {
+          s3Keys =
+            typeof req.body.s3Keys === "string"
+              ? JSON.parse(req.body.s3Keys)
+              : req.body.s3Keys;
+        }
+        // generate the key from pre-signed url if user profiled s3 key with pesgned url thena convert to key
+        const parsedS3Keys = await Promise.all(
+          s3Keys?.map(async (key) => {
+            if (key.includes("https://")) {
+              const parsedKey = await getKeyFromSignedUrl(key);
+              return parsedKey;
+            }
+            return key;
+          })
+        );
+        // Upload all images using Promise.all
+        const uploadPromises = files?.map((file) => {
+          const timestamp = Date.now();
+          const originalName = file.originalname;
+          const finalKey = `${originalName}`;
+
+          return UploadImgToS3({
+            key: finalKey,
+            fileBuffer: file.buffer,
+            fileName: originalName,
+          });
         });
-        return;
+        // Execute all uploads
+        const uploadedKeys = await Promise.all(uploadPromises);
+        // Delete old images if s3Keys are provided
+        if (parsedS3Keys && parsedS3Keys.length > 0) {
+          const deletePromises = parsedS3Keys.map((key: string | null) =>
+            key ? DeleteMediaFromS3({ key }) : null
+          );
+          await Promise.all(deletePromises);
+        }
+        const uploadedFiles = files.map((file, i) => ({
+          key: uploadedKeys[i],
+          originalName: file.originalname,
+        }));
+
+        res.status(200).json({
+          success: true,
+          message: "Images upload success",
+          data: uploadedFiles,
+          deletedKeys: parsedS3Keys,
+        });
       }
 
       const userId = req.user.id;
       const typedPathType = pathType as UploadPathType;
-
+      console.log("path type ", typedPathType);
       // Path types that require familyId
       const familyPathTypes: UploadPathType[] = [
         "familyIdProof",
         "familyInsurance",
         "healthMetricsFamily",
       ];
-      
+
       const requiresFamilyId = familyPathTypes.includes(typedPathType);
-      
+
       if (requiresFamilyId && !familyId) {
         res.status(400).json({
           success: false,
@@ -116,9 +167,17 @@ router.post(
         return;
       }
 
-      const prefix = requiresFamilyId && familyId
-        ? (uploadPathMap[typedPathType] as (userId: string, familyId: string) => string)(userId, familyId)
-        : (uploadPathMap[typedPathType] as (userId: string) => string)(userId);
+      const prefix =
+        requiresFamilyId && familyId
+          ? (
+              uploadPathMap[typedPathType] as (
+                userId: string,
+                familyId: string
+              ) => string
+            )(userId, familyId)
+          : (uploadPathMap[typedPathType] as (userId: string) => string)(
+              userId
+            );
 
       // get s3Keys from form data and parse if it's a string
       let s3Keys: string[] = [];
@@ -147,7 +206,7 @@ router.post(
         const cleanName = path.basename(originalName, extension);
         const finalName = `${cleanName}_${timestamp}${extension}`;
         const finalKey = `${prefix}${finalName}`;
-        
+
         return UploadImgToS3({
           key: finalKey,
           fileBuffer: file.buffer,
