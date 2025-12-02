@@ -13,6 +13,7 @@ import {
   homeVisitConfigUpdateSchema,
 } from "../../validation/validation";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { sendPushNotification } from "../../utils/push/send-notification";
 
 // NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
 // Removing local AuthRequest avoids duplicated type drift.
@@ -248,6 +249,27 @@ export const bookHomeVisitAppointment = async (
       patientGeo,
     });
     await newAppointment.save();
+
+    const findDoctor = await Doctor.findById(doctorId);
+    if (findDoctor) {
+      const doctorUser = await User.findById(findDoctor.userId);
+
+      if (doctorUser?.fcmToken) {
+        await sendPushNotification({
+          token: doctorUser.fcmToken,
+          title: "New Home Visit Appointment",
+          body: `${patientUserDetail.firstName} ${patientUserDetail.lastName} has booked an home visit appointment for ${new Date(slot.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(slot.time.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} to ${new Date(slot.time.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })})}`,
+          data: {
+            appointmentId: newAppointment._id.toString(),
+            type: "home-visit",
+            patientName: patientUserDetail.firstName + " " + patientUserDetail.lastName,
+            appointmentDate: slot.day,
+            appointmentTime: slot.time.start + "to" + slot.time.end
+          }
+        });
+      }
+    }
+
     // Populate the response
     const populatedAppointment = populateAppointment(newAppointment._id);
 
@@ -343,6 +365,36 @@ export const acceptHomeVisitRequest = async (
     appointment.doctorIp = getClientIp(req);
 
     await appointment.save();
+
+    const patient = await Patient.findById(appointment.patientId);
+    if (patient) {
+      const patientUser = await User.findById(patient.userId);
+
+      if (patientUser?.fcmToken) {
+        try {
+          const doctorUser = await User.findById(doctorUserId);
+          const doctorName = doctorUser ? `Dr. ${doctorUser.firstName} ${doctorUser.lastName}` : 'Doctor';
+
+          await sendPushNotification({
+            token: patientUser.fcmToken,
+            title: "Home Visit Request Accepted",
+            body: `${doctorName} accepted your home visit request. Travel cost: Rs.${travelCost}. Total: Rs.${totalCost}`,
+            data: {
+              appointmentId: appointment._id.toString(),
+              type: "home_visit_accepted",
+              doctorName: doctorName,
+              fixedCost: appointment.pricing.fixedCost.toString(),
+              travelCost: travelCost.toString(),
+              totalCost: totalCost.toString()
+            }
+          });
+          console.log(`Home visit acceptance notification sent to patient ${patientUser._id}`);
+        } catch (error) {
+          console.error(`Failed to send notification to patient:`, error);
+        }
+      }
+    }
+
 
     // Populate the response
     const updatedAppointment = await populateAppointment(appointment._id);

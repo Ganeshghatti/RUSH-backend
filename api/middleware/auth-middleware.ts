@@ -18,8 +18,16 @@ export const verifyToken = async (
   next: NextFunction
 ) => {
   try {
-    // Get token from cookies
-    const token = req.cookies.token;
+    // Get token from cookies (web) or Authorization header (mobile)
+    let token = req.cookies.token;
+
+    // If no cookie token, check Authorization header
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7); // Remove 'Bearer ' prefix
+      }
+    }
 
     if (!token) {
       res.status(401).json({
@@ -120,7 +128,7 @@ export const checkRole = (role: string) => {
 
 export const authOptional = (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
-  if (!token) return next(); 
+  if (!token) return next();
   try {
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) {

@@ -28,6 +28,8 @@ import { updateEmergencyStatusCron } from "./controller/appointment/emergency-ap
 import { updateClinicStatusCron } from "./controller/appointment/clinic-appointment";
 import { updateHomeStatusCron } from "./controller/appointment/homevisit-appointment";
 
+import pushRoutes from "./routes/notifications/push-routes";
+
 // Load environment variables
 dotenv.config();
 
@@ -100,6 +102,7 @@ app.use("/doctor", doctorSubscriptionRoutes);
 app.use("/patient", patientSubscriptionRoutes);
 app.use("/api", doctorProfileRoutes);
 app.use("/user", walletRoutes);
+app.use("/push", pushRoutes);
 
 app.use(symptomRoutes);
 

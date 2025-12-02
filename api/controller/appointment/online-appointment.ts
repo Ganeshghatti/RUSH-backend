@@ -9,6 +9,7 @@ import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { sendPushNotification } from "../../utils/push/send-notification";
 
 /* step 1 - Book appointment by patient + Amount freeze*/
 export const bookOnlineAppointment = async (
@@ -161,6 +162,28 @@ export const bookOnlineAppointment = async (
       },
     });
     await newAppointment.save();
+
+    //push notif
+    const findDoctor = await Doctor.findById(doctorId);
+    if (findDoctor) {
+      const doctorUser = await User.findById(findDoctor.userId);
+
+      if (doctorUser?.fcmToken) {
+        await sendPushNotification({
+          token: doctorUser.fcmToken,
+          title: "New Online Appointment",
+          body: `${patientUserDetail.firstName} ${patientUserDetail.lastName} has booked an online appointment for ${new Date(slot.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(slot.time.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} to ${new Date(slot.time.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+          data: {
+            appointmentId: newAppointment._id.toString(),
+            type: "online",
+            patientName: patientUserDetail.firstName + " " + patientUserDetail.lastName,
+            appointmentDate: slot.date,
+            appointmentTime: slot.time.start + "to" + slot.time.end
+          }
+        });
+      }
+    }
+
 
     // Populate the response with detailed patient and doctor information
     const populatedAppointment = await OnlineAppointment.findById(
@@ -368,7 +391,7 @@ export const getPatientAppointments = async (
           select: "firstName lastName countryCode gender email profilePic",
         },
       })
-      .sort({ "slot.day": 1, "slot.time.start": 1 }); 
+      .sort({ "slot.day": 1, "slot.time.start": 1 });
 
     // Find all emergency appointments for this patient (patientId references Patient)
     let emergencyAppointments = await EmergencyAppointment.find({
@@ -548,6 +571,37 @@ export const updateAppointmentStatus = async (
     // Update status of the appointment
     appointment.status = status;
     await appointment.save();
+
+    // Send push notification to patient when appointment is accepted
+    if (status === "accepted") {
+      const patient = await Patient.findById(appointment.patientId);
+      if (patient) {
+        const patientUser = await User.findById(patient.userId);
+
+        if (patientUser?.fcmToken) {
+          try {
+            const doctorUser = await User.findById(doctorUserId);
+            const doctorName = doctorUser ? `Dr. ${doctorUser.firstName} ${doctorUser.lastName}` : 'Doctor';
+
+            await sendPushNotification({
+              token: patientUser.fcmToken,
+              title: "Online Appointment Confirmed",
+              body: `${doctorName} accepted your online appointment. You can join the video call now.`,
+              data: {
+                appointmentId: appointment._id.toString(),
+                type: "online_accepted",
+                doctorName: doctorName,
+                status: "accepted",
+                roomName: appointment.roomName || ""
+              }
+            });
+            console.log(`Online appointment confirmation notification sent to patient ${patientUser._id}`);
+          } catch (error) {
+            console.error(`Failed to send notification to patient:`, error);
+          }
+        }
+      }
+    }
 
     // Populate the response with detailed patient and doctor information
     const updatedAppointment = await OnlineAppointment.findById(appointment._id)
@@ -832,13 +886,13 @@ export const finalPayment = async (
       }
 
       // Determine slot key for fee extraction
-      let slotKey = `min${appointment?.slot?.duration || 15}` as
+      let slotKey = `min${appointment?.slot?.duration || 15} ` as
         | "min15"
         | "min30"
         | "min60";
       let platformFee =
         subscription.platformFeeOnline &&
-        subscription.platformFeeOnline[slotKey]
+          subscription.platformFeeOnline[slotKey]
           ? subscription.platformFeeOnline[slotKey]!.figure
           : 0;
       let opsExpense =

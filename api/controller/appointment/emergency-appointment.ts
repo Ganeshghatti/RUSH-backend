@@ -8,6 +8,7 @@ import twilio from "twilio";
 import { jwt } from "twilio";
 import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { sendPushNotification } from "../../utils/push/send-notification";
 
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -159,6 +160,44 @@ export const createEmergencyAppointment = async (
       },
     });
     await newEmergencyAppointment.save();
+
+    const doctors = await Doctor.find().select("userId");
+    console.log(`🔍 Found ${doctors.length} doctors in database`);
+
+    // Send push notifications to all doctors with FCM tokens
+    let notificationsSent = 0;
+    let doctorsWithTokens = 0;
+    let doctorsWithoutTokens = 0;
+
+    for (const d of doctors) {
+      const user = await User.findById(d.userId);
+      if (user?.fcmToken) {
+        doctorsWithTokens++;
+        try {
+          await sendPushNotification({
+            token: user.fcmToken,
+            title: "🚨 New Emergency Request",
+            body: `${name} needs urgent help${location ? ` at ${location}` : ''}`,
+            data: {
+              appointmentId: newEmergencyAppointment._id.toString(),
+              type: "emergency",
+              patientName: name,
+              location: location || '',
+              contactNumber: contactNumber
+            }
+          });
+          notificationsSent++;
+          console.log(`Emergency notification sent to doctor ${user._id}`);
+        } catch (error) {
+          console.error(`Failed to send notification to doctor ${user._id}:`, error);
+        }
+      } else {
+        doctorsWithoutTokens++;
+        console.log(`Doctor ${d.userId} has no FCM token`);
+      }
+    }
+    console.log(`Summary: ${doctorsWithTokens} doctors with tokens, ${doctorsWithoutTokens} without tokens`);
+    console.log(`Emergency notifications sent to ${notificationsSent} doctors`);
 
     // Populate the response with patient information
     const populatedAppointment = await EmergencyAppointment.findById(

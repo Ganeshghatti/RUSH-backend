@@ -27,7 +27,7 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
 
     // Remove '+' from phone number
     const formattedPhoneNumber = phoneNumber.replace('+91', '');
-    console.log("formattedPhoneNumber",formattedPhoneNumber);
+    console.log("formattedPhoneNumber", formattedPhoneNumber);
 
     const message = encodeURIComponent(
       `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`
@@ -117,7 +117,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
-    
+
     // Check if an OTP already exists for the phone number
     const existingOTP = await OTP.findOne({ phone });
 
@@ -366,6 +366,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       success: true,
       message: "Registration successful.",
       action: "verifyOtp:registration-complete",
+      token: token, // Return token for mobile apps
       data: {
         user: {
           id: user._id,
@@ -407,7 +408,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         const token = jwt.sign(
-          { id: user._id, email: user.email, role }, 
+          { id: user._id, email: user.email, role },
           JWT_SECRET,
           { expiresIn: "24h" }
         );
@@ -424,6 +425,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           success: true,
           message: "Login successful.",
           action: "login:admin-success",
+          token: token, // Return token for mobile apps
         });
         return;
       } else {
@@ -538,6 +540,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       success: true,
       message: "Login successful.",
       action: "login:success",
+      token: token, // Return token for mobile apps
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -583,14 +586,14 @@ export const findCurrentUser = async (
       select: "-password"
     });
     if (user.roleRefs?.patient) populatePaths.push({
-      path: "roleRefs.patient", 
+      path: "roleRefs.patient",
       select: "-password"
     });
 
     if (populatePaths.length > 0) {
       user = await user.populate(populatePaths);
     }
-    
+
     const userWithUrls = await generateSignedUrlsForUser(user);
 
     res.status(200).json({

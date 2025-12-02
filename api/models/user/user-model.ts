@@ -121,6 +121,15 @@ const userSchema = new Schema({
     },
   ],
   isDocumentVerified: { type: Boolean, default: false },
+  fcmToken: {
+    type: String,
+    default: null,
+  },
+
+  deviceType: {
+    type: String,
+    default: null,
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

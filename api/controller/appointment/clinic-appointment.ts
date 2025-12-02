@@ -16,6 +16,7 @@ import {
   isMaxAttemptsReached,
 } from "../../utils/otp-utils";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { sendPushNotification } from "../../utils/push/send-notification";
 
 // Interface for authenticated request
 interface AuthRequest extends Request {
@@ -38,14 +39,14 @@ const populateClinicDetails = (appointments: any[], doctor: any) => {
       ...appointment.toObject(),
       clinicDetails: clinic
         ? {
-            clinicName: clinic.clinicName,
-            address: clinic.address,
-            consultationFee: clinic.consultationFee,
-            frontDeskNumber: clinic.frontDeskNumber,
-            operationalDays: clinic.operationalDays,
-            timeSlots: clinic.timeSlots,
-            isActive: clinic.isActive,
-          }
+          clinicName: clinic.clinicName,
+          address: clinic.address,
+          consultationFee: clinic.consultationFee,
+          frontDeskNumber: clinic.frontDeskNumber,
+          operationalDays: clinic.operationalDays,
+          timeSlots: clinic.timeSlots,
+          isActive: clinic.isActive,
+        }
         : null,
     };
   });
@@ -638,6 +639,29 @@ export const bookClinicAppointment = async (
 
     await appointment.save();
 
+    //push
+
+    const findDoctor = await Doctor.findById(doctorId);
+    if (findDoctor) {
+      const doctorUser = await User.findById(findDoctor.userId);
+
+      if (doctorUser?.fcmToken) {
+        await sendPushNotification({
+          token: doctorUser.fcmToken,
+          title: "New Clinic Appointment",
+          body: `${patientUserDetail.firstName} ${patientUserDetail.lastName} has booked an clinic appointment for ${new Date(slot.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(slot.time.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} to ${new Date(slot.time.end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })})}`,
+          data: {
+            appointmentId: appointment._id.toString(),
+            type: "clinic",
+            patientName: patientUserDetail.firstName + " " + patientUserDetail.lastName,
+            clinicName: clinic.clinicName,
+            appointmentDate: slot.day,
+            appointmentTime: slot.time.start + "to" + slot.time.end
+          }
+        });
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Clinic appointment booked successfully.",
@@ -722,6 +746,35 @@ export const acceptClinicAppointment = async (
       isUsed: false,
     };
     await appointment.save();
+
+    // Send push notification to patient
+    const patient = await Patient.findById(appointment.patientId);
+    if (patient) {
+      const patientUser = await User.findById(patient.userId);
+
+      if (patientUser?.fcmToken) {
+        try {
+          const doctorUser = await User.findById(doctorUserId);
+          const doctorName = doctorUser ? `Dr. ${doctorUser.firstName} ${doctorUser.lastName}` : 'Doctor';
+
+          await sendPushNotification({
+            token: patientUser.fcmToken,
+            title: "Clinic Appointment Confirmed",
+            body: `${doctorName} confirmed your clinic appointment. Please check your app for the OTP.`,
+            data: {
+              appointmentId: appointment._id.toString(),
+              type: "clinic_accepted",
+              doctorName: doctorName,
+              status: "accepted",
+              otpGenerated: "true"
+            }
+          });
+          console.log(`Clinic appointment confirmation notification sent to patient ${patientUser._id}`);
+        } catch (error) {
+          console.error(`Failed to send notification to patient:`, error);
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -894,14 +947,14 @@ export const getPatientClinicAppointments = async (
         ...appointment.toObject(),
         clinicDetails: clinic
           ? {
-              clinicName: clinic.clinicName,
-              address: clinic.address,
-              consultationFee: clinic.consultationFee,
-              frontDeskNumber: clinic.frontDeskNumber,
-              operationalDays: clinic.operationalDays,
-              timeSlots: clinic.timeSlots,
-              isActive: clinic.isActive,
-            }
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
           : null,
       };
     });
@@ -966,14 +1019,14 @@ export const getDoctorClinicAppointments = async (
         ...appointment.toObject(),
         clinicDetails: clinic
           ? {
-              clinicName: clinic.clinicName,
-              address: clinic.address,
-              consultationFee: clinic.consultationFee,
-              frontDeskNumber: clinic.frontDeskNumber,
-              operationalDays: clinic.operationalDays,
-              timeSlots: clinic.timeSlots,
-              isActive: clinic.isActive,
-            }
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
           : null,
       };
     });
