@@ -15,6 +15,9 @@ import crypto from "crypto";
 import Razorpay from "razorpay";
 import { razorpayConfig } from "../../config/razorpay";
 import { RatingModel } from "../../models/appointment/rating-model";
+import uploadPathMap, {
+  type UploadPathType,
+} from "../../routes/media/upload-paths";
 
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map<string, NodeJS.Timeout>();
@@ -36,11 +39,11 @@ export const doctorOnboardV2 = async (
       });
       return;
     }
-    console.log("Hello Ji ",data)
+    console.log("Hello Ji ", data);
 
     // Parse JSON string from `data` field
     const parsedData = typeof data === "string" ? JSON.parse(data) : data;
-    console.log("Parsed data ",parsedData)
+    console.log("Parsed data ", parsedData);
 
     // Destructure fields from parsedData
     const {
@@ -138,16 +141,26 @@ export const doctorOnboardV2 = async (
 
     // Helper function to generate unique file name and S3 key
     const generateS3Key = (
-      file: Express.Multer.File
+      file: Express.Multer.File,
+      pathType: UploadPathType
     ): { key: string; fileName: string } => {
+      console.log("path type ", pathType);
+      console.log("locc ", uploadPathMap[pathType]);
+      const prefix = (uploadPathMap[pathType] as (userId: string) => string)(
+        userId
+      );
+      console.log("PREFIXXX ", prefix);
       const timestamp = Date.now();
       const originalName = file.originalname;
       const extension = path.extname(originalName);
+      const cleanName = path.basename(originalName, extension);
+      const finalName = `${cleanName}_${timestamp}${extension}`;
       const fileName = `${path.basename(
         originalName,
         extension
       )}_${timestamp}${extension}`;
-      const key = `uploads/${fileName}`;
+      const key = `${prefix}${finalName}`;
+      console.log("KEY ", key);
       return { key, fileName };
     };
 
@@ -156,7 +169,7 @@ export const doctorOnboardV2 = async (
     let degreeImageUrls: string[] = [];
     if (degreeImages.length > 0) {
       const degreeImagePromises = degreeImages.map((file) => {
-        const { key, fileName } = generateS3Key(file);
+        const { key, fileName } = generateS3Key(file, "doctorQualification");
         return UploadImgToS3({
           key,
           fileBuffer: file.buffer,
@@ -180,7 +193,7 @@ export const doctorOnboardV2 = async (
     let licenseImageUrls: string[] = [];
     if (licenseImages.length > 0) {
       const licenseImagePromises = licenseImages.map((file) => {
-        const { key, fileName } = generateS3Key(file);
+        const { key, fileName } = generateS3Key(file, "doctorLicense");
         return UploadImgToS3({
           key,
           fileBuffer: file.buffer,
@@ -204,7 +217,7 @@ export const doctorOnboardV2 = async (
     const singleImageKeys = [];
 
     if (files["signatureImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["signatureImage"][0]);
+      const { key, fileName } = generateS3Key(files["signatureImage"][0],"doctorSignature");
       singleImageUploads.push(
         UploadImgToS3({
           key,
@@ -216,7 +229,7 @@ export const doctorOnboardV2 = async (
     }
 
     if (files["upiqrImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["upiqrImage"][0]);
+      const { key, fileName } = generateS3Key(files["upiqrImage"][0], "bankingQR");
       singleImageUploads.push(
         UploadImgToS3({
           key,
@@ -228,7 +241,7 @@ export const doctorOnboardV2 = async (
     }
 
     if (files["profilePic"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["profilePic"][0]);
+      const { key, fileName } = generateS3Key(files["profilePic"][0], "userProfilePic");
       singleImageUploads.push(
         UploadImgToS3({
           key,
@@ -240,7 +253,7 @@ export const doctorOnboardV2 = async (
     }
 
     if (files["personalIdProofImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["personalIdProofImage"][0]);
+      const { key, fileName } = generateS3Key(files["personalIdProofImage"][0], "personalIdProof");
       singleImageUploads.push(
         UploadImgToS3({
           key,
@@ -252,7 +265,7 @@ export const doctorOnboardV2 = async (
     }
 
     if (files["addressProofImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["addressProofImage"][0]);
+      const { key, fileName } = generateS3Key(files["addressProofImage"][0], "addressProof");
       singleImageUploads.push(
         UploadImgToS3({
           key,
@@ -264,7 +277,7 @@ export const doctorOnboardV2 = async (
     }
 
     if (files["taxImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["taxImage"][0]);
+      const { key, fileName } = generateS3Key(files["taxImage"][0],"taxProof");
       singleImageUploads.push(
         UploadImgToS3({
           key,
@@ -363,7 +376,7 @@ export const doctorOnboardV2 = async (
     };
 
     console.log(" main data to update", doctorUpdateData);
-    console.log("user to update ",userUpdateData)
+    console.log("user to update ", userUpdateData);
 
     // Update both user and doctor using discriminator model
     const [updatedUser, updatedDoctor] = await Promise.all([

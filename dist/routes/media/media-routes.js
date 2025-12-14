@@ -69,19 +69,64 @@ router.post("/upload/v1", auth_middleware_1.verifyToken, exports.upload.single("
 }));
 // Route for uploading multiple images with optional key deletion
 router.post("/upload", auth_middleware_1.verifyToken, exports.upload.array("images"), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+    var _a, _b;
     try {
         const files = req.files;
         const { pathType, familyId } = req.body;
         if (!pathType || !(pathType in upload_paths_1.default)) {
-            res.status(400).json({
-                success: false,
-                message: "Invalid or missing pathType.",
+            // res.status(400).json({
+            //   success: false,
+            //   message: "Invalid or missing pathType.",
+            // });
+            // return;
+            // get s3Keys from form data and parse if it's a string
+            let s3Keys = [];
+            if ((_a = req === null || req === void 0 ? void 0 : req.body) === null || _a === void 0 ? void 0 : _a.s3Keys) {
+                s3Keys =
+                    typeof req.body.s3Keys === "string"
+                        ? JSON.parse(req.body.s3Keys)
+                        : req.body.s3Keys;
+            }
+            // generate the key from pre-signed url if user profiled s3 key with pesgned url thena convert to key
+            const parsedS3Keys = yield Promise.all(s3Keys === null || s3Keys === void 0 ? void 0 : s3Keys.map((key) => __awaiter(void 0, void 0, void 0, function* () {
+                if (key.includes("https://")) {
+                    const parsedKey = yield (0, upload_media_2.getKeyFromSignedUrl)(key);
+                    return parsedKey;
+                }
+                return key;
+            })));
+            // Upload all images using Promise.all
+            const uploadPromises = files === null || files === void 0 ? void 0 : files.map((file) => {
+                const timestamp = Date.now();
+                const originalName = file.originalname;
+                const finalKey = `${originalName}`;
+                return (0, upload_media_1.UploadImgToS3)({
+                    key: finalKey,
+                    fileBuffer: file.buffer,
+                    fileName: originalName,
+                });
             });
-            return;
+            // Execute all uploads
+            const uploadedKeys = yield Promise.all(uploadPromises);
+            // Delete old images if s3Keys are provided
+            if (parsedS3Keys && parsedS3Keys.length > 0) {
+                const deletePromises = parsedS3Keys.map((key) => key ? (0, delete_media_1.DeleteMediaFromS3)({ key }) : null);
+                yield Promise.all(deletePromises);
+            }
+            const uploadedFiles = files.map((file, i) => ({
+                key: uploadedKeys[i],
+                originalName: file.originalname,
+            }));
+            res.status(200).json({
+                success: true,
+                message: "Images upload success",
+                data: uploadedFiles,
+                deletedKeys: parsedS3Keys,
+            });
         }
         const userId = req.user.id;
         const typedPathType = pathType;
+        console.log("path type ", typedPathType);
         // Path types that require familyId
         const familyPathTypes = [
             "familyIdProof",
@@ -101,7 +146,7 @@ router.post("/upload", auth_middleware_1.verifyToken, exports.upload.array("imag
             : upload_paths_1.default[typedPathType](userId);
         // get s3Keys from form data and parse if it's a string
         let s3Keys = [];
-        if ((_a = req === null || req === void 0 ? void 0 : req.body) === null || _a === void 0 ? void 0 : _a.s3Keys) {
+        if ((_b = req === null || req === void 0 ? void 0 : req.body) === null || _b === void 0 ? void 0 : _b.s3Keys) {
             s3Keys =
                 typeof req.body.s3Keys === "string"
                     ? JSON.parse(req.body.s3Keys)
