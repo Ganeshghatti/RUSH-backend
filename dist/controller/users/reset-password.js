@@ -25,20 +25,27 @@ const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, fu
     try {
         const { role, email } = req.body;
         if (!email || !validator_1.default.isEmail(email) || !role) {
-            res
-                .status(400)
-                .json({ success: false, message: "Valid email and role are required" });
+            res.status(400).json({
+                success: false,
+                message: "Please provide a valid email and role.",
+                action: "sendResetPasswordLink:validate-input",
+            });
             return;
         }
         const user = yield user_model_1.default.findOne({ email });
         if (!user) {
-            res.status(404).json({ success: false, message: "User not found" });
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find an account with that email.",
+                action: "sendResetPasswordLink:user-not-found",
+            });
             return;
         }
         if (!user.roles.includes(role)) {
             res.status(400).json({
                 success: false,
-                message: `You do not have the role: ${role}`,
+                message: "This account doesn't have access to that role.",
+                action: `sendResetPasswordLink:missing-role:${role}`,
             });
             return;
         }
@@ -50,7 +57,8 @@ const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, fu
             if (now - createdAt < 10 * 60 * 1000) {
                 res.status(400).json({
                     success: false,
-                    message: "An email reset link has already been sent to this email address. Please wait 10 minutes.",
+                    message: "We already sent a reset link—please wait a few minutes before requesting another.",
+                    action: "sendResetPasswordLink:throttled",
                 });
                 return;
             }
@@ -97,14 +105,16 @@ const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, fu
         yield reset_password_model_1.default.create({ email, role, token });
         res.status(200).json({
             success: true,
-            message: "Password reset link sent to your email",
+            message: "We emailed you a link to reset your password.",
+            action: "sendResetPasswordLink:success",
         });
     }
     catch (error) {
         console.error("Error sending reset link:", error);
         res.status(500).json({
             success: false,
-            message: "Server error while sending reset link",
+            message: "We couldn't send the reset email right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -114,23 +124,28 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const { token } = req.params;
         const { newPassword, role } = req.body;
         if (!token || !role) {
-            res
-                .status(400)
-                .json({ success: false, message: "Token and role are required" });
+            res.status(400).json({
+                success: false,
+                message: "Token and role are required.",
+                action: "resetPassword:validate-input",
+            });
             return;
         }
         if (!newPassword || newPassword.length < 6) {
             res.status(400).json({
                 success: false,
-                message: "Password must be at least 6 characters long",
+                message: "Password must be at least 6 characters long.",
+                action: "resetPassword:validate-password-length",
             });
             return;
         }
         const resetEntry = yield reset_password_model_1.default.findOne({ token });
         if (!resetEntry) {
-            res
-                .status(400)
-                .json({ success: false, message: "Invalid or expired reset token" });
+            res.status(400).json({
+                success: false,
+                message: "That reset link is no longer valid.",
+                action: "resetPassword:token-not-found",
+            });
             return;
         }
         // Check if token is expired (10 minutes = 600,000 ms)
@@ -141,28 +156,36 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             yield reset_password_model_1.default.deleteOne({ token });
             res.status(400).json({
                 success: false,
-                message: "Reset token has expired. Please request a new link.",
+                message: "This reset link has expired. Please request a new one.",
+                action: "resetPassword:token-expired",
             });
             return;
         }
         const user = yield user_model_1.default.findOne({ email: resetEntry.email });
         if (!user) {
-            res.status(404).json({ success: false, message: "User not found" });
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find the related account.",
+                action: "resetPassword:user-not-found",
+            });
             return;
         }
         if (resetEntry.role !== role) {
             res.status(400).json({
                 success: false,
-                message: `You do not have the role: ${role}`,
+                message: "This reset link doesn't match the selected role.",
+                action: `resetPassword:role-mismatch:${role}`,
             });
             return;
         }
         if (role === "doctor") {
             const doctor = yield doctor_model_1.default.findOne({ userId: user._id });
             if (!doctor) {
-                res
-                    .status(404)
-                    .json({ success: false, message: "Doctor profile not found" });
+                res.status(404).json({
+                    success: false,
+                    message: "Doctor profile is missing for this account.",
+                    action: "resetPassword:doctor-profile-missing",
+                });
                 return;
             }
             const salt = yield bcrypt_1.default.genSalt(10);
@@ -173,9 +196,11 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         else if (role === "patient") {
             const patient = yield patient_model_1.default.findOne({ userId: user._id });
             if (!patient) {
-                res
-                    .status(404)
-                    .json({ success: false, message: "Patient profile not found" });
+                res.status(404).json({
+                    success: false,
+                    message: "Patient profile is missing for this account.",
+                    action: "resetPassword:patient-profile-missing",
+                });
                 return;
             }
             const salt = yield bcrypt_1.default.genSalt(10);
@@ -184,21 +209,27 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             yield patient.save();
         }
         else {
-            res.status(400).json({ success: false, message: "Invalid role" });
+            res.status(400).json({
+                success: false,
+                message: "That role isn't supported for password resets.",
+                action: `resetPassword:invalid-role:${role}`,
+            });
             return;
         }
         // Delete token after use
         yield reset_password_model_1.default.deleteOne({ token });
         res.status(200).json({
             success: true,
-            message: "Password reset successful",
+            message: "Your password has been updated.",
+            action: "resetPassword:success",
         });
     }
     catch (error) {
         console.error("Error resetting password:", error);
         res.status(500).json({
             success: false,
-            message: "Server error while resetting password",
+            message: "We couldn't reset the password right now.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

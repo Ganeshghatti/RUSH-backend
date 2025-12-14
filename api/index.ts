@@ -18,11 +18,15 @@ import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
 import clinicAppointmentRoutes from "./routes/appointment/clinic-appointment";
 import homeVisitAppointmentRoutes from "./routes/appointment/homevisit-appointment";
+import prescriptionRoutes from "./routes/appointment/prescription-route";
+import ratingRoute from "./routes/appointment/rating-route";
+
 import { sendSMSV3 } from "./controller/users/auth";
 import cron from "node-cron";
-import { updateAppointmentExpiredStatus } from "./controller/appointment/online-appointment";
-import { updateClinicAppointmentExpiredStatus } from "./controller/appointment/clinic-appointment";
-import { updateHomeVisitAppointmentExpiredStatus } from "./controller/appointment/homevisit-appointment";
+import { updateOnlineStatusCron } from "./controller/appointment/online-appointment";
+import { updateEmergencyStatusCron } from "./controller/appointment/emergency-appointment";
+import { updateClinicStatusCron } from "./controller/appointment/clinic-appointment";
+import { updateHomeStatusCron } from "./controller/appointment/homevisit-appointment";
 
 // Load environment variables
 dotenv.config();
@@ -37,20 +41,29 @@ app.set("trust proxy", 1);
 app.use(
   cors({
     origin: [
-      "https://app.rushdr.com",
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "https://admin.rushdr.com",
-      "https://rushdr.com",
-      "https://www.rushdr.com",
+      "app://rushdr",
+      "app://com.rushdr.rushdr",
+      "capacitor://localhost",
+      "ionic://localhost",
+
       "http://localhost",
       "https://localhost",
-      "capacitor://localhost",
+      "http://localhost:3000",
+      "http://localhost:5173",
+
+      "http://localhost:8080",
+      "http://10.0.2.2",
+      "http://10.0.2.2:8080",
+
+      "https://app.rushdr.com",
+      "https://rushdr.com",
+      "https://www.rushdr.com",
+      "https://admin.rushdr.com"
     ],
     credentials: true,
   })
 );
+
 
 // Middleware
 app.use(express.json({ limit: "1000mb" }));
@@ -100,6 +113,10 @@ app.use(clinicAppointmentRoutes);
 
 app.use(homeVisitAppointmentRoutes);
 
+app.use(prescriptionRoutes);
+
+app.use(ratingRoute);
+
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 //   console.error(err);
@@ -110,12 +127,27 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-// Cron job to update expired appointments
-// Runs once every 24 hours at midnight to check for expired appointments
+// Cron job to update appointments status
+cron.schedule("30 18 * * *", async () => {
+  console.log("Running daily cron at 18:30 UTC");
+  try {
+    const onlineResult = await updateOnlineStatusCron();
+    console.log("Online Appointment Cron:", onlineResult);
 
-// cron.schedule("0 0 * * *", async () => {
-//   console.log("Running cron job to update expired appointments...");
-//   await updateAppointmentExpiredStatus();
-//   await updateClinicAppointmentExpiredStatus();
-//   await updateHomeVisitAppointmentExpiredStatus();
-// });
+    const emergencyResult = await updateEmergencyStatusCron();
+    console.log("Emergency Appointment Cron:", emergencyResult);
+
+    const clinicResult = await updateClinicStatusCron();
+    console.log("Clinic Appointment Cron:", clinicResult);
+
+    const homeVisitResult = await updateHomeStatusCron();
+    console.log("Home Visit Appointment Cron:", homeVisitResult);
+
+    console.log(
+      "All cron jobs completed successfully at",
+      new Date().toISOString()
+    );
+  } catch (err) {
+    console.error("Error triggering APIs:", err);
+  }
+});

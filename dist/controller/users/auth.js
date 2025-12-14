@@ -95,28 +95,33 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!phone || !email || !role) {
             res.status(400).json({
                 success: false,
-                message: "Phone number, email, and role are required",
+                message: "Phone number, email, and role are required.",
+                action: "sendOtp:validate-missing-fields",
             });
             return;
         }
         if (!validator_1.default.isMobilePhone(phone, "any")) {
             res.status(400).json({
                 success: false,
-                message: "Invalid phone number format",
+                message: "Invalid phone number format.",
+                action: "sendOtp:validate-invalid-phone",
             });
             return;
         }
-        if (!validator_1.default.isEmail(email)) {
+        const normalizedEmail = email.toLowerCase();
+        if (!validator_1.default.isEmail(normalizedEmail)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid email format",
+                message: "Invalid email format.",
+                action: "sendOtp:validate-invalid-email",
             });
             return;
         }
         if (!["doctor", "patient", "admin"].includes(role)) {
             res.status(400).json({
                 success: false,
-                message: "Role must be either 'doctor', 'patient' or 'admin'",
+                message: "Role must be doctor, patient, or admin.",
+                action: "sendOtp:validate-invalid-role",
             });
             return;
         }
@@ -125,15 +130,17 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (existingUser && existingUser.roles.includes(role)) {
             res.status(400).json({
                 success: false,
-                message: `You are already registered with the role: ${role}`,
+                message: `You are already registered with the role: ${role}.`,
+                action: "sendOtp:user-role-exists",
             });
             return;
         }
-        const existingEmail = yield user_model_1.default.findOne({ email });
+        const existingEmail = yield user_model_1.default.findOne({ email: normalizedEmail });
         if (existingEmail && existingEmail.phone !== phone) {
             res.status(400).json({
                 success: false,
-                message: "Email already used with different phone number",
+                message: "Email already used with different phone number.",
+                action: "sendOtp:email-phone-mismatch",
             });
             return;
         }
@@ -143,6 +150,7 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             res.status(400).json({
                 success: false,
                 message: "An OTP has already been sent to this phone number. Please wait 5 minutes.",
+                action: "sendOtp:otp-throttle",
             });
             return;
         }
@@ -154,14 +162,16 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         yield (0, exports.sendSMSV3)(phone, newOTP);
         res.status(200).json({
             success: true,
-            message: "OTP sent successfully",
+            message: "OTP sent successfully.",
+            action: "sendOtp:otp-sent",
         });
     }
     catch (error) {
         console.error("Error sending OTP:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to send OTP",
+            message: "Failed to send OTP.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -179,35 +189,41 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             !role) {
             res.status(400).json({
                 success: false,
-                message: "All fields (phone, otp, firstName, lastName, email, password, role) are required",
+                message: "All fields (phone, otp, firstName, lastName, email, password, role) are required.",
+                action: "verifyOtp:validate-missing-fields",
             });
             return;
         }
         if (!validator_1.default.isMobilePhone(phone, "any")) {
             res.status(400).json({
                 success: false,
-                message: "Invalid phone number format",
+                message: "Invalid phone number format.",
+                action: "verifyOtp:validate-invalid-phone",
             });
             return;
         }
-        if (!validator_1.default.isEmail(email)) {
+        const normalizedEmail = email.toLowerCase();
+        if (!validator_1.default.isEmail(normalizedEmail)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid email format",
+                message: "Invalid email format.",
+                action: "verifyOtp:validate-invalid-email",
             });
             return;
         }
         if (password.length < 4) {
             res.status(400).json({
                 success: false,
-                message: "Password must be at least 6 characters",
+                message: "Password must be at least 6 characters.",
+                action: "verifyOtp:validate-weak-password",
             });
             return;
         }
         if (!["doctor", "patient", "admin"].includes(role)) {
             res.status(400).json({
                 success: false,
-                message: "Role must be either 'doctor', 'patient' or 'admin'",
+                message: "Role must be doctor, patient, or admin.",
+                action: "verifyOtp:validate-invalid-role",
             });
             return;
         }
@@ -216,12 +232,13 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!otpRecord || otpRecord.otp !== otp) {
             res.status(400).json({
                 success: false,
-                message: "Invalid OTP",
+                message: "Invalid OTP.",
+                action: "verifyOtp:otp-mismatch",
             });
             return;
         }
         // Check if user exists
-        let user = yield user_model_1.default.findOne({ email });
+        let user = yield user_model_1.default.findOne({ email: normalizedEmail });
         // Hash the password
         const salt = yield bcrypt_1.default.genSalt(10);
         const hashedPassword = yield bcrypt_1.default.hash(password.toLowerCase(), salt);
@@ -230,7 +247,8 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             if (user.phone !== phone) {
                 res.status(400).json({
                     success: false,
-                    message: "Phone number does not match the registered email",
+                    message: "Phone number does not match the registered email.",
+                    action: "verifyOtp:user-phone-mismatch",
                 });
                 return;
             }
@@ -238,12 +256,14 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             if (user.roles.includes(role)) {
                 res.status(400).json({
                     success: false,
-                    message: `You are already registered with the role: ${role}`,
+                    message: `You are already registered with the role: ${role}.`,
+                    action: "verifyOtp:user-role-exists",
                 });
                 return;
             }
             // Add the new role
             user.roles.push(role);
+            user.email = normalizedEmail;
             // Create role-specific data
             if (role === "doctor") {
                 const doctorProfile = yield doctor_model_1.default.create({
@@ -277,7 +297,7 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         else {
             // Create a new user with the specified role only
             user = new user_model_1.default({
-                email,
+                email: normalizedEmail,
                 roles: [role], // Only assign the requested role
                 phone,
                 phoneVerified: true,
@@ -330,19 +350,22 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             httpOnly: true,
             secure: true,
             sameSite: "none",
-            maxAge: 24 * 60 * 60 * 1000, // 1 day
+            maxAge: 24 * 60 * 60 * 1000 * 30, // 30 day
             path: "/",
         });
         res.status(200).json({
             success: true,
-            message: "Registration successful",
-            user: {
-                id: user._id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                phone: user.phone,
-                roles: user.roles,
+            message: "Registration successful.",
+            action: "verifyOtp:registration-complete",
+            data: {
+                user: {
+                    id: user._id,
+                    email: user.email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    phone: user.phone,
+                    roles: user.roles,
+                },
             },
         });
     }
@@ -350,8 +373,8 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         console.error("OTP verification error:", error);
         res.status(500).json({
             success: false,
-            message: "Server error during OTP verification",
-            error: error instanceof Error ? error.message : String(error),
+            message: "Failed to verify OTP.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -359,17 +382,19 @@ exports.verifyOtp = verifyOtp;
 const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email, password, role } = req.body;
+        const normalizedEmail = typeof email === "string" ? email.toLowerCase() : email;
         if (role === "admin") {
-            if (email === "urushdr@gmail.com" && password === "BulletBike$$$") {
-                const user = yield user_model_1.default.findOne({ email });
+            if (normalizedEmail === "urushdr@gmail.com" && password === "BulletBike$$$") {
+                const user = yield user_model_1.default.findOne({ email: normalizedEmail });
                 if (!user) {
                     res.status(404).json({
                         success: false,
-                        message: "User not found",
+                        message: "User not found.",
+                        action: "login:admin-user-missing",
                     });
                     return;
                 }
-                const token = jsonwebtoken_1.default.sign({ id: user._id, email, role }, JWT_SECRET, { expiresIn: "24h" });
+                const token = jsonwebtoken_1.default.sign({ id: user._id, email: user.email, role }, JWT_SECRET, { expiresIn: "24h" });
                 res.cookie("token", token, {
                     httpOnly: true,
                     secure: true,
@@ -379,44 +404,50 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 });
                 res.status(200).json({
                     success: true,
-                    message: "Login successful",
+                    message: "Login successful.",
+                    action: "login:admin-success",
                 });
                 return;
             }
             else {
                 res.status(401).json({
                     success: false,
-                    message: "Invalid admin credentials",
+                    message: "Invalid admin credentials.",
+                    action: "login:admin-invalid-credentials",
                 });
                 return;
             }
         }
-        if (!email || !password || !role) {
+        if (!normalizedEmail || !password || !role) {
             res.status(400).json({
                 success: false,
-                message: "Email, password, and role are required",
+                message: "Email, password, and role are required.",
+                action: "login:validate-missing-fields",
             });
             return;
         }
-        if (!validator_1.default.isEmail(email)) {
+        if (!validator_1.default.isEmail(normalizedEmail)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid email format",
+                message: "Invalid email format.",
+                action: "login:validate-invalid-email",
             });
             return;
         }
         if (!["doctor", "patient", "admin"].includes(role)) {
             res.status(400).json({
                 success: false,
-                message: "Role must be either 'doctor', 'patient' or 'admin'",
+                message: "Role must be doctor, patient, or admin.",
+                action: "login:validate-invalid-role",
             });
             return;
         }
-        const user = yield user_model_1.default.findOne({ email });
+        const user = yield user_model_1.default.findOne({ email: normalizedEmail });
         if (!user) {
             res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "User not found.",
+                action: "login:user-not-found",
             });
             return;
         }
@@ -424,6 +455,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             res.status(403).json({
                 success: false,
                 message: `You are not registered with the role: ${role}. Please register first.`,
+                action: "login:user-role-missing",
             });
             return;
         }
@@ -444,7 +476,8 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!rolePassword) {
             res.status(500).json({
                 success: false,
-                message: `No ${role} profile found for this user`,
+                message: `No ${role} profile found for this user.`,
+                action: "login:role-profile-missing",
             });
             return;
         }
@@ -452,7 +485,8 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!isMatch) {
             res.status(401).json({
                 success: false,
-                message: "Invalid credentials",
+                message: "Invalid credentials.",
+                action: "login:invalid-credentials",
             });
             return;
         }
@@ -469,14 +503,16 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         });
         res.status(200).json({
             success: true,
-            message: "Login successful",
+            message: "Login successful.",
+            action: "login:success",
         });
     }
     catch (error) {
         console.error("Login error:", error);
         res.status(500).json({
             success: false,
-            message: "Server error during login",
+            message: "Login failed.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -488,7 +524,8 @@ const findCurrentUser = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid user ID format",
+                message: "Invalid user ID format.",
+                action: "findCurrentUser:validate-invalid-id",
             });
             return;
         }
@@ -496,7 +533,8 @@ const findCurrentUser = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!user) {
             res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "User not found.",
+                action: "findCurrentUser:user-not-found",
             });
             return;
         }
@@ -518,7 +556,8 @@ const findCurrentUser = (req, res) => __awaiter(void 0, void 0, void 0, function
         const userWithUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(user);
         res.status(200).json({
             success: true,
-            message: "User retrieved successfully",
+            message: "User retrieved successfully.",
+            action: "findCurrentUser:success",
             data: Object.assign({ currentRole: role }, userWithUrls),
         });
     }
@@ -526,8 +565,8 @@ const findCurrentUser = (req, res) => __awaiter(void 0, void 0, void 0, function
         console.error("Error in finding user:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to retrieve user",
-            error: error.message,
+            message: "Failed to retrieve user.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -542,14 +581,16 @@ const logout = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         });
         res.status(200).json({
             success: true,
-            message: "Logged out successfully",
+            message: "Logged out successfully.",
+            action: "logout:success",
         });
     }
     catch (error) {
         console.error("Logout error:", error);
         res.status(500).json({
             success: false,
-            message: "Server error during logout",
+            message: "Failed to logout.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

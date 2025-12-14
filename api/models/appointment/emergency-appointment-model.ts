@@ -23,7 +23,7 @@ const emergencyAppointmentSchema = new Schema(
     },
     media: [
       {
-        type: String, // URL or file path for media
+        type: String,
       },
     ],
     location: {
@@ -41,7 +41,7 @@ const emergencyAppointmentSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "in-progress", "completed", "expired"],
+      enum: ["pending", "in-progress", "completed", "expired", "unattended"],
       default: "pending",
     },
     roomName: {
@@ -57,7 +57,12 @@ const emergencyAppointmentSchema = new Schema(
         enum: ["pending", "completed"],
         default: "pending",
       },
+      doctorPlatformFee: { type: Number },
+      doctorOpsExpense: { type: Number },
+      doctorEarning: { type: Number }
     },
+    prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
+    ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" },
   },
   {
     timestamps: true, // Automatically manages createdAt and updatedAt

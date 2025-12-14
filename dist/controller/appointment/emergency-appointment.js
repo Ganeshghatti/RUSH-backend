@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateEmergencyAppointmentExpiredStatus = exports.finalPayment = exports.createEmergencyRoomAccessToken = exports.acceptEmergencyAppointment = exports.getPatientEmergencyAppointments = exports.getAllEmergencyAppointments = exports.createEmergencyAppointment = exports.convertMediaKeysToUrls = void 0;
+exports.updateEmergencyStatusCron = exports.finalPayment = exports.createEmergencyRoomAccessToken = exports.acceptEmergencyAppointment = exports.getPatientEmergencyAppointments = exports.getAllEmergencyAppointments = exports.createEmergencyAppointment = exports.convertMediaKeysToUrls = void 0;
 const emergency_appointment_model_1 = __importDefault(require("../../models/appointment/emergency-appointment-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
@@ -59,7 +59,7 @@ const convertMediaKeysToUrls = (appointments) => __awaiter(void 0, void 0, void 
     })));
 });
 exports.convertMediaKeysToUrls = convertMediaKeysToUrls;
-/* create emergency appointment when patient requests + freeze 2500*/
+/* step-1 create emergency appointment when patient requests + freeze 2500*/
 const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Validate request body
@@ -67,8 +67,11 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
+                message: "Please review the emergency request details and try again.",
+                action: "createEmergencyAppointment:validation-error",
+                data: {
+                    errors: validationResult.error.errors,
+                },
             });
             return;
         }
@@ -79,7 +82,8 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "createEmergencyAppointment:patient-not-found",
             });
             return;
         }
@@ -88,7 +92,8 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (!patientUserDetail) {
             res.status(404).json({
                 success: false,
-                message: "Patient User not found",
+                message: "We couldn't find your account details.",
+                action: "createEmergencyAppointment:patient-user-not-found",
             });
             return;
         }
@@ -97,7 +102,8 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (patientAvailableBalance < 2500) {
             res.status(400).json({
                 success: false,
-                message: "Insufficient wallet balance. Please add money to your wallet. Required balance: ₹2500",
+                message: "Insufficient wallet balance. Add funds to reserve this emergency appointment (₹2500 required).",
+                action: "createEmergencyAppointment:insufficient-balance",
                 data: {
                     totalBalance: patientUserDetail.wallet,
                     availableBalance: patientAvailableBalance,
@@ -112,7 +118,8 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (!freezeSuccess) {
             res.status(400).json({
                 success: false,
-                message: "Error freezing amount in wallet",
+                message: "We couldn't reserve the emergency booking amount.",
+                action: "createEmergencyAppointment:freeze-failed",
             });
             return;
         }
@@ -150,16 +157,17 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         ]);
         res.status(201).json({
             success: true,
+            message: "Emergency appointment created successfully.",
+            action: "createEmergencyAppointment:success",
             data: appointmentsWithUrls[0],
-            message: "Emergency appointment created successfully",
         });
     }
     catch (error) {
         console.error("Error creating emergency appointment:", error);
         res.status(500).json({
             success: false,
-            message: "Error creating emergency appointment",
-            error: error.message,
+            message: "We couldn't create the emergency appointment.",
+            action: error.message,
         });
     }
 });
@@ -181,17 +189,20 @@ const getAllEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, void
         const appointmentsWithUrls = yield (0, exports.convertMediaKeysToUrls)(appointments);
         res.status(200).json({
             success: true,
-            data: appointmentsWithUrls,
-            count: appointmentsWithUrls.length,
-            message: "Emergency appointments retrieved successfully",
+            message: "Emergency appointments retrieved successfully.",
+            action: "getAllEmergencyAppointments:success",
+            data: {
+                appointments: appointmentsWithUrls,
+                count: appointmentsWithUrls.length,
+            },
         });
     }
     catch (error) {
         console.error("Error getting emergency appointments:", error);
         res.status(500).json({
             success: false,
-            message: "Error retrieving emergency appointments",
-            error: error.message,
+            message: "We couldn't load emergency appointments right now.",
+            action: error.message,
         });
     }
 });
@@ -204,7 +215,8 @@ const getPatientEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, 
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "getPatientEmergencyAppointments:patient-not-found",
             });
             return;
         }
@@ -225,22 +237,25 @@ const getPatientEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, 
         const appointmentsWithUrls = yield (0, exports.convertMediaKeysToUrls)(appointments);
         res.status(200).json({
             success: true,
-            data: appointmentsWithUrls,
-            count: appointmentsWithUrls.length,
-            message: "Patient emergency appointments retrieved successfully",
+            message: "Patient emergency appointments retrieved successfully.",
+            action: "getPatientEmergencyAppointments:success",
+            data: {
+                appointments: appointmentsWithUrls,
+                count: appointmentsWithUrls.length,
+            },
         });
     }
     catch (error) {
         console.error("Error getting patient emergency appointments:", error);
         res.status(500).json({
             success: false,
-            message: "Error retrieving patient emergency appointments",
-            error: error.message,
+            message: "We couldn't load the patient's emergency appointments.",
+            action: error.message,
         });
     }
 });
 exports.getPatientEmergencyAppointments = getPatientEmergencyAppointments;
-/* doctor accepts emergency appointment + emergency online room is created */
+/* step-2 doctor accepts emergency appointment + emergency online room is created */
 const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
@@ -250,7 +265,8 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "acceptEmergencyAppointment:doctor-not-found",
             });
             return;
         }
@@ -259,7 +275,8 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (!emergencyAppointment) {
             res.status(404).json({
                 success: false,
-                message: "Emergency appointment not found",
+                message: "We couldn't find that emergency appointment.",
+                action: "acceptEmergencyAppointment:appointment-not-found",
             });
             return;
         }
@@ -267,7 +284,8 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (emergencyAppointment.status !== "pending") {
             res.status(400).json({
                 success: false,
-                message: "Emergency appointment is already accepted or completed",
+                message: "This emergency appointment is already accepted or completed.",
+                action: "acceptEmergencyAppointment:invalid-status",
             });
             return;
         }
@@ -276,7 +294,8 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find the patient profile.",
+                action: "acceptEmergencyAppointment:patient-not-found",
             });
             return;
         }
@@ -312,19 +331,20 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         });
         res.status(200).json({
             success: true,
+            message: "Emergency appointment accepted successfully.",
+            action: "acceptEmergencyAppointment:success",
             data: {
                 appointment: updatedAppointment,
                 roomName: room.uniqueName,
             },
-            message: "Emergency appointment accepted successfully",
         });
     }
     catch (error) {
         console.error("Error accepting emergency appointment:", error);
         res.status(500).json({
             success: false,
-            message: "Error accepting emergency appointment",
-            error: error.message,
+            message: "We couldn't accept the emergency appointment.",
+            action: error.message,
         });
     }
 });
@@ -336,9 +356,11 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
     try {
         const { roomName } = req.body;
         if (!roomName) {
-            res
-                .status(400)
-                .json({ success: false, message: "Room name is required" });
+            res.status(400).json({
+                success: false,
+                message: "Room name is required.",
+                action: "createEmergencyRoomAccessToken:missing-room-name",
+            });
             return;
         }
         const identity = req.user.id; //user id of user who joined
@@ -347,7 +369,8 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
         if (!appointment || appointment.status !== "in-progress") {
             res.status(404).json({
                 success: false,
-                message: "Emergency appointment not found",
+                message: "We couldn't find an active emergency appointment for this room.",
+                action: "createEmergencyRoomAccessToken:appointment-not-found",
             });
             return;
         }
@@ -358,7 +381,8 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
         if (!doctor) {
             res.status(400).json({
                 success: false,
-                message: "Doctor not found in DB",
+                message: "We couldn't find the doctor profile.",
+                action: "createEmergencyRoomAccessToken:doctor-not-found",
             });
             return;
         }
@@ -368,7 +392,8 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
         if (!patient) {
             res.status(400).json({
                 success: false,
-                message: "Patient not found in DB",
+                message: "We couldn't find the patient profile.",
+                action: "createEmergencyRoomAccessToken:patient-not-found",
             });
             return;
         }
@@ -381,11 +406,11 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
         if (!whoJoined) {
             res.status(403).json({
                 success: false,
-                message: "You are not authorized to join this room",
+                message: "You are not authorized to join this room.",
+                action: "createEmergencyRoomAccessToken:unauthorised",
             });
             return;
         }
-        console.log("The user who joined is ", whoJoined);
         // creating token for this identity.
         const token = new AccessToken(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_API_KEY, process.env.TWILIO_API_SECRET, { identity: `${whoJoined}_${identity}` });
         const videoGrant = new VideoGrant({ room: roomName });
@@ -393,22 +418,28 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
         const jwtToken = token.toJwt();
         res.status(200).json({
             success: true,
-            token: jwtToken,
-            role: whoJoined,
-            identity: `${whoJoined}_${identity}`,
-            roomName,
-            appointmentType: "emergency",
+            message: "Access token generated successfully.",
+            action: "createEmergencyRoomAccessToken:success",
+            data: {
+                token: jwtToken,
+                role: whoJoined,
+                identity: `${whoJoined}_${identity}`,
+                roomName,
+                appointmentType: "emergency",
+            },
         });
     }
     catch (err) {
         console.error("Failed to generate  twilio access token:", err);
-        res
-            .status(500)
-            .json({ success: false, message: "Token generation failed" });
+        res.status(500).json({
+            success: false,
+            message: "We couldn't generate the room access token.",
+            action: err instanceof Error ? err.message : String(err),
+        });
     }
 });
 exports.createEmergencyRoomAccessToken = createEmergencyRoomAccessToken;
-/* doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
+/* step-3 doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
     try {
@@ -417,7 +448,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!roomName) {
             res.status(400).json({
                 success: false,
-                message: "Missing room name",
+                message: "Room name is required.",
+                action: "emergencyFinalPayment:missing-room-name",
             });
             return;
         }
@@ -426,7 +458,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!appointment) {
             res.status(400).json({
                 success: false,
-                message: "This appointment does not exist in DB.",
+                message: "We couldn't find an appointment for this room.",
+                action: "emergencyFinalPayment:appointment-not-found",
             });
             return;
         }
@@ -440,7 +473,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             if (!patientUserDetail || !patient) {
                 res.status(400).json({
                     sucess: false,
-                    message: "Patient or patient user not found.",
+                    message: "We couldn't find the patient profile.",
+                    action: "emergencyFinalPayment:patient-not-found",
                 });
                 return;
             }
@@ -451,7 +485,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             if (!doctorUserDetail || !doctor) {
                 res.status(400).json({
                     sucess: false,
-                    message: "Doctor or doctor user not found.",
+                    message: "We couldn't find the doctor profile.",
+                    action: "emergencyFinalPayment:doctor-not-found",
                 });
                 return;
             }
@@ -461,7 +496,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             if (!activeSub) {
                 res.status(400).json({
                     success: false,
-                    message: "Doctor has no active subscription",
+                    message: "The doctor does not have an active subscription.",
+                    action: "emergencyFinalPayment:no-active-subscription",
                 });
                 return;
             }
@@ -469,7 +505,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             if (!subscription) {
                 res.status(404).json({
                     success: false,
-                    message: "Subscription not found",
+                    message: "We couldn't find the associated subscription.",
+                    action: "emergencyFinalPayment:subscription-not-found",
                 });
                 return;
             }
@@ -497,19 +534,24 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                     appointment.paymentDetails.paymentStatus = "completed";
                     appointment.paymentDetails.patientWalletDeducted = deductAmount;
                     appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+                    appointment.paymentDetails.doctorPlatformFee = platformFee;
+                    appointment.paymentDetails.doctorOpsExpense = opsExpense;
+                    appointment.paymentDetails.doctorEarning = incrementAmount;
                     yield appointment.save();
                 }
                 else {
                     res.status(500).json({
                         success: false,
-                        message: "Failed to process final payment",
+                        message: "We couldn't process the final payment.",
+                        action: "emergencyFinalPayment:wallet-deduction-failed",
                     });
                     return;
                 }
             }
             res.status(200).json({
                 success: true,
-                message: "Final payment completed",
+                message: "Final payment completed.",
+                action: "emergencyFinalPayment:success",
             });
             return;
         }
@@ -517,6 +559,7 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             res.status(200).json({
                 sucess: true,
                 message: "Final payment is already processed.",
+                action: "emergencyFinalPayment:already-processed",
             });
             return;
         }
@@ -525,27 +568,95 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         console.error("Error processing final payment: ", err);
         res.status(500).json({
             success: false,
-            message: "Error in processing final payment",
-            error: err.message,
+            message: "We couldn't process the final payment.",
+            action: err.message,
         });
     }
 });
 exports.finalPayment = finalPayment;
-// Update expired clinic appointments - for cron job
-const updateEmergencyAppointmentExpiredStatus = () => __awaiter(void 0, void 0, void 0, function* () {
+//***** script for cron job
+const updateEmergencyStatusCron = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const now = new Date();
-        // Find appointments that should be expired (end time has passed and status is still pending/confirmed)
-        const expiredAppointments = yield emergency_appointment_model_1.default.updateMany({
-            createdAt: { $lt: now },
-            status: { $in: ["pending", "confirmed"] },
-        }, {
-            $set: { status: "expired" },
+        // subtract 3 hours (check until 3:30 UTC(9pm IST))
+        const cutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+        const appointments = yield emergency_appointment_model_1.default.find({
+            "slot.time.end": { $lt: cutoff },
+            status: { $in: ["pending", "in-progress"] },
         });
-        console.log(`Updated ${expiredAppointments.modifiedCount} expired clinic appointments`);
+        if (appointments.length === 0) {
+            return {
+                success: true,
+                message: "No emergency appointments to update.",
+                summary: { expired: 0, completed: 0, unattended: 0 },
+            };
+        }
+        let expired = 0;
+        let completed = 0;
+        let unattended = 0;
+        // loop through all the appointments
+        for (const appt of appointments) {
+            const { status, paymentDetails, patientId } = appt;
+            if (!status || !paymentDetails || !patientId) {
+                console.warn("Skipping appointment due to missing fields:", appt._id);
+                continue;
+            }
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": patientId,
+            });
+            if (!patientUserDetail) {
+                console.warn("Patient user not found for appointment:", appt._id);
+                continue;
+            }
+            // pending -> expired
+            if (status === "pending") {
+                appt.status = "expired";
+                const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                if (!unFreezeSuccess) {
+                    console.warn("Unfreeze failed for appointment:", appt._id);
+                    continue;
+                }
+                yield patientUserDetail.save();
+                if (appt.paymentDetails) {
+                    appt.paymentDetails.patientWalletFrozen = 0;
+                }
+                expired++;
+            }
+            // in-progress → completed or unattended
+            else if (status === "in-progress") {
+                if ((paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.paymentStatus) === "completed") {
+                    appt.status = "completed";
+                    completed++;
+                }
+                else {
+                    appt.status = "unattended";
+                    const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                    if (!unFreezeSuccess) {
+                        console.warn("Unfreeze failed for appointment:", appt._id);
+                        continue;
+                    }
+                    yield patientUserDetail.save();
+                    if (appt.paymentDetails) {
+                        appt.paymentDetails.patientWalletFrozen = 0;
+                    }
+                    unattended++;
+                }
+            }
+            yield appt.save();
+        }
+        return {
+            success: true,
+            message: "Emergency Statuses updated.",
+            summary: { expired, completed, unattended },
+        };
     }
     catch (error) {
-        console.error("Error updating expired clinic appointments:", error);
+        console.error("Cron job error in updateEmergencyStatusCron:", error);
+        return {
+            success: false,
+            message: "Cron job failed to update emergency appointments.",
+            error: error.message,
+        };
     }
 });
-exports.updateEmergencyAppointmentExpiredStatus = updateEmergencyAppointmentExpiredStatus;
+exports.updateEmergencyStatusCron = updateEmergencyStatusCron;

@@ -20,7 +20,8 @@ const addUnregisteredPatient = (req, res) => __awaiter(void 0, void 0, void 0, f
         if (!Array.isArray(patientsData) || patientsData.length === 0) {
             res.status(400).json({
                 success: false,
-                message: "No patient data provided or empty array",
+                message: "No patient data was provided.",
+                action: "addUnregisteredPatient:empty-input",
             });
             return;
         }
@@ -58,21 +59,27 @@ const addUnregisteredPatient = (req, res) => __awaiter(void 0, void 0, void 0, f
         if (patients.length === 0) {
             res.status(400).json({
                 success: false,
-                message: "No valid patient records with required fields found",
+                message: "No valid patient records were found with the required fields.",
+                action: "addUnregisteredPatient:no-valid-records",
             });
             return;
         }
         yield unregistered_patient_model_1.default.insertMany(patients);
         res.status(201).json({
             success: true,
-            message: `${patients.length} unregistered patients added successfully`,
+            message: `${patients.length} unregistered patients added successfully.`,
+            action: "addUnregisteredPatient:success",
+            data: {
+                inserted: patients.length,
+            },
         });
     }
     catch (err) {
         console.error("Error adding unregistered patients:", err);
         res.status(500).json({
             success: false,
-            message: "Failed to add unregistered patients",
+            message: "We couldn't add the unregistered patients.",
+            action: err instanceof Error ? err.message : String(err),
         });
     }
 });
@@ -82,6 +89,8 @@ const getUnregisteredPatient = (req, res) => __awaiter(void 0, void 0, void 0, f
         const patients = yield unregistered_patient_model_1.default.find();
         res.status(200).json({
             success: true,
+            message: "Unregistered patients fetched successfully.",
+            action: "getUnregisteredPatient:success",
             data: patients,
         });
     }
@@ -89,7 +98,8 @@ const getUnregisteredPatient = (req, res) => __awaiter(void 0, void 0, void 0, f
         console.error("Error getting unregistered patients:", err);
         res.status(500).json({
             success: false,
-            message: "Failed to get unregistered patients",
+            message: "We couldn't retrieve unregistered patients.",
+            action: err instanceof Error ? err.message : String(err),
         });
     }
 });

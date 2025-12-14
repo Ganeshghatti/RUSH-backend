@@ -10,7 +10,7 @@ const homeVisitAppointmentSchema = new Schema(
     },
     patientId: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Patient",
       required: true,
     },
     slot: {
@@ -42,20 +42,22 @@ const homeVisitAppointmentSchema = new Schema(
       city: { type: String, required: true },
       pincode: { type: String, required: true },
       country: { type: String, required: true, default: "India" },
-      location: {
-        type: { type: String, enum: ["Point"], default: "Point" },
-        coordinates: { type: [Number], required: true },
-      },
+      // location: {
+      //   type: { type: String, enum: ["Point"], default: "Point" },
+      //   coordinates: { type: [Number], required: true },
+      // },
     },
     status: {
       type: String,
       enum: [
         "pending",
         "doctor_accepted",
+        "doctor_rejected",
         "patient_confirmed",
+        "patient_cancelled",
         "completed",
-        "cancelled",
         "expired",
+        "unattended",
       ],
       default: "pending",
     },
@@ -73,20 +75,25 @@ const homeVisitAppointmentSchema = new Schema(
     },
     paymentDetails: {
       amount: { type: Number },
-      walletDeducted: { type: Number },
-      walletFrozen: { type: Number },
+      patientWalletDeducted: { type: Number },
+      patientWalletFrozen: { type: Number },
       paymentStatus: {
         type: String,
-        enum: ["pending", "frozen", "completed", "failed"],
+        enum: ["pending", "completed"],
         default: "pending",
       },
+      doctorPlatformFee: { type: Number },
+      doctorOpsExpense: { type: Number },
+      doctorEarning: { type: Number }
     },
-    doctorIp: String,
-    patientIp: String,
-    patientGeo: {
-      type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: [Number],
-    },
+    // doctorIp: String,
+    // patientIp: String,
+    // patientGeo: {
+    //   type: { type: String, enum: ["Point"], default: "Point" },
+    //   coordinates: [Number],
+    // },
+    prescriptionId: { type: Schema.Types.ObjectId, ref: "Prescription" },
+    ratingId: { type: Schema.Types.ObjectId, ref: "RatingModel" },
   },
   {
     timestamps: true,
@@ -97,7 +104,7 @@ const homeVisitAppointmentSchema = new Schema(
 homeVisitAppointmentSchema.index({ doctorId: 1, "slot.day": 1 });
 homeVisitAppointmentSchema.index({ patientId: 1, "slot.day": 1 });
 homeVisitAppointmentSchema.index({ status: 1 });
-homeVisitAppointmentSchema.index({ patientGeo: "2dsphere" });
+// homeVisitAppointmentSchema.index({ patientGeo: "2dsphere" });
 
 const HomeVisitAppointment = mongoose.model(
   "HomeVisitAppointment",

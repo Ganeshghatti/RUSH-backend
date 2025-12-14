@@ -70,7 +70,7 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                 filter.specialization = { $regex: queryRegex };
             }
             doctorsBySpecialization = yield doctor_model_1.default.find(filter)
-                .select("-password")
+                .select("-password -earnings")
                 .populate({
                 path: "userId",
                 match: Object.assign({ isDocumentVerified: true }, (gender ? { gender } : {})),
@@ -112,15 +112,17 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         })));
         res.status(200).json({
             success: true,
+            message: "Doctors fetched successfully.",
+            action: "searchDoctor:success",
             data: doctorsWithSignedUrls,
-            message: "Doctors fetched successfully",
         });
     }
     catch (error) {
         console.error("Error while searching doctors:", error);
         res.status(500).json({
             success: false,
-            message: "Error while searching doctors",
+            message: "We couldn't complete the doctor search.",
+            action: error.message,
         });
     }
 });

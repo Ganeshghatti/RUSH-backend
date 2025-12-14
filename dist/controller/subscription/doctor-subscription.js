@@ -39,7 +39,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (price < 0) {
             res.status(400).json({
                 success: false,
-                message: "Price must be a non-negative number (0 or greater)",
+                message: "Price must be zero or higher.",
+                action: "createDoctorSubscription:invalid-price",
             });
             return;
         }
@@ -49,7 +50,11 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (pfOnlineErr || oeOnlineErr) {
             res.status(400).json({
                 success: false,
-                message: pfOnlineErr || oeOnlineErr,
+                message: "Please review the online fee settings.",
+                action: `createDoctorSubscription:${pfOnlineErr ? "platform-fee-error" : "ops-fee-error"}`,
+                data: {
+                    details: pfOnlineErr || oeOnlineErr,
+                },
             });
             return;
         }
@@ -70,7 +75,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                 fee.figure < 0) {
                 res.status(400).json({
                     success: false,
-                    message: "All platform/ops fees (except online) must be objects with type ('Number' or 'Percentage') and a non-negative figure",
+                    message: "Please review the clinic, home visit, and emergency fee settings.",
+                    action: `createDoctorSubscription:invalid-fee-${feeFields.indexOf(fee)}`,
                 });
                 return;
             }
@@ -79,7 +85,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!name || !description || !duration) {
             res.status(400).json({
                 success: false,
-                message: "Missing required subscription fields: price, name, description, and duration are required",
+                message: "Price, name, description, and duration are required to create a subscription.",
+                action: "createDoctorSubscription:missing-required-fields",
             });
             return;
         }
@@ -119,7 +126,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         });
         res.status(201).json({
             success: true,
-            message: "Subscription created successfully",
+            message: "Subscription created successfully.",
+            action: "createDoctorSubscription:success",
             data: subscription,
         });
     }
@@ -127,7 +135,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         console.error("Error creating subscription:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to create subscription",
+            message: "We couldn't create the subscription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -143,7 +152,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof no_of_clinics !== "number" || no_of_clinics < 0) {
                 res.status(400).json({
                     success: false,
-                    message: "no_of_clinics must be a non-negative number",
+                    message: "Number of clinics must be zero or higher.",
+                    action: "updateDoctorSubscription:invalid-clinic-count",
                 });
                 return;
             }
@@ -154,7 +164,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof advertisement_cost !== "number" || advertisement_cost < 0) {
                 res.status(400).json({
                     success: false,
-                    message: "advertisement_cost must be a non-negative number",
+                    message: "Advertisement cost must be zero or higher.",
+                    action: "updateDoctorSubscription:invalid-advertisement-cost",
                 });
                 return;
             }
@@ -165,7 +176,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof isActive !== "boolean") {
                 res.status(400).json({
                     success: false,
-                    message: "isActive field must be a boolean",
+                    message: "isActive must be true or false.",
+                    action: "updateDoctorSubscription:invalid-isActive",
                 });
                 return;
             }
@@ -176,7 +188,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof name !== "string" || name.trim() === "") {
                 res.status(400).json({
                     success: false,
-                    message: "name field must be a non-empty string",
+                    message: "Name must be a non-empty string.",
+                    action: "updateDoctorSubscription:invalid-name",
                 });
                 return;
             }
@@ -187,7 +200,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof description !== "string" || description.trim() === "") {
                 res.status(400).json({
                     success: false,
-                    message: "description field must be a non-empty string",
+                    message: "Description must be a non-empty string.",
+                    action: "updateDoctorSubscription:invalid-description",
                 });
                 return;
             }
@@ -198,7 +212,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (!Array.isArray(features)) {
                 res.status(400).json({
                     success: false,
-                    message: "features field must be an array",
+                    message: "Features must be provided as a list.",
+                    action: "updateDoctorSubscription:invalid-features-type",
                 });
                 return;
             }
@@ -207,7 +222,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                 if (typeof feature !== "string" || feature.trim() === "") {
                     res.status(400).json({
                         success: false,
-                        message: "All features must be non-empty strings",
+                        message: "Each feature must be a non-empty string.",
+                        action: "updateDoctorSubscription:invalid-feature-entry",
                     });
                     return;
                 }
@@ -233,7 +249,11 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                     if (err) {
                         res.status(400).json({
                             success: false,
-                            message: err,
+                            message: "Please review the online fee settings.",
+                            action: `updateDoctorSubscription:${field}-error`,
+                            data: {
+                                details: err,
+                            },
                         });
                         return;
                     }
@@ -248,7 +268,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                         fee.figure < 0) {
                         res.status(400).json({
                             success: false,
-                            message: `Field ${field} must be an object with type ('Number' or 'Percentage') and a non-negative figure`,
+                            message: "Please review the fee settings for clinic, home visit, or emergency.",
+                            action: `updateDoctorSubscription:invalid-fee-${field}`,
                         });
                         return;
                     }
@@ -261,7 +282,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof price !== "number") {
                 res.status(400).json({
                     success: false,
-                    message: "Price field must be a number",
+                    message: "Price must be a number.",
+                    action: "updateDoctorSubscription:invalid-price",
                 });
                 return;
             }
@@ -271,7 +293,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (Object.keys(updateData).length === 0) {
             res.status(400).json({
                 success: false,
-                message: "At least one field (isActive, name, description, or features) must be provided for update",
+                message: "Provide at least one field to update the subscription.",
+                action: "updateDoctorSubscription:no-fields",
             });
             return;
         }
@@ -279,13 +302,15 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!subscription) {
             res.status(404).json({
                 success: false,
-                message: "Subscription not found",
+                message: "We couldn't find that subscription.",
+                action: "updateDoctorSubscription:not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Subscription updated successfully",
+            message: "Subscription updated successfully.",
+            action: "updateDoctorSubscription:success",
             data: subscription,
         });
     }
@@ -293,7 +318,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         console.error("Error updating subscription:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to update subscription",
+            message: "We couldn't update the subscription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -304,7 +330,8 @@ const getSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, functio
         const subscriptionsWithSignedUrls = yield (0, signed_url_1.generateSignedUrlsForSubscriptions)(subscriptions);
         res.status(200).json({
             success: true,
-            message: "Subscriptions fetched successfully",
+            message: "Subscriptions fetched successfully.",
+            action: "getDoctorSubscriptions:success",
             data: subscriptionsWithSignedUrls,
         });
     }
@@ -312,7 +339,8 @@ const getSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.error("Error fetching subscriptions:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch subscriptions",
+            message: "We couldn't load the subscriptions.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -325,7 +353,8 @@ const getActiveSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, f
         if (!activeSubscriptions || activeSubscriptions.length === 0) {
             res.status(404).json({
                 success: false,
-                message: "No active subscriptions found",
+                message: "No active subscriptions are available right now.",
+                action: "getActiveDoctorSubscriptions:none-found",
             });
             return;
         }
@@ -333,7 +362,8 @@ const getActiveSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, f
         const subscriptionsWithSignedUrls = yield (0, signed_url_1.generateSignedUrlsForSubscriptions)(activeSubscriptions);
         res.status(200).json({
             success: true,
-            message: "Active subscriptions fetched successfully",
+            message: "Active subscriptions fetched successfully.",
+            action: "getActiveDoctorSubscriptions:success",
             data: subscriptionsWithSignedUrls,
         });
     }
@@ -341,7 +371,8 @@ const getActiveSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, f
         console.error("Error fetching active subscriptions:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch active subscriptions",
+            message: "We couldn't load the active subscriptions.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -353,7 +384,8 @@ const deleteSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!subscription) {
             res.status(404).json({
                 success: false,
-                message: "Subscription not found",
+                message: "We couldn't find that subscription.",
+                action: "deleteDoctorSubscription:not-found",
             });
             return;
         }
@@ -363,8 +395,11 @@ const deleteSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (doctorsUsingSubscription.length > 0) {
             res.status(400).json({
                 success: false,
-                message: "Cannot delete this subscription as it is currently used by one or more doctors",
-                doctorCount: doctorsUsingSubscription.length,
+                message: "This subscription is assigned to one or more doctors and cannot be deleted.",
+                action: "deleteDoctorSubscription:in-use",
+                data: {
+                    doctorCount: doctorsUsingSubscription.length,
+                },
             });
             return;
         }
@@ -386,14 +421,16 @@ const deleteSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         // }
         res.status(200).json({
             success: true,
-            message: "Subscription deleted successfully",
+            message: "Subscription deleted successfully.",
+            action: "deleteDoctorSubscription:success",
         });
     }
     catch (error) {
         console.error("Error deleting subscription:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to delete subscription",
+            message: "We couldn't delete the subscription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

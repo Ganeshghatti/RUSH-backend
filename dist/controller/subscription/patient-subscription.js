@@ -24,7 +24,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (price < 0) {
             res.status(400).json({
                 success: false,
-                message: "Price must be a non-negative number (0 or greater)",
+                message: "Price must be zero or higher.",
+                action: "createPatientSubscription:invalid-price",
             });
             return;
         }
@@ -32,7 +33,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!name || !description || !duration) {
             res.status(400).json({
                 success: false,
-                message: "Missing required subscription fields: price, name, description, and duration are required",
+                message: "Price, name, description, and duration are required to create a subscription.",
+                action: "createPatientSubscription:missing-required-fields",
             });
             return;
         }
@@ -60,7 +62,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         });
         res.status(201).json({
             success: true,
-            message: "Subscription created successfully",
+            message: "Subscription created successfully.",
+            action: "createPatientSubscription:success",
             data: subscription,
         });
     }
@@ -68,7 +71,8 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         console.error("Error creating subscription:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to create subscription",
+            message: "We couldn't create the subscription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -84,7 +88,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof isActive !== "boolean") {
                 res.status(400).json({
                     success: false,
-                    message: "isActive field must be a boolean",
+                    message: "isActive must be true or false.",
+                    action: "updatePatientSubscription:invalid-isActive",
                 });
                 return;
             }
@@ -95,7 +100,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof name !== "string" || name.trim() === "") {
                 res.status(400).json({
                     success: false,
-                    message: "name field must be a non-empty string",
+                    message: "Name must be a non-empty string.",
+                    action: "updatePatientSubscription:invalid-name",
                 });
                 return;
             }
@@ -106,7 +112,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (typeof description !== "string" || description.trim() === "") {
                 res.status(400).json({
                     success: false,
-                    message: "description field must be a non-empty string",
+                    message: "Description must be a non-empty string.",
+                    action: "updatePatientSubscription:invalid-description",
                 });
                 return;
             }
@@ -117,7 +124,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             if (!Array.isArray(features)) {
                 res.status(400).json({
                     success: false,
-                    message: "features field must be an array",
+                    message: "Features must be provided as a list.",
+                    action: "updatePatientSubscription:invalid-features-type",
                 });
                 return;
             }
@@ -126,7 +134,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                 if (typeof feature !== "string" || feature.trim() === "") {
                     res.status(400).json({
                         success: false,
-                        message: "All features must be non-empty strings",
+                        message: "Each feature must be a non-empty string.",
+                        action: "updatePatientSubscription:invalid-feature-entry",
                     });
                     return;
                 }
@@ -137,7 +146,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (Object.keys(updateData).length === 0) {
             res.status(400).json({
                 success: false,
-                message: "At least one field (isActive, name, description, or features) must be provided for update",
+                message: "Provide at least one field to update the subscription.",
+                action: "updatePatientSubscription:no-fields",
             });
             return;
         }
@@ -145,13 +155,15 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!subscription) {
             res.status(404).json({
                 success: false,
-                message: "Subscription not found",
+                message: "We couldn't find that subscription.",
+                action: "updatePatientSubscription:not-found",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Subscription updated successfully",
+            message: "Subscription updated successfully.",
+            action: "updatePatientSubscription:success",
             data: subscription,
         });
     }
@@ -159,7 +171,8 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
         console.error("Error updating subscription:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to update subscription",
+            message: "We couldn't update the subscription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -169,7 +182,8 @@ const getSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, functio
         const subscriptions = yield patient_subscription_1.default.find({});
         res.status(200).json({
             success: true,
-            message: "Subscriptions fetched successfully",
+            message: "Subscriptions fetched successfully.",
+            action: "getPatientSubscriptions:success",
             data: subscriptions,
         });
     }
@@ -177,7 +191,8 @@ const getSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.error("Error fetching subscriptions:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch subscriptions",
+            message: "We couldn't load the subscriptions.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -190,7 +205,8 @@ const getActiveSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, f
         if (!activeSubscriptions || activeSubscriptions.length === 0) {
             res.status(404).json({
                 success: false,
-                message: "No active subscriptions found",
+                message: "No active subscriptions are available right now.",
+                action: "getActivePatientSubscriptions:none-found",
             });
             return;
         }
@@ -198,7 +214,8 @@ const getActiveSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, f
         const subscriptionsWithSignedUrls = yield (0, signed_url_1.generateSignedUrlsForSubscriptions)(activeSubscriptions);
         res.status(200).json({
             success: true,
-            message: "Active subscriptions fetched successfully",
+            message: "Active subscriptions fetched successfully.",
+            action: "getActivePatientSubscriptions:success",
             data: subscriptionsWithSignedUrls,
         });
     }
@@ -206,7 +223,8 @@ const getActiveSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, f
         console.error("Error fetching active subscriptions:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch active subscriptions",
+            message: "We couldn't load the active subscriptions.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });

@@ -22,9 +22,12 @@ const path_1 = __importDefault(require("path"));
 const signed_url_1 = require("../../utils/signed-url");
 const online_appointment_model_1 = __importDefault(require("../../models/appointment/online-appointment-model"));
 const clinic_appointment_model_1 = __importDefault(require("../../models/appointment/clinic-appointment-model"));
+const homevisit_appointment_model_1 = __importDefault(require("../../models/appointment/homevisit-appointment-model"));
 const emergency_appointment_model_1 = __importDefault(require("../../models/appointment/emergency-appointment-model"));
 const crypto_1 = __importDefault(require("crypto"));
 const razorpay_1 = require("../../config/razorpay");
+const rating_model_1 = require("../../models/appointment/rating-model");
+const upload_paths_1 = __importDefault(require("../../routes/media/upload-paths"));
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map();
 const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -36,15 +39,17 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!data) {
             res.status(400).json({
                 success: false,
-                message: "Missing data field in FormData",
+                message: "Please include the required form data.",
+                action: "doctorOnboardV2:missing-data",
             });
             return;
         }
+        console.log("Hello Ji ", data);
         // Parse JSON string from `data` field
         const parsedData = typeof data === "string" ? JSON.parse(data) : data;
+        console.log("Parsed data ", parsedData);
         // Destructure fields from parsedData
         const { prefix, firstName, lastName, gender, dob, address, personalIdProof, addressProof, bankDetails, qualifications, registration, experience, specialization, taxProof, } = parsedData;
-        console.log("Parsed data:", parsedData);
         // Parse JSON strings if sent as strings (for nested objects)
         const parsedQualifications = typeof qualifications === "string"
             ? JSON.parse(qualifications)
@@ -65,7 +70,8 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid user ID format",
+                message: "The user ID provided is invalid.",
+                action: "doctorOnboardV2:invalid-user-id",
             });
             return;
         }
@@ -77,7 +83,8 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!user) {
             res.status(404).json({
                 success: false,
-                message: "User not found or not a doctor",
+                message: "We couldn't find the user or they are not registered as a doctor.",
+                action: "doctorOnboardV2:user-not-found",
             });
             return;
         }
@@ -97,17 +104,25 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             !specialization) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields",
+                message: "Please fill in all required doctor details.",
+                action: "doctorOnboardV2:missing-required-fields",
             });
             return;
         }
         // Helper function to generate unique file name and S3 key
-        const generateS3Key = (file) => {
+        const generateS3Key = (file, pathType) => {
+            console.log("path type ", pathType);
+            console.log("locc ", upload_paths_1.default[pathType]);
+            const prefix = upload_paths_1.default[pathType](userId);
+            console.log("PREFIXXX ", prefix);
             const timestamp = Date.now();
             const originalName = file.originalname;
             const extension = path_1.default.extname(originalName);
+            const cleanName = path_1.default.basename(originalName, extension);
+            const finalName = `${cleanName}_${timestamp}${extension}`;
             const fileName = `${path_1.default.basename(originalName, extension)}_${timestamp}${extension}`;
-            const key = `uploads/${fileName}`;
+            const key = `${prefix}${finalName}`;
+            console.log("KEY ", key);
             return { key, fileName };
         };
         // Upload degreeImages and map to qualifications
@@ -115,7 +130,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         let degreeImageUrls = [];
         if (degreeImages.length > 0) {
             const degreeImagePromises = degreeImages.map((file) => {
-                const { key, fileName } = generateS3Key(file);
+                const { key, fileName } = generateS3Key(file, "doctorQualification");
                 return (0, upload_media_1.UploadImgToS3)({
                     key,
                     fileBuffer: file.buffer,
@@ -137,7 +152,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         let licenseImageUrls = [];
         if (licenseImages.length > 0) {
             const licenseImagePromises = licenseImages.map((file) => {
-                const { key, fileName } = generateS3Key(file);
+                const { key, fileName } = generateS3Key(file, "doctorLicense");
                 return (0, upload_media_1.UploadImgToS3)({
                     key,
                     fileBuffer: file.buffer,
@@ -158,7 +173,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         const singleImageUploads = [];
         const singleImageKeys = [];
         if ((_a = files["signatureImage"]) === null || _a === void 0 ? void 0 : _a[0]) {
-            const { key, fileName } = generateS3Key(files["signatureImage"][0]);
+            const { key, fileName } = generateS3Key(files["signatureImage"][0], "doctorSignature");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["signatureImage"][0].buffer,
@@ -167,7 +182,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("signatureImage");
         }
         if ((_b = files["upiqrImage"]) === null || _b === void 0 ? void 0 : _b[0]) {
-            const { key, fileName } = generateS3Key(files["upiqrImage"][0]);
+            const { key, fileName } = generateS3Key(files["upiqrImage"][0], "bankingQR");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["upiqrImage"][0].buffer,
@@ -176,7 +191,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("upiqrImage");
         }
         if ((_c = files["profilePic"]) === null || _c === void 0 ? void 0 : _c[0]) {
-            const { key, fileName } = generateS3Key(files["profilePic"][0]);
+            const { key, fileName } = generateS3Key(files["profilePic"][0], "userProfilePic");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["profilePic"][0].buffer,
@@ -185,7 +200,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("profilePic");
         }
         if ((_d = files["personalIdProofImage"]) === null || _d === void 0 ? void 0 : _d[0]) {
-            const { key, fileName } = generateS3Key(files["personalIdProofImage"][0]);
+            const { key, fileName } = generateS3Key(files["personalIdProofImage"][0], "personalIdProof");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["personalIdProofImage"][0].buffer,
@@ -194,7 +209,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("personalIdProofImage");
         }
         if ((_e = files["addressProofImage"]) === null || _e === void 0 ? void 0 : _e[0]) {
-            const { key, fileName } = generateS3Key(files["addressProofImage"][0]);
+            const { key, fileName } = generateS3Key(files["addressProofImage"][0], "addressProof");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["addressProofImage"][0].buffer,
@@ -203,7 +218,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             singleImageKeys.push("addressProofImage");
         }
         if ((_f = files["taxImage"]) === null || _f === void 0 ? void 0 : _f[0]) {
-            const { key, fileName } = generateS3Key(files["taxImage"][0]);
+            const { key, fileName } = generateS3Key(files["taxImage"][0], "taxProof");
             singleImageUploads.push((0, upload_media_1.UploadImgToS3)({
                 key,
                 fileBuffer: files["taxImage"][0].buffer,
@@ -267,6 +282,7 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
                 ? Object.assign(Object.assign({}, parsedTaxProof), { image: taxProofImageUrl }) : undefined,
         };
         console.log(" main data to update", doctorUpdateData);
+        console.log("user to update ", userUpdateData);
         // Update both user and doctor using discriminator model
         const [updatedUser, updatedDoctor] = yield Promise.all([
             user_model_1.default.findByIdAndUpdate(userId, { $set: userUpdateData }, {
@@ -282,13 +298,15 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
             console.log("the error is here", updatedDoctor, updatedUser);
             res.status(500).json({
                 success: false,
-                message: "Failed to update doctor information",
+                message: "We couldn't save the doctor information.",
+                action: "doctorOnboardV2:update-failed",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Doctor onboarded successfully",
+            message: "Doctor information saved successfully.",
+            action: "doctorOnboardV2:success",
             data: updatedDoctor,
         });
     }
@@ -296,8 +314,8 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         console.error("Error in doctor onboarding:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to onboard doctor",
-            error: error.message,
+            message: "We couldn't complete the doctor onboarding.",
+            action: error.message,
         });
     }
 });
@@ -308,7 +326,8 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!req.body.data) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields: JSON data is required",
+                message: "Please include the required form data.",
+                action: "subscribeDoctor:missing-data",
             });
             return;
         }
@@ -320,7 +339,8 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         catch (error) {
             res.status(400).json({
                 success: false,
-                message: "Invalid JSON data format",
+                message: "We couldn't read the submitted information.",
+                action: "subscribeDoctor:invalid-json",
             });
             return;
         }
@@ -329,7 +349,8 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!doctorId || !subscriptionId) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields: doctorId, subscriptionId, or paymentDetails.upiId",
+                message: "Missing required details. Please provide the doctor and subscription IDs.",
+                action: "subscribeDoctor:missing-fields",
             });
             return;
         }
@@ -341,7 +362,8 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "We couldn't find the doctor for this subscription.",
+                action: "subscribeDoctor:doctor-not-found",
             });
             return;
         }
@@ -351,14 +373,16 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!subscription) {
             res.status(404).json({
                 success: false,
-                message: "Subscription plan not found",
+                message: "We couldn't find that subscription plan.",
+                action: "subscribeDoctor:plan-not-found",
             });
             return;
         }
         if (!subscription.isActive) {
             res.status(400).json({
                 success: false,
-                message: "Subscription plan is not active",
+                message: "This subscription plan is currently inactive.",
+                action: "subscribeDoctor:plan-inactive",
             });
             return;
         }
@@ -373,7 +397,8 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         console.log("order created: ", order);
         res.status(200).json({
             success: true,
-            message: "Doctor subscription initiated successfully",
+            message: "Subscription order created successfully.",
+            action: "subscribeDoctor:order-created",
             data: {
                 order,
                 prefill: {
@@ -389,8 +414,8 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
         console.error("Error in subscribing doctor:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to subscribe doctor",
-            error: error,
+            message: "We couldn't start the subscription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -406,7 +431,8 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             !userId) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, userId",
+                message: "Please provide all payment verification details.",
+                action: "doctorVerifyPaymentSubscription:validate-input",
             });
             return;
         }
@@ -421,7 +447,8 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             if (!doctor) {
                 res.status(404).json({
                     success: false,
-                    message: "User not found",
+                    message: "We couldn't find the doctor for this subscription.",
+                    action: "doctorVerifyPaymentSubscription:doctor-not-found",
                 });
                 return;
             }
@@ -429,14 +456,16 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             if (!subscription) {
                 res.status(404).json({
                     success: false,
-                    message: "Subscription plan not found",
+                    message: "We couldn't find that subscription plan.",
+                    action: "doctorVerifyPaymentSubscription:plan-not-found",
                 });
                 return;
             }
             if (!subscription.isActive) {
                 res.status(400).json({
                     success: false,
-                    message: "Subscription plan is not active",
+                    message: "This subscription plan is currently inactive.",
+                    action: "doctorVerifyPaymentSubscription:plan-inactive",
                 });
                 return;
             }
@@ -489,7 +518,8 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
                 default:
                     res.status(400).json({
                         success: false,
-                        message: "Invalid subscription duration",
+                        message: "This subscription duration is not supported.",
+                        action: `doctorVerifyPaymentSubscription:invalid-duration:${subscription.duration}`,
                     });
                     return;
             }
@@ -505,19 +535,25 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             yield doctor.save();
             res.status(200).json({
                 success: true,
-                message: "Payment verified successfully",
+                message: "Subscription payment verified successfully.",
+                action: "doctorVerifyPaymentSubscription:success",
                 data: doctor,
             });
         }
         else {
             res.status(400).json({
                 success: false,
-                message: "Invalid payment signature",
+                message: "We could not verify the payment signature.",
+                action: "doctorVerifyPaymentSubscription:signature-mismatch",
             });
         }
     }
     catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({
+            success: false,
+            message: "We couldn't verify the subscription payment.",
+            action: err.message,
+        });
     }
 });
 exports.verifyPaymentSubscription = verifyPaymentSubscription;
@@ -529,7 +565,8 @@ const getDoctorById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!userId) {
             res.status(400).json({
                 success: false,
-                message: "userId is required",
+                message: "User ID is required.",
+                action: "getDoctorById:missing-user-id",
             });
             return;
         }
@@ -541,21 +578,24 @@ const getDoctorById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!user) {
             res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "We couldn't find a user with that ID.",
+                action: "getDoctorById:user-not-found",
             });
             return;
         }
         if (!user.roles.includes("doctor")) {
             res.status(403).json({
                 success: false,
-                message: "User is not a doctor",
+                message: "This user is not registered as a doctor.",
+                action: "getDoctorById:not-a-doctor",
             });
             return;
         }
         if (!((_a = user === null || user === void 0 ? void 0 : user.roleRefs) === null || _a === void 0 ? void 0 : _a.doctor)) {
             res.status(404).json({
                 success: false,
-                message: "Doctor data not found",
+                message: "No doctor profile found for this user.",
+                action: "getDoctorById:doctor-data-not-found",
             });
             return;
         }
@@ -563,7 +603,8 @@ const getDoctorById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const userWithUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(user);
         res.status(200).json({
             success: true,
-            message: "Doctor fetched successfully",
+            message: "Doctor details fetched successfully.",
+            action: "getDoctorById:success",
             data: userWithUrls,
         });
     }
@@ -571,21 +612,22 @@ const getDoctorById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         console.error("Error fetching doctor:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch doctor",
-            error: error.message,
+            message: "We couldn't fetch the doctor details.",
+            action: error.message,
         });
     }
 });
 exports.getDoctorById = getDoctorById;
 const getAllPatientsForDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const doctorId = req.user.id; // Get doctor's user ID from auth middleware
+        const doctorUserId = req.user.id;
         // Find the doctor document using userId
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId });
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor's user profile.",
+                action: "getAllPatientsForDoctor:doctorUser-not-found",
             });
             return;
         }
@@ -595,14 +637,19 @@ const getAllPatientsForDoctor = (req, res) => __awaiter(void 0, void 0, void 0, 
         })
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode phone gender email profilePic dob address",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode phone gender email profilePic dob address",
+            },
         })
-            .sort({ "slot.day": -1 }); // Sort by most recent appointments first
+            .sort({ "slot.day": -1 });
         if (!appointments || appointments.length === 0) {
             res.status(200).json({
                 success: true,
+                message: "No patients found for this doctor yet.",
+                action: "getAllPatientsForDoctor:empty",
                 data: [],
-                message: "No patients found for this doctor",
             });
             return;
         }
@@ -629,10 +676,10 @@ const getAllPatientsForDoctor = (req, res) => __awaiter(void 0, void 0, void 0, 
         const patientsArray = Array.from(uniquePatients.values());
         // Generate signed URLs for profile pictures if they exist
         const patientsWithSignedUrls = yield Promise.all(patientsArray.map((patient) => __awaiter(void 0, void 0, void 0, function* () {
-            if (patient.profilePic) {
+            if (patient.userId.profilePic) {
                 try {
-                    const signedUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(patient);
-                    return signedUrls;
+                    const signedUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(patient.userId);
+                    return Object.assign(Object.assign({}, patient), { userId: signedUrls });
                 }
                 catch (error) {
                     console.warn("Failed to generate signed URL for patient profile pic:", error);
@@ -643,17 +690,20 @@ const getAllPatientsForDoctor = (req, res) => __awaiter(void 0, void 0, void 0, 
         })));
         res.status(200).json({
             success: true,
-            data: patientsWithSignedUrls,
-            count: patientsWithSignedUrls.length,
-            message: "Patients retrieved successfully",
+            message: "Patients retrieved successfully.",
+            action: "getAllPatientsForDoctor:success",
+            data: {
+                patients: patientsWithSignedUrls,
+                count: patientsWithSignedUrls.length,
+            },
         });
     }
     catch (error) {
         console.error("Error getting patients for doctor:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to get patients",
-            error: error.message,
+            message: "We couldn't load patients for this doctor.",
+            action: error.message,
         });
     }
 });
@@ -666,7 +716,8 @@ const getDoctorAppointmentStats = (req, res) => __awaiter(void 0, void 0, void 0
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "getDoctorAppointmentStats:doctor-not-found",
             });
             return;
         }
@@ -714,8 +765,8 @@ const getDoctorAppointmentStats = (req, res) => __awaiter(void 0, void 0, void 0
         ];
         // Calculate counts by status for all appointments
         const pendingCount = allAppointments.filter((app) => app.status === "pending").length;
-        const acceptedConfirmedCount = allAppointments.filter((app) => app.status === "accepted" || app.status === "confirmed").length;
-        const rejectedCancelledCount = allAppointments.filter((app) => app.status === "rejected" || app.status === "cancelled").length;
+        const acceptedConfirmedCount = allAppointments.filter((app) => app.status === "accepted").length;
+        const rejectedCancelledCount = allAppointments.filter((app) => app.status === "rejected").length;
         const completedCount = allAppointments.filter((app) => app.status === "completed").length;
         const totalCount = allAppointments.length;
         // Generate signed URLs for patient profile pictures
@@ -757,16 +808,17 @@ const getDoctorAppointmentStats = (req, res) => __awaiter(void 0, void 0, void 0
         };
         res.status(200).json({
             success: true,
+            message: "Doctor appointment statistics retrieved successfully.",
+            action: "getDoctorAppointmentStats:success",
             data: stats,
-            message: "Doctor appointment statistics retrieved successfully",
         });
     }
     catch (error) {
         console.error("Error getting doctor appointment stats:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to get appointment statistics",
-            error: error.message,
+            message: "We couldn't load appointment statistics.",
+            action: error.message,
         });
     }
 });
@@ -779,20 +831,28 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "getDoctorDashboard:doctor-not-found",
             });
             return;
         }
+        const noOfRating = yield rating_model_1.RatingModel.countDocuments({
+            doctorId: doctor._id,
+        });
         // Get all appointments for this doctor
-        const [onlineAppointments, emergencyAppointments] = yield Promise.all([
+        const [onlineAppointments, emergencyAppointments, clinicAppointments, homeVisitAppointments,] = yield Promise.all([
             online_appointment_model_1.default.find({
                 doctorId: doctor._id,
             })
                 .populate({
                 path: "patientId",
-                select: "firstName lastName profilePic",
+                select: "userId",
+                populate: {
+                    path: "userId",
+                    select: "firstName lastName countryCode gender email profilePic",
+                },
             })
-                .sort({ "slot.day": -1, "slot.time.start": -1 }), // Sort by most recent first
+                .sort({ "slot.day": -1, "slot.time.start": -1 }),
             emergency_appointment_model_1.default.find({
                 doctorId: doctor._id,
             })
@@ -804,7 +864,31 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
                     select: "firstName lastName countryCode phone email profilePic",
                 },
             })
-                .sort({ createdAt: -1 }), // Sort by newest first
+                .sort({ createdAt: -1 }),
+            clinic_appointment_model_1.default.find({
+                doctorId: doctor._id,
+            })
+                .populate({
+                path: "patientId",
+                select: "userId",
+                populate: {
+                    path: "userId",
+                    select: "firstName lastName countryCode gender email profilePic",
+                },
+            })
+                .sort({ "slot.day": -1, "slot.time.start": -1 }),
+            homevisit_appointment_model_1.default.find({
+                doctorId: doctor._id,
+            })
+                .populate({
+                path: "patientId",
+                select: "userId",
+                populate: {
+                    path: "userId",
+                    select: "firstName lastName countryCode gender email profilePic",
+                },
+            })
+                .sort({ "slot.day": -1, "slot.time.start": -1 }),
         ]);
         // Calculate online appointment counts by status
         const onlineStats = {
@@ -813,7 +897,7 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
                 .length,
             accepted: onlineAppointments.filter((app) => app.status === "accepted")
                 .length,
-            rejected: onlineAppointments.filter((app) => app.status === "rejected")
+            completed: onlineAppointments.filter((app) => app.status === "completed")
                 .length,
         };
         // Calculate emergency appointment counts by status
@@ -824,15 +908,44 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
             inProgress: emergencyAppointments.filter((app) => app.status === "in-progress").length,
             completed: emergencyAppointments.filter((app) => app.status === "completed").length,
         };
+        const clinicStats = {
+            total: clinicAppointments.length,
+            pending: clinicAppointments.filter((app) => app.status === "pending")
+                .length,
+            accepted: clinicAppointments.filter((app) => app.status === "accepted")
+                .length,
+            completed: clinicAppointments.filter((app) => app.status === "completed")
+                .length,
+        };
+        const homeVisitStats = {
+            total: homeVisitAppointments.length,
+            pending: homeVisitAppointments.filter((app) => app.status === "pending" || app.status === "doctor_accepted").length,
+            accepted: homeVisitAppointments.filter((app) => app.status === "patient_confirmed").length,
+            completed: homeVisitAppointments.filter((app) => app.status === "completed").length,
+        };
         // Calculate total appointments across both types
         const totalStats = {
-            total: onlineStats.total + emergencyStats.total,
-            pending: onlineStats.pending + emergencyStats.pending,
-            active: onlineStats.accepted + emergencyStats.inProgress,
-            completed: onlineStats.rejected + emergencyStats.completed, // Including rejected online appointments in completed count
+            total: onlineStats.total +
+                emergencyStats.total +
+                clinicStats.total +
+                homeVisitStats.total,
+            pending: onlineStats.pending +
+                emergencyStats.pending +
+                clinicStats.pending +
+                homeVisitStats.pending,
+            active: onlineStats.accepted +
+                emergencyStats.inProgress +
+                clinicStats.accepted +
+                homeVisitStats.accepted,
+            completed: onlineStats.completed +
+                emergencyStats.completed +
+                clinicStats.completed +
+                homeVisitStats.completed,
         };
         // Process emergency appointments to add presigned URLs
-        const processedEmergencyAppointments = yield Promise.all(emergencyAppointments.map((appointment) => __awaiter(void 0, void 0, void 0, function* () {
+        const processedEmergencyAppointments = yield Promise.all(emergencyAppointments
+            .filter((appointment) => appointment.status !== "completed")
+            .map((appointment) => __awaiter(void 0, void 0, void 0, function* () {
             var _a, _b;
             const appointmentObj = appointment.toObject();
             // Generate presigned URLs for media array if it exists
@@ -867,7 +980,7 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
         const dashboardData = {
             appointmentStats: totalStats,
             reviews: {
-                total: 0, // Set to 0 as requested
+                total: noOfRating,
                 average: 0,
             },
             // recentOnlineAppointments: onlineAppointments.slice(0, 5), // Get 5 most recent appointments
@@ -875,7 +988,8 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
         };
         res.status(200).json({
             success: true,
-            message: "Doctor dashboard data retrieved successfully",
+            message: "Doctor dashboard data retrieved successfully.",
+            action: "getDoctorDashboard:success",
             data: dashboardData,
         });
     }
@@ -883,8 +997,8 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
         console.error("Error getting doctor dashboard:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to get doctor dashboard data",
-            error: error.message,
+            message: "We couldn't load the doctor dashboard.",
+            action: error.message,
         });
     }
 });
@@ -897,7 +1011,8 @@ const updateDoctorActiveStatus = (req, res) => __awaiter(void 0, void 0, void 0,
         if (typeof isActive !== "boolean") {
             res.status(400).json({
                 success: false,
-                message: "isActive must be a boolean value (true or false)",
+                message: "isActive must be true or false.",
+                action: "updateDoctorActiveStatus:invalid-isActive",
             });
             return;
         }
@@ -906,7 +1021,8 @@ const updateDoctorActiveStatus = (req, res) => __awaiter(void 0, void 0, void 0,
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "updateDoctorActiveStatus:doctor-not-found",
             });
             return;
         }
@@ -926,7 +1042,8 @@ const updateDoctorActiveStatus = (req, res) => __awaiter(void 0, void 0, void 0,
         if (!updatedDoctor) {
             res.status(500).json({
                 success: false,
-                message: "Failed to update doctor status",
+                message: "We couldn't update the doctor status.",
+                action: "updateDoctorActiveStatus:update-failed",
             });
             return;
         }
@@ -947,7 +1064,10 @@ const updateDoctorActiveStatus = (req, res) => __awaiter(void 0, void 0, void 0,
         }
         res.status(200).json({
             success: true,
-            message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". Will automatically disable after 1 hour." : ""}`,
+            message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive
+                ? ". The system will automatically set it to inactive soon."
+                : ""}`,
+            action: "updateDoctorActiveStatus:success",
             data: {
                 isActive: updatedDoctor.isActive,
                 activationTime: isActive ? activationTime : null,
@@ -961,8 +1081,8 @@ const updateDoctorActiveStatus = (req, res) => __awaiter(void 0, void 0, void 0,
         console.error("Error updating doctor active status:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to update doctor active status",
-            error: error.message,
+            message: "We couldn't update the doctor active status.",
+            action: error.message,
         });
     }
 });

@@ -16,7 +16,8 @@ export const verifyRecaptcha = async (
     if (!recaptchaToken) {
       res.status(400).json({
         success: false,
-        message: "reCAPTCHA token is required",
+        message: "reCAPTCHA token is required.",
+        action: "verifyRecaptcha:missing-token",
       });
       return;
     }
@@ -41,7 +42,8 @@ export const verifyRecaptcha = async (
     if (!response.data.success) {
       res.status(400).json({
         success: false,
-        message: "reCAPTCHA verification failed",
+        message: "We couldn't verify reCAPTCHA. Please try again.",
+        action: "verifyRecaptcha:verification-failed",
       });
       return;
     }
@@ -53,7 +55,8 @@ export const verifyRecaptcha = async (
     console.error("reCAPTCHA verification error:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error during reCAPTCHA verification",
+      message: "We couldn't verify reCAPTCHA right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 }; 

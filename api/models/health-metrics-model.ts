@@ -1,12 +1,7 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-const TreatmentStatus = {
-  ONGOING: "Ongoing",
-  CONTROLLED: "Controlled",
-  NOT_TREATED: "Not Treated",
-} as const;
-
+// ***** medical history
 const MedicalCondition = {
   DIABETES: "diabetes",
   HYPERTENSION: "hypertension",
@@ -37,34 +32,38 @@ const MedicalCondition = {
   VISION_PROBLEMS: "visionProblems",
   HEARING_LOSS: "hearingLoss",
   SLEEP_DISORDERS: "sleepDisorders",
-  COVID: 'covid'
+  COVID: "covid",
 } as const;
-
 const HadCondition = {
-  I_DONT_KNOW: "i dont know",
-  I_THINK_SO: "i think so",
-  YES: "yes",
-  NO: "no",
+  I_DONT_KNOW: "I dont know",
+  I_THINK_SO: "I think so",
+  YES: "Yes",
+  NO: "No",
+} as const;
+const TreatmentStatus = {
+  ONGOING: "Ongoing",
+  CONTROLLED: "Controlled",
+  NOT_TREATED: "Not Treated",
 } as const;
 
+// ***** menstrual cycle
 const MenstrualCycle = {
   REGULAR: "Regular",
   IRREGULAR: "Irregular",
   MENOPAUSE: "Menopause",
 } as const;
-
 const PregnancyStatus = {
   PREGNANT: "Pregnant",
   NOT_PREGNANT: "Not Pregnant",
   TRYING: "Trying",
 } as const;
 
+// ***** mental health
 const SleepPattern = {
   NORMAL: "Normal",
   INSOMNIA: "Insomnia",
   OVERSLEEPING: "Oversleeping",
 } as const;
-
 const StressLevel = {
   NONE: "None",
   MILD: "Mild",
@@ -72,30 +71,33 @@ const StressLevel = {
   SEVERE: "Severe",
 } as const;
 
+// ***** final schema
 const healthMetricsSchema = new Schema(
   {
-    patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    // type : {
-    //   enum:[]
-    // }
-    // familyId: take from family model also includes boolean value if 
-    reports: [String],
-    medicalHistory: [{
-      condition: { 
-        type: String, 
-        enum: Object.values(MedicalCondition),
-        required: true 
+    // this is ID of the patient(this health metrices can be of this patient or their family)
+    patientId: { type: Schema.Types.ObjectId, ref: "Patient", required: true },
+    ownerType: {
+      type: String,
+      required: true,
+      enum: ["Patient", "Family"],
+    },
+    familyId: { type: Schema.Types.ObjectId, ref: "Family" },
+    medicalHistory: [
+      {
+        condition: {
+          type: String,
+          enum: Object.values(MedicalCondition),
+        },
+        hadCondition: {
+          type: String,
+          enum: Object.values(HadCondition),
+        },
+        ageOfOnset: Number,
+        treatmentStatus: { type: String, enum: Object.values(TreatmentStatus) },
+        reports: String,
       },
-      hadCondition: { 
-        type: String, 
-        enum: Object.values(HadCondition),
-        required: true 
-      },
-      ageOfOnset: Number,
-      treatmentStatus: { type: String, enum: Object.values(TreatmentStatus) },
-      reports: [String],
-    }],
-    vitals: [{
+    ],
+    vitals: {
       temperature: Number,
       bloodPressure: String,
       pulseRate: Number,
@@ -107,9 +109,9 @@ const healthMetricsSchema = new Schema(
       height: Number,
       weight: Number,
       bmi: Number,
-    }],
+    },
     femaleHealth: {
-      lastMenstrualPeriod: Date,
+      lastMenstrualPeriod: String,
       menstrualCycle: {
         type: String,
         enum: Object.values(MenstrualCycle),
@@ -146,7 +148,7 @@ const healthMetricsSchema = new Schema(
       },
     },
     dentalHealth: {
-      lastDentalVisit: Date,
+      lastDentalVisit: String,
       dentalIssues: [String],
       brushingHabit: String,
       oralConcerns: String,
@@ -169,3 +171,5 @@ export const HealthMetrics = mongoose.model(
   "HealthMetrics",
   healthMetricsSchema
 );
+
+export default HealthMetrics;

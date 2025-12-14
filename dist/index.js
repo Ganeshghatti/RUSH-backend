@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -23,6 +32,13 @@ const online_appointment_1 = __importDefault(require("./routes/appointment/onlin
 const emergency_appointment_1 = __importDefault(require("./routes/appointment/emergency-appointment"));
 const clinic_appointment_1 = __importDefault(require("./routes/appointment/clinic-appointment"));
 const homevisit_appointment_1 = __importDefault(require("./routes/appointment/homevisit-appointment"));
+const prescription_route_1 = __importDefault(require("./routes/appointment/prescription-route"));
+const rating_route_1 = __importDefault(require("./routes/appointment/rating-route"));
+const node_cron_1 = __importDefault(require("node-cron"));
+const online_appointment_2 = require("./controller/appointment/online-appointment");
+const emergency_appointment_2 = require("./controller/appointment/emergency-appointment");
+const clinic_appointment_2 = require("./controller/appointment/clinic-appointment");
+const homevisit_appointment_2 = require("./controller/appointment/homevisit-appointment");
 // Load environment variables
 dotenv_1.default.config();
 // Connect to MongoDB
@@ -32,16 +48,21 @@ const PORT = process.env.PORT || 5000;
 app.set("trust proxy", 1);
 app.use((0, cors_1.default)({
     origin: [
-        "https://app.rushdr.com",
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://admin.rushdr.com",
-        "https://rushdr.com",
-        "https://www.rushdr.com",
+        "app://rushdr",
+        "app://com.rushdr.rushdr",
+        "capacitor://localhost",
+        "ionic://localhost",
         "http://localhost",
         "https://localhost",
-        "capacitor://localhost",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://10.0.2.2",
+        "http://10.0.2.2:8080",
+        "https://app.rushdr.com",
+        "https://rushdr.com",
+        "https://www.rushdr.com",
+        "https://admin.rushdr.com"
     ],
     credentials: true,
 }));
@@ -80,6 +101,8 @@ app.use(online_appointment_1.default);
 app.use(emergency_appointment_1.default);
 app.use(clinic_appointment_1.default);
 app.use(homevisit_appointment_1.default);
+app.use(prescription_route_1.default);
+app.use(rating_route_1.default);
 // // Error handling middleware
 // app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 //   console.error(err);
@@ -88,11 +111,21 @@ app.use(homevisit_appointment_1.default);
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-// Cron job to update expired appointments
-// Runs once every 24 hours at midnight to check for expired appointments
-// cron.schedule("0 0 * * *", async () => {
-//   console.log("Running cron job to update expired appointments...");
-//   await updateAppointmentExpiredStatus();
-//   await updateClinicAppointmentExpiredStatus();
-//   await updateHomeVisitAppointmentExpiredStatus();
-// });
+// Cron job to update appointments status
+node_cron_1.default.schedule("30 18 * * *", () => __awaiter(void 0, void 0, void 0, function* () {
+    console.log("Running daily cron at 18:30 UTC");
+    try {
+        const onlineResult = yield (0, online_appointment_2.updateOnlineStatusCron)();
+        console.log("Online Appointment Cron:", onlineResult);
+        const emergencyResult = yield (0, emergency_appointment_2.updateEmergencyStatusCron)();
+        console.log("Emergency Appointment Cron:", emergencyResult);
+        const clinicResult = yield (0, clinic_appointment_2.updateClinicStatusCron)();
+        console.log("Clinic Appointment Cron:", clinicResult);
+        const homeVisitResult = yield (0, homevisit_appointment_2.updateHomeStatusCron)();
+        console.log("Home Visit Appointment Cron:", homeVisitResult);
+        console.log("All cron jobs completed successfully at", new Date().toISOString());
+    }
+    catch (err) {
+        console.error("Error triggering APIs:", err);
+    }
+}));

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
 import Doctor from "../../models/user/doctor-model";
+import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 import { generateOTP, isMaxAttemptsReached } from "../../utils/otp-utils";
 import {
@@ -15,17 +16,16 @@ import DoctorSubscription from "../../models/doctor-subscription";
 import { sendNewAppointmentNotification } from "../../utils/mail/appointment-notifications";
 import { sendTravelCostNoticeMail } from "../../utils/mail/patient_notifications";
 
-// NOTE: Other controllers access req.user directly; we rely on global Express augmentation.
-// Removing local AuthRequest avoids duplicated type drift.
-
-// Distance, doctor geolocation are not required for home visit logic anymore
-
 // Common population helper
 const populateAppointment = (id: any) =>
   HomeVisitAppointment.findById(id)
     .populate({
       path: "patientId",
-      select: "firstName lastName countryCode gender email profilePic",
+      select: "userId",
+      populate: {
+        path: "userId",
+        select: "firstName lastName countryCode gender email profilePic",
+      },
     })
     .populate({
       path: "doctorId",
@@ -35,33 +35,6 @@ const populateAppointment = (id: any) =>
         select: "firstName lastName countryCode gender email profilePic",
       },
     });
-
-// Extract client IP (basic; respects x-forwarded-for first entry)
-const getClientIp = (req: Request): string | undefined => {
-  const fwd = (req.headers["x-forwarded-for"] as string) || "";
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.ip || (req.socket && req.socket.remoteAddress) || undefined;
-};
-
-// Helper: compute total amount frozen in other home visit appointments for a patient
-const getFrozenHomeVisitAmount = async (patientId: any): Promise<number> => {
-  const frozen = await HomeVisitAppointment.aggregate([
-    {
-      $match: {
-        patientId: new mongoose.Types.ObjectId(patientId),
-        status: "patient_confirmed",
-        "paymentDetails.paymentStatus": "frozen",
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        total: { $sum: { $ifNull: ["$pricing.totalCost", 0] } },
-      },
-    },
-  ]);
-  return frozen?.[0]?.total || 0;
-};
 
 /* Step 1: Patient creates home visit request with fixed cost only */
 export const bookHomeVisitAppointment = async (
@@ -74,24 +47,34 @@ export const bookHomeVisitAppointment = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the home visit request details and try again.",
+        action: "bookHomeVisitAppointment:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
-
     const { doctorId, slot, patientAddress } = parsed.data;
 
     const patientUserId = (req as any).user?.id;
     if (!patientUserId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to request a home visit.",
+        action: "bookHomeVisitAppointment:not-authenticated",
       });
       return;
     }
-
-    // (Field presence/shape already enforced by Zod schema)
+    const patientUserDetail = await User.findById(patientUserId);
+    if (!patientUserDetail) {
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find your patient's user profile.",
+        action: "bookHomeVisitAppointment:patientUser-not-found",
+      });
+      return;
+    }
 
     // Check if doctor exists and has home visit enabled
     const doctor = await Doctor.findById(doctorId).populate({
@@ -100,40 +83,42 @@ export const bookHomeVisitAppointment = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find the selected doctor.",
+        action: "bookHomeVisitAppointment:doctor-not-found",
       });
       return;
     }
-
     if (!doctor.homeVisit || !doctor.homeVisit.isActive) {
       res.status(400).json({
         success: false,
-        message: "Doctor does not offer home visit services",
+        message: "This doctor does not offer home visit services.",
+        action: "bookHomeVisitAppointment:home-visit-disabled",
       });
       return;
     }
 
     // Check if patient exists
-    const patient = await User.findById(patientUserId);
+    const patient = await Patient.findOne({ userId: patientUserId });
     if (!patient) {
       res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "We couldn't find your patient profile.",
+        action: "bookHomeVisitAppointment:patient-not-found",
       });
       return;
     }
+    const patientId = patient._id;
 
     // Get fixed cost from doctor's home visit configuration
     const fixedCost = doctor.homeVisit?.fixedPrice || 0;
     if (fixedCost <= 0) {
       res.status(400).json({
         success: false,
-        message: "Doctor has not set home visit pricing",
+        message: "The doctor has not set home visit pricing.",
+        action: "bookHomeVisitAppointment:no-pricing",
       });
       return;
     }
-
-    // Distance not used anymore
 
     // Check if the slot is already booked
     const existingAppointment = await HomeVisitAppointment.findOne({
@@ -143,29 +128,51 @@ export const bookHomeVisitAppointment = async (
       "slot.time.end": new Date(slot.time.end),
       status: { $in: ["pending", "doctor_accepted", "patient_confirmed"] },
     });
-
     if (existingAppointment) {
       res.status(400).json({
         success: false,
-        message: "This slot is already booked",
+        message: "This slot is already booked.",
+        action: "bookHomeVisitAppointment:slot-unavailable",
       });
       return;
     }
 
-    // Get patient IP (keep only patient IP and patient location for potential logistics)
-    const patientIp =
-      req.ip ||
-      req.connection.remoteAddress ||
-      (req.headers["x-forwarded-for"] as string);
-    const patientGeo = {
-      type: "Point" as const,
-      coordinates: patientAddress.location.coordinates,
-    };
+    // check if patient user profile have fixed cost in available balance, if yes freeze it
+    const availableBalance = (patientUserDetail as any).getAvailableBalance();
+    if (availableBalance < fixedCost) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Your wallet balance is too low to send request for this appointment.",
+        action: "bookHomeVisitAppointment:insufficient-balance",
+        data: {
+          required: fixedCost,
+          available: availableBalance,
+          totalWallet: patientUserDetail.wallet,
+          frozenAmount: patientUserDetail.frozenAmount,
+        },
+      });
+      return;
+    }
+    const freezeSuccess = (patientUserDetail as any).freezeAmount(fixedCost);
+    if (!freezeSuccess) {
+      res.status(400).json({
+        success: false,
+        message: "We couldn't freeze the amount.",
+        action: "bookHomeVisitAppointment:freeze-failed",
+        data: {
+          required: fixedCost,
+          available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
+          totalWallet: patientUserDetail.wallet,
+        },
+      });
+    }
+    await patientUserDetail.save();
 
     // Create new appointment with only fixed cost
     const newAppointment = new HomeVisitAppointment({
       doctorId,
-      patientId: patientUserId,
+      patientId,
       slot: {
         day: new Date(slot.day),
         duration: slot.duration,
@@ -182,10 +189,6 @@ export const bookHomeVisitAppointment = async (
         city: patientAddress.city,
         pincode: patientAddress.pincode,
         country: patientAddress.country || "India",
-        location: {
-          type: "Point",
-          coordinates: patientAddress.location.coordinates,
-        },
       },
       status: "pending",
       pricing: {
@@ -195,12 +198,10 @@ export const bookHomeVisitAppointment = async (
       },
       paymentDetails: {
         amount: fixedCost,
-        walletDeducted: 0,
-        walletFrozen: 0,
+        patientWalletDeducted: 0,
+        patientWalletFrozen: fixedCost,
         paymentStatus: "pending",
       },
-      patientIp,
-      patientGeo,
     });
     await newAppointment.save();
 
@@ -222,33 +223,20 @@ export const bookHomeVisitAppointment = async (
     }
 
     // Populate the response
-    const populatedAppointment = await HomeVisitAppointment.findById(
-      newAppointment._id
-    )
-      .populate({
-        path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId homeVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      });
+    const populatedAppointment = await populateAppointment(newAppointment._id);
 
     res.status(201).json({
       success: true,
+      message: "Home visit request created successfully.",
+      action: "bookHomeVisitAppointment:success",
       data: populatedAppointment,
-      message: "Home visit request created successfully",
     });
   } catch (error: any) {
     console.error("Error booking home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error creating home visit request",
-      error: error.message,
+      message: "We couldn't create the home visit request.",
+      action: error.message,
     });
   }
 };
@@ -264,18 +252,22 @@ export const acceptHomeVisitRequest = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the request details and try again.",
+        action: "acceptHomeVisitRequest:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
     const { travelCost } = parsed.data;
-    const doctorId = (req as any).user?.id;
 
-    if (!doctorId) {
+    const doctorUserId = (req as any).user?.id;
+    if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to accept requests.",
+        action: "acceptHomeVisitRequest:not-authenticated",
       });
       return;
     }
@@ -286,34 +278,36 @@ export const acceptHomeVisitRequest = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "acceptHomeVisitRequest:doctor-not-found",
       });
       return;
     }
+    const doctorId = doctor._id;
 
     // Find the appointment
     const appointment = await HomeVisitAppointment.findOne({
       _id: appointmentId,
-      doctorId: doctor._id,
+      doctorId,
       status: "pending",
     }).populate({
       path: "patientId",
       select: "firstName lastName email",
     });
-
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or not in pending status",
+        message: "We couldn't find a pending appointment to accept.",
+        action: "acceptHomeVisitRequest:appointment-not-found",
       });
       return;
     }
-
     // Update appointment with travel cost
     if (!appointment.pricing || !appointment.paymentDetails) {
       res.status(500).json({
         success: false,
-        message: "Appointment pricing or payment details not found",
+        message: "Appointment pricing or payment details are missing.",
+        action: "acceptHomeVisitRequest:pricing-missing",
       });
       return;
     }
@@ -324,9 +318,6 @@ export const acceptHomeVisitRequest = async (
     appointment.pricing.travelCost = travelCost;
     appointment.pricing.totalCost = totalCost;
     appointment.paymentDetails.amount = totalCost;
-
-    // Get doctor IP only (no geolocation persisted for doctor)
-    appointment.doctorIp = getClientIp(req);
 
     await appointment.save();
 
@@ -351,20 +342,21 @@ export const acceptHomeVisitRequest = async (
 
     res.status(200).json({
       success: true,
+      message: "Home visit request accepted and travel cost added.",
+      action: "acceptHomeVisitRequest:success",
       data: updatedAppointment,
-      message: "Home visit request accepted with travel cost added",
     });
   } catch (error: any) {
     console.error("Error accepting home visit request:", error);
     res.status(500).json({
       success: false,
-      message: "Error accepting request",
-      error: error.message,
+      message: "We couldn't accept the home visit request.",
+      action: error.message,
     });
   }
 };
 
-/* Step 3: Patient confirms the appointment and totalCost frozen in wallet */
+/* Step 3: Patient confirms the appointment and totalCost=fixedCost+travelCost frozen in wallet */
 export const confirmHomeVisitAppointment = async (
   req: Request,
   res: Response
@@ -376,21 +368,33 @@ export const confirmHomeVisitAppointment = async (
     if (!patientUserId) {
       res.status(401).json({
         success: false,
-        message: "Patient User not authenticated",
+        message: "You must be signed in to confirm this appointment.",
+        action: "confirmHomeVisitAppointment:not-authenticated",
       });
       return;
     }
+    const patient = await Patient.findOne({ userId: patientUserId });
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find your patient profile.",
+        action: "confirmHomeVisitAppointment:patient-not-found",
+      });
+      return;
+    }
+    const patientId = patient._id;
 
     // Find the appointment
     const appointment = await HomeVisitAppointment.findOne({
       _id: appointmentId,
-      patientId: patientUserId,
+      patientId,
       status: "doctor_accepted",
     });
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or not in correct status",
+        message: "We couldn't find the appointment to confirm.",
+        action: "confirmHomeVisitAppointment:appointment-not-found",
       });
       return;
     }
@@ -398,11 +402,14 @@ export const confirmHomeVisitAppointment = async (
     if (!appointment.pricing || !appointment.paymentDetails) {
       res.status(500).json({
         success: false,
-        message: "Appointment pricing or payment details not found",
+        message: "Appointment pricing or payment details are missing.",
+        action: "confirmHomeVisitAppointment:pricing-missing",
       });
       return;
     }
 
+    const fixedCost = appointment.pricing?.fixedCost || 0;
+    const travelCost = appointment.pricing?.travelCost || 0;
     const totalCost = appointment.pricing?.totalCost || 0;
 
     // find patient's user details
@@ -410,19 +417,21 @@ export const confirmHomeVisitAppointment = async (
     if (!patientUserDetail) {
       res.status(404).json({
         success: false,
-        message: "Patient User not found",
+        message: "We couldn't find your patient's user profile.",
+        action: "confirmHomeVisitAppointment:patientUser-not-found",
       });
       return;
     }
 
     //***** Check wallet balance - getAvailableBalance excludes frozen amount from wallet *****\\
     const availableBalance = (patientUserDetail as any).getAvailableBalance();
-    if (availableBalance < totalCost) {
+    if (availableBalance < travelCost) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "Your wallet balance is too low to confirm this appointment.",
+        action: "confirmHomeVisitAppointment:insufficient-balance",
         data: {
-          required: totalCost,
+          required: travelCost,
           available: availableBalance,
           totalWallet: patientUserDetail.wallet,
           frozenAmount: patientUserDetail.frozenAmount || 0,
@@ -431,13 +440,14 @@ export const confirmHomeVisitAppointment = async (
       return;
     }
 
-    const freezeSuccess = (patientUserDetail as any).freezeAmount(totalCost);
+    const freezeSuccess = (patientUserDetail as any).freezeAmount(travelCost);
     if (!freezeSuccess) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "We couldn't reserve the appointment amount.",
+        action: "confirmHomeVisitAppointment:freeze-failed",
         data: {
-          required: totalCost,
+          required: travelCost,
           available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
           totalWallet: patientUserDetail.wallet,
         },
@@ -450,9 +460,9 @@ export const confirmHomeVisitAppointment = async (
 
     // Update appointment
     appointment.status = "patient_confirmed";
-    appointment.paymentDetails.walletDeducted = 0;
-    appointment.paymentDetails.walletFrozen = totalCost;
-    appointment.paymentDetails.paymentStatus = "frozen";
+    appointment.paymentDetails.patientWalletDeducted = 0;
+    appointment.paymentDetails.patientWalletFrozen = totalCost;
+    appointment.paymentDetails.paymentStatus = "pending";
     appointment.otp = {
       code: otpCode,
       generatedAt: new Date(),
@@ -468,15 +478,16 @@ export const confirmHomeVisitAppointment = async (
 
     res.status(200).json({
       success: true,
+      message: "Home visit appointment confirmed and payment reserved.",
+      action: "confirmHomeVisitAppointment:success",
       data: confirmedAppointment,
-      message: "Home visit appointment confirmed and payment frozen",
     });
   } catch (error: any) {
     console.error("Error confirming home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error confirming appointment",
-      error: error.message,
+      message: "We couldn't confirm the home visit appointment.",
+      action: error.message,
     });
   }
 };
@@ -492,8 +503,11 @@ export const completeHomeVisitAppointment = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the completion details and try again.",
+        action: "completeHomeVisitAppointment:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
@@ -501,7 +515,8 @@ export const completeHomeVisitAppointment = async (
     if (!otp) {
       res.status(400).json({
         success: false,
-        message: "OTP is required",
+        message: "OTP is required.",
+        action: "completeHomeVisitAppointment:missing-otp",
       });
       return;
     }
@@ -510,27 +525,28 @@ export const completeHomeVisitAppointment = async (
     if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "Doctor User not authenticated",
+        message: "You must be signed in to complete this appointment.",
+        action: "completeHomeVisitAppointment:not-authenticated",
       });
       return;
     }
-
-    // find doctor
-    const doctor = await Doctor.findOne({ userId: doctorUserId });
-    if (!doctor) {
-      res.status(404).json({
-        success: false,
-        message: "Doctor not found",
-      });
-      return;
-    }
-
     // Find doctor user detail to increment amount in the doctor user wallet
     const doctorUserDetail = await User.findById(doctorUserId);
     if (!doctorUserDetail) {
       res.status(401).json({
         success: false,
-        message: "Doctor User not found",
+        message: "We couldn't find your doctor profile.",
+        action: "completeHomeVisitAppointment:doctor-user-not-found",
+      });
+      return;
+    }
+    // find doctor
+    const doctor = await Doctor.findOne({ userId: doctorUserId });
+    if (!doctor) {
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find your doctor profile.",
+        action: "completeHomeVisitAppointment:doctor-not-found",
       });
       return;
     }
@@ -543,7 +559,8 @@ export const completeHomeVisitAppointment = async (
     if (!activeSub) {
       res.status(400).json({
         success: false,
-        message: "Doctor has no active subscription",
+        message: "The doctor does not have an active subscription.",
+        action: "completeHomeVisitAppointment:no-active-subscription",
       });
       return;
     }
@@ -553,7 +570,8 @@ export const completeHomeVisitAppointment = async (
     if (!subscription) {
       res.status(404).json({
         success: false,
-        message: "Subscription not found",
+        message: "We couldn't find the associated subscription.",
+        action: "completeHomeVisitAppointment:subscription-not-found",
       });
       return;
     }
@@ -569,7 +587,8 @@ export const completeHomeVisitAppointment = async (
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message: "Appointment not found or not in confirmed status",
+        message: "We couldn't find a confirmed appointment to complete.",
+        action: "completeHomeVisitAppointment:appointment-not-found",
       });
       return;
     }
@@ -578,12 +597,11 @@ export const completeHomeVisitAppointment = async (
     if (!appointment.otp || appointment.otp.isUsed) {
       res.status(400).json({
         success: false,
-        message: "OTP is not available or already used",
+        message: "The OTP is not available or has already been used.",
+        action: "completeHomeVisitAppointment:otp-unavailable",
       });
       return;
     }
-
-    // No OTP expiry check; OTP is permanent for this appointment
 
     if (
       isMaxAttemptsReached(
@@ -593,7 +611,8 @@ export const completeHomeVisitAppointment = async (
     ) {
       res.status(400).json({
         success: false,
-        message: "Maximum OTP attempts exceeded",
+        message: "Maximum OTP attempts exceeded.",
+        action: "completeHomeVisitAppointment:max-attempts",
       });
       return;
     }
@@ -604,9 +623,12 @@ export const completeHomeVisitAppointment = async (
 
       res.status(400).json({
         success: false,
-        message: "Invalid OTP",
-        attemptsRemaining:
-          appointment.otp.maxAttempts - appointment.otp.attempts,
+        message: "Invalid OTP.",
+        action: "completeHomeVisitAppointment:otp-mismatch",
+        data: {
+          attemptsRemaining:
+            appointment.otp.maxAttempts - appointment.otp.attempts,
+        },
       });
       return;
     }
@@ -616,15 +638,15 @@ export const completeHomeVisitAppointment = async (
     appointment.otp.isUsed = true;
 
     //***** convert frozen amount to actual deduction *****\\
-    if (
-      appointment.paymentDetails?.paymentStatus === "pending" ||
-      appointment.paymentDetails?.paymentStatus === "frozen"
-    ) {
-      const patientUserDetail = await User.findById(appointment.patientId);
+    if (appointment.paymentDetails?.paymentStatus === "pending") {
+      const patientUserDetail = await User.findOne({
+        "roleRefs.patient": appointment.patientId,
+      });
       if (!patientUserDetail) {
         res.status(400).json({
           success: false,
-          message: "Patient User not found",
+          message: "We couldn't find the patient profile.",
+          action: "completeHomeVisitAppointment:patient-not-found",
         });
         return;
       }
@@ -636,9 +658,6 @@ export const completeHomeVisitAppointment = async (
       );
       if (deductSuccess && deductAmount) {
         await patientUserDetail.save();
-        appointment.paymentDetails.walletDeducted = deductAmount;
-        if (appointment.paymentDetails.walletFrozen) appointment.paymentDetails.walletFrozen -= deductAmount;
-        appointment.paymentDetails.paymentStatus = "completed";
 
         // increment in doctor user
         let incrementAmount =
@@ -646,125 +665,149 @@ export const completeHomeVisitAppointment = async (
         if (incrementAmount < 0) incrementAmount = 0;
         doctorUserDetail.wallet += incrementAmount;
         await doctorUserDetail.save();
+
+        appointment.paymentDetails.patientWalletDeducted = deductAmount;
+        if (appointment.paymentDetails.patientWalletFrozen) {
+          appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+        }
+        appointment.paymentDetails.paymentStatus = "completed";
+
+        appointment.paymentDetails.doctorPlatformFee = platformFee;
+        appointment.paymentDetails.doctorOpsExpense = opsExpense;
+        appointment.paymentDetails.doctorEarning = incrementAmount;
+
+        await appointment.save();
       } else {
         res.status(500).json({
           success: false,
-          message: "Failed to process final payment",
+          message: "We couldn't process the final payment.",
+          action: "completeHomeVisitAppointment:wallet-deduction-failed",
         });
         return;
       }
     }
-    await appointment.save();
 
     // Populate the response
     const completedAppointment = await populateAppointment(appointment._id);
 
     res.status(200).json({
       success: true,
-      data: completedAppointment,
       message:
-        "Home visit appointment completed successfully and final payment processed",
+        "Home visit appointment completed successfully and payment processed.",
+      action: "completeHomeVisitAppointment:success",
+      data: completedAppointment,
     });
   } catch (error: any) {
     console.error("Error completing home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error completing appointment",
-      error: error.message,
+      message: "We couldn't complete the home visit appointment.",
+      action: error.message,
     });
   }
 };
 
 // Cancel appointment (by patient or doctor)
-export const cancelHomeVisitAppointment = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const { appointmentId } = req.params;
-    const parsed = homeVisitAppointmentCancelSchema.safeParse(req.body || {});
-    if (!parsed.success) {
-      res.status(400).json({
-        success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
-      });
-      return;
-    }
-    // reason currently unused (no persistence field) – intentionally ignored to avoid lint warning
-    const userId = (req as any).user?.id;
+// export const cancelHomeVisitAppointment = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const { appointmentId } = req.params;
+//     const parsed = homeVisitAppointmentCancelSchema.safeParse(req.body || {});
+//     if (!parsed.success) {
+//       res.status(400).json({
+//         success: false,
+//         message: "Please review the cancellation details and try again.",
+//         action: "cancelHomeVisitAppointment:validation-error",
+//         data: {
+//           errors: parsed.error.errors,
+//         },
+//       });
+//       return;
+//     }
+//     // reason currently unused (no persistence field) – intentionally ignored to avoid lint warning
+//     const userId = (req as any).user?.id;
 
-    if (!userId) {
-      res.status(401).json({
-        success: false,
-        message: "User not authenticated",
-      });
-      return;
-    }
+//     if (!userId) {
+//       res.status(401).json({
+//         success: false,
+//         message: "You must be signed in to cancel this appointment.",
+//         action: "cancelHomeVisitAppointment:not-authenticated",
+//       });
+//       return;
+//     }
 
-    // Find the appointment
-    const appointment = await HomeVisitAppointment.findById(appointmentId);
-    if (!appointment) {
-      res.status(404).json({
-        success: false,
-        message: "Appointment not found",
-      });
-      return;
-    }
+//     // Find the appointment
+//     const appointment = await HomeVisitAppointment.findById(appointmentId);
+//     if (!appointment) {
+//       res.status(404).json({
+//         success: false,
+//         message: "We couldn't find that appointment.",
+//         action: "cancelHomeVisitAppointment:appointment-not-found",
+//       });
+//       return;
+//     }
 
-    // Check if user is patient or doctor of this appointment
-    const doctor = await Doctor.findOne({ userId });
-    const isDoctor =
-      doctor && doctor._id.toString() === appointment.doctorId.toString();
-    const isPatient = appointment.patientId.toString() === userId;
+//     // Check if user is patient or doctor of this appointment
+//     const doctor = await Doctor.findOne({ userId });
+//     const isDoctor =
+//       doctor && doctor._id.toString() === appointment.doctorId.toString();
+//     const patient = await Patient.findOne({ userId });
+//     const isPatient =
+//       patient && patient._id.toString() === appointment.patientId.toString();
 
-    if (!isDoctor && !isPatient) {
-      res.status(403).json({
-        success: false,
-        message: "Not authorized to cancel this appointment",
-      });
-      return;
-    }
+//     if (!isDoctor && !isPatient) {
+//       res.status(403).json({
+//         success: false,
+//         message: "You are not authorised to cancel this appointment.",
+//         action: "cancelHomeVisitAppointment:unauthorised",
+//       });
+//       return;
+//     }
 
-    // Check if appointment can be cancelled
-    if (
-      appointment.status === "completed" ||
-      appointment.status === "cancelled"
-    ) {
-      res.status(400).json({
-        success: false,
-        message: "Cannot cancel completed or already cancelled appointment",
-      });
-      return;
-    }
+//     // Check if appointment can be cancelled
+//     if (
+//       appointment.status === "completed" ||
+//       appointment.status === "doctor_rejected" ||
+//       appointment.status === "patient_cancelled"
+//     ) {
+//       res.status(400).json({
+//         success: false,
+//         message: "This appointment is already completed or cancelled.",
+//         action: "cancelHomeVisitAppointment:invalid-status",
+//       });
+//       return;
+//     }
 
-    // No refund handling required since we didn't deduct wallet on confirm
+//     // No refund handling required since we didn't deduct wallet on confirm
 
-    // Update appointment status
-    appointment.status = "cancelled";
-    if (appointment.paymentDetails) {
-      appointment.paymentDetails.paymentStatus = "failed";
-      appointment.paymentDetails.walletDeducted = 0;
-    }
-    await appointment.save();
+//     // Update appointment status
+//     appointment.status = "cancelled";
+//     if (appointment.paymentDetails) {
+//       appointment.paymentDetails.paymentStatus = "failed";
+//       appointment.paymentDetails.walletDeducted = 0;
+//     }
+//     await appointment.save();
 
-    // Populate the response
-    const cancelledAppointment = await populateAppointment(appointment._id);
+//     // Populate the response
+//     const cancelledAppointment = await populateAppointment(appointment._id);
 
-    res.status(200).json({
-      success: true,
-      data: cancelledAppointment,
-      message: "Home visit appointment cancelled successfully",
-    });
-  } catch (error: any) {
-    console.error("Error cancelling home visit appointment:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error cancelling appointment",
-      error: error.message,
-    });
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       message: "Home visit appointment cancelled successfully.",
+//       action: "cancelHomeVisitAppointment:success",
+//       data: cancelledAppointment,
+//     });
+//   } catch (error: any) {
+//     console.error("Error cancelling home visit appointment:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "We couldn't cancel the home visit appointment.",
+//       action: error.message,
+//     });
+//   }
+// };
 
 // Get doctor appointments by date
 export const getDoctorHomeVisitAppointmentByDate = async (
@@ -778,7 +821,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     if (!doctorId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to view these appointments.",
+        action: "getDoctorHomeVisitAppointmentByDate:not-authenticated",
       });
       return;
     }
@@ -786,7 +830,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     if (!date) {
       res.status(400).json({
         success: false,
-        message: "Date is required",
+        message: "Date is required.",
+        action: "getDoctorHomeVisitAppointmentByDate:missing-date",
       });
       return;
     }
@@ -795,7 +840,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "getDoctorHomeVisitAppointmentByDate:doctor-not-found",
       });
       return;
     }
@@ -829,9 +875,10 @@ export const getDoctorHomeVisitAppointmentByDate = async (
 
     res.status(200).json({
       success: true,
-      data: appointments,
       message:
-        "Doctor home visit appointments for the date retrieved successfully",
+        "Doctor home visit appointments for the date retrieved successfully.",
+      action: "getDoctorHomeVisitAppointmentByDate:success",
+      data: appointments,
     });
   } catch (error: any) {
     console.error(
@@ -840,8 +887,8 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     );
     res.status(500).json({
       success: false,
-      message: "Error retrieving appointments",
-      error: error.message,
+      message: "We couldn't load home visit appointments for that date.",
+      action: error.message,
     });
   }
 };
@@ -857,17 +904,21 @@ export const updateHomeVisitConfig = async (
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        message: "Validation error",
-        errors: parsed.error.errors,
+        message: "Please review the configuration details and try again.",
+        action: "updateHomeVisitConfig:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
       });
       return;
     }
-    const { isActive, fixedPrice, availability, location } = parsed.data;
+    const { isActive, fixedPrice, availability } = parsed.data;
 
     if (!doctorId) {
       res.status(401).json({
         success: false,
-        message: "User not authenticated",
+        message: "You must be signed in to update home visit settings.",
+        action: "updateHomeVisitConfig:not-authenticated",
       });
       return;
     }
@@ -876,7 +927,8 @@ export const updateHomeVisitConfig = async (
     if (!doctor) {
       res.status(404).json({
         success: false,
-        message: "Doctor not found",
+        message: "We couldn't find your doctor profile.",
+        action: "updateHomeVisitConfig:doctor-not-found",
       });
       return;
     }
@@ -892,12 +944,6 @@ export const updateHomeVisitConfig = async (
       // Cast because Mongoose DocumentArray typing may differ from plain parsed array
       (doctor.homeVisit as any).availability = availability as any;
     }
-    if (location && location.coordinates && doctor.homeVisit) {
-      doctor.homeVisit.location = {
-        type: "Point",
-        coordinates: location.coordinates,
-      };
-    }
 
     if (doctor.homeVisit) {
       doctor.homeVisit.updatedAt = new Date();
@@ -906,44 +952,111 @@ export const updateHomeVisitConfig = async (
 
     res.status(200).json({
       success: true,
+      message: "Home visit configuration updated successfully.",
+      action: "updateHomeVisitConfig:success",
       data: doctor.homeVisit,
-      message: "Home visit configuration updated successfully",
     });
   } catch (error: any) {
     console.error("Error updating home visit configuration:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating configuration",
-      error: error.message,
+      message: "We couldn't update the home visit configuration.",
+      action: error.message,
     });
   }
 };
 
-// Cron function to update expired appointments
-export const updateHomeVisitAppointmentExpiredStatus =
-  async (): Promise<void> => {
-    try {
-      const now = new Date();
+//***** script for cron job
+export const updateHomeStatusCron = async () => {
+  try {
+    const now = new Date();
 
-      // Find appointments that should be expired
-      const expiredAppointments = await HomeVisitAppointment.find({
-        status: { $in: ["pending", "doctor_accepted", "patient_confirmed"] },
-        "slot.time.end": { $lt: now },
-      });
+    const appointments = await HomeVisitAppointment.find({
+      "slot.time.end": { $lt: now },
+      status: { $in: ["pending", "doctor_accepted", "patient_confirmed"] },
+    });
+    if (appointments.length === 0) {
+      return {
+        success: true,
+        message: "No home appointments to update.",
+        summary: { expired: 0, completed: 0, unattended: 0 },
+      };
+    }
 
-      for (const appointment of expiredAppointments) {
-        appointment.status = "expired";
-        if (appointment.paymentDetails) {
-          appointment.paymentDetails.paymentStatus = "failed";
-          appointment.paymentDetails.walletDeducted = 0;
-        }
-        await appointment.save();
+    let expired = 0;
+    let completed = 0;
+    let unattended = 0;
+
+    // loop through all the appointments
+    for (const appt of appointments) {
+      const { status, paymentDetails, patientId } = appt;
+      if (!status || !paymentDetails || !patientId) {
+        console.warn("Skipping appointment due to missing fields:", appt._id);
+        continue;
       }
 
-      console.log(
-        `Updated ${expiredAppointments.length} expired home visit appointments`
-      );
-    } catch (error) {
-      console.error("Error updating expired home visit appointments:", error);
+      const patientUserDetail = await User.findOne({
+        "roleRefs.patient": patientId,
+      });
+      if (!patientUserDetail) {
+        console.warn("Patient user not found for appointment:", appt._id);
+        continue;
+      }
+
+      // pending, doctor_accepted -> expired
+      if (status === "pending" || status === "doctor_accepted") {
+        appt.status = "expired";
+
+        const unFreezeSuccess = (patientUserDetail as any).unfreezeAmount(
+          paymentDetails?.patientWalletFrozen
+        );
+        if (!unFreezeSuccess) {
+          console.warn("Unfreeze failed for appointment:", appt._id);
+          continue;
+        }
+
+        await patientUserDetail.save();
+        if (appt.paymentDetails) {
+          appt.paymentDetails.patientWalletFrozen = 0;
+        }
+        expired++;
+      }
+      // patient_confirmed → completed or unattended
+      else if (status === "patient_confirmed") {
+        if (paymentDetails?.paymentStatus === "completed") {
+          appt.status = "completed";
+          completed++;
+        } else {
+          appt.status = "unattended";
+          const unFreezeSuccess = (patientUserDetail as any).unfreezeAmount(
+            paymentDetails?.patientWalletFrozen
+          );
+          if (!unFreezeSuccess) {
+            console.warn("Unfreeze failed for appointment:", appt._id);
+            continue;
+          }
+          await patientUserDetail.save();
+          if (appt.paymentDetails) {
+            appt.paymentDetails.patientWalletFrozen = 0;
+          }
+          unattended++;
+        }
+      }
+
+      await appt.save();
     }
-  };
+
+    return {
+      success: true,
+      message: "Home Statuses updated.",
+      summary: { expired, completed, unattended },
+    };
+  } catch (error) {
+    console.error("Cron job error in updateHomeStatusCron:", error);
+    return {
+      success: false,
+      message: "Cron job failed to update home appointments.",
+      error: (error as Error).message,
+    };
+  }
+};

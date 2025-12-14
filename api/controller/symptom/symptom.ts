@@ -19,14 +19,16 @@ export const searchSymptoms = async (
 
     res.status(200).json({
       success: true,
-      message: "Symptoms fetched successfully",
+      message: "Symptoms retrieved successfully.",
+      action: "searchSymptoms:success",
       data: symptoms,
     });
   } catch (error) {
     console.error("Error searching symptoms:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to search symptoms",
+      message: "We couldn't search symptoms right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -41,14 +43,16 @@ export const getAllUniqueSpecialist = async (
 
     res.status(200).json({
       success: true,
-      message: "Unique specialist fetched successfully",
+      message: "Specialists retrieved successfully.",
+      action: "getAllUniqueSpecialist:success",
       data: uniqueSymptoms,
     });
   } catch (error) {
     console.error("Error fetching unique specialist:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch unique specialist",
+      message: "We couldn't fetch the specialist list right now.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };

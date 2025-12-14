@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateAppointmentExpiredStatus = exports.getAllPatients = exports.getDoctorAppointmentByDate = exports.finalPayment = exports.createRoomAccessToken = exports.updateAppointmentStatus = exports.getPatientAppointments = exports.getDoctorAppointments = exports.bookOnlineAppointment = void 0;
+exports.updateOnlineStatusCron = exports.getAllPatients = exports.getDoctorAppointmentByDate = exports.finalPayment = exports.createRoomAccessToken = exports.updateAppointmentStatus = exports.getPatientAppointments = exports.getDoctorAppointments = exports.bookOnlineAppointment = void 0;
 const twilio_1 = __importDefault(require("twilio"));
 const twilio_2 = require("twilio");
 const online_appointment_model_1 = __importDefault(require("../../models/appointment/online-appointment-model"));
@@ -23,7 +23,7 @@ const doctor_model_1 = __importDefault(require("../../models/user/doctor-model")
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
-/* Book appointment by patient + Amount freeze*/
+/* step 1 - Book appointment by patient + Amount freeze*/
 const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -33,30 +33,24 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!doctorId || !slot) {
             res.status(400).json({
                 success: false,
-                message: "Doctor ID and slot information are required",
+                message: "Doctor ID and slot information are required.",
+                action: "bookOnlineAppointment:missing-fields",
             });
             return;
         }
         if (!slot.day || !slot.duration || !slot.time) {
             res.status(400).json({
                 success: false,
-                message: "Slot day, duration, and time are required",
+                message: "Slot day, duration, and time are required.",
+                action: "bookOnlineAppointment:missing-slot-fields",
             });
             return;
         }
         if (!slot.time.start || !slot.time.end) {
             res.status(400).json({
                 success: false,
-                message: "Slot start time and end time are required",
-            });
-            return;
-        }
-        // Check if doctor exists
-        const doctor = yield doctor_model_1.default.findById(doctorId);
-        if (!doctor) {
-            res.status(404).json({
-                success: false,
-                message: "Doctor not found",
+                message: "Slot start time and end time are required.",
+                action: "bookOnlineAppointment:missing-slot-times",
             });
             return;
         }
@@ -65,7 +59,29 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!patientUserDetail) {
             res.status(404).json({
                 success: false,
-                message: "Patient User not found",
+                message: "We couldn't find your patient's user profile.",
+                action: "bookOnlineAppointment:patientUser-not-found",
+            });
+            return;
+        }
+        // check if patient exists
+        const patient = yield patient_model_1.default.findOne({ userId: patientUserId });
+        if (!patient) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find your patient profile.",
+                action: "bookOnlineAppointment:patient-not-found",
+            });
+            return;
+        }
+        const patientId = patient._id;
+        // Check if doctor exists
+        const doctor = yield doctor_model_1.default.findById(doctorId);
+        if (!doctor) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find the selected doctor.",
+                action: "bookOnlineAppointment:doctor-not-found",
             });
             return;
         }
@@ -73,7 +89,8 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!matchedDuration) {
             res.status(400).json({
                 success: false,
-                message: "Doctor does not offer this duration",
+                message: "The doctor does not offer this appointment duration.",
+                action: "bookOnlineAppointment:unsupported-duration",
             });
             return;
         }
@@ -89,7 +106,8 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (existingAppointment) {
             res.status(400).json({
                 success: false,
-                message: "This slot is already booked",
+                message: "This slot is already booked.",
+                action: "bookOnlineAppointment:slot-unavailable",
             });
             return;
         }
@@ -98,7 +116,8 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (patientAvailableBalance < price) {
             res.status(400).json({
                 success: false,
-                message: "Insufficient wallet balance",
+                message: "Your wallet balance is too low for this booking.",
+                action: "bookOnlineAppointment:insufficient-balance",
             });
             return;
         }
@@ -107,7 +126,8 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!freezeSuccess) {
             res.status(400).json({
                 success: false,
-                message: "Error freezing amount in wallet",
+                message: "We couldn't reserve the appointment amount.",
+                action: "bookOnlineAppointment:freeze-failed",
                 data: {
                     required: price,
                     available: patientUserDetail.wallet - patientUserDetail.frozenAmount,
@@ -120,7 +140,7 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         // Create new appointment
         const newAppointment = new online_appointment_model_1.default({
             doctorId,
-            patientId: patientUserId,
+            patientId,
             slot: {
                 day: new Date(slot.day),
                 duration: slot.duration,
@@ -143,7 +163,11 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         const populatedAppointment = yield online_appointment_model_1.default.findById(newAppointment._id)
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
         })
             .populate({
             path: "doctorId",
@@ -155,16 +179,17 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
         });
         res.status(201).json({
             success: true,
+            message: "Appointment booked successfully.",
+            action: "bookOnlineAppointment:success",
             data: populatedAppointment,
-            message: "Appointment booked successfully",
         });
     }
     catch (error) {
         console.error("Error booking online appointment:", error);
         res.status(500).json({
             success: false,
-            message: "Error booking appointment",
-            error: error.message,
+            message: "We couldn't book the appointment right now.",
+            action: error.message,
         });
     }
 });
@@ -172,42 +197,28 @@ exports.bookOnlineAppointment = bookOnlineAppointment;
 // Get all appointments for doctor
 const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const doctorId = req.user.id; // Assuming the logged-in user is a doctor
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId });
+        const doctorUserId = req.user.id;
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "getDoctorAppointments:doctor-not-found",
             });
             return;
         }
-        const now = new Date();
-        // Helper function to update appointment statuses
-        const updateStatuses = (appointments, Model) => __awaiter(void 0, void 0, void 0, function* () {
-            const updates = appointments.map((appt) => __awaiter(void 0, void 0, void 0, function* () {
-                var _a, _b;
-                const endDate = new Date((_b = (_a = appt.slot) === null || _a === void 0 ? void 0 : _a.time) === null || _b === void 0 ? void 0 : _b.end); // assuming slot.time.end exists
-                if (endDate && endDate < now) {
-                    if (appt.status === "pending") {
-                        appt.status = "expired";
-                        yield Model.updateOne({ _id: appt._id }, { status: "cancelled" });
-                    }
-                    else if (appt.status === "accepted") {
-                        appt.status = "completed";
-                        yield Model.updateOne({ _id: appt._id }, { status: "completed" });
-                    }
-                }
-                return appt;
-            }));
-            return Promise.all(updates);
-        });
-        // Find all online appointments for this doctor
+        const doctorId = doctor._id;
+        /***** Find all online appointments for this doctor ******/
         let onlineAppointments = yield online_appointment_model_1.default.find({
-            doctorId: doctor._id,
+            doctorId,
         })
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
         })
             .populate({
             path: "doctorId",
@@ -217,11 +228,10 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
                 select: "firstName lastName countryCode gender email profilePic",
             },
         })
-            .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
-        onlineAppointments = yield updateStatuses(onlineAppointments, online_appointment_model_1.default);
+            .sort({ "slot.day": 1, "slot.time.start": 1 });
         // Find all emergency appointments for this doctor
         let emergencyAppointments = yield emergency_appointment_model_1.default.find({
-            doctorId: doctor._id,
+            doctorId,
         })
             .populate({
             path: "patientId",
@@ -239,11 +249,18 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
                 select: "firstName lastName countryCode gender email profilePic",
             },
         })
-            .sort({ createdAt: -1 }); // Sort by most recent created first
-        emergencyAppointments = yield updateStatuses(emergencyAppointments, emergency_appointment_model_1.default);
+            .sort({ createdAt: -1 });
         // Find all clinic appointments for this doctor
         let clinicAppointments = yield clinic_appointment_model_1.default.find({
-            doctorId: doctor._id,
+            doctorId,
+        })
+            .populate({
+            path: "patientId",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
         })
             .populate({
             path: "doctorId",
@@ -253,19 +270,18 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
                 select: "firstName lastName profilePic",
             },
         })
-            .populate({
-            path: "patientId",
-            select: "firstName lastName profilePic phone",
-        })
-            .sort({ "slot.day": -1 });
-        clinicAppointments = yield updateStatuses(clinicAppointments, clinic_appointment_model_1.default);
+            .sort({ "slot.day": -1, "slot.time.start": -1 });
         // Find all home visit appointments for this doctor
         let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
-            doctorId: doctor._id,
+            doctorId,
         })
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
         })
             .populate({
             path: "doctorId",
@@ -276,22 +292,24 @@ const getDoctorAppointments = (req, res) => __awaiter(void 0, void 0, void 0, fu
             },
         })
             .sort({ "slot.day": -1, "slot.time.start": -1 });
-        homeVisitAppointments = yield updateStatuses(homeVisitAppointments, homevisit_appointment_model_1.default);
         res.status(200).json({
             success: true,
-            onlineAppointment: onlineAppointments,
-            emergencyAppointment: emergencyAppointments,
-            clinicAppointment: clinicAppointments,
-            homevisitAppointment: homeVisitAppointments,
-            message: "Doctor appointments retrieved successfully",
+            message: "Doctor appointments retrieved successfully.",
+            action: "getDoctorAppointments:success",
+            data: {
+                onlineAppointments,
+                emergencyAppointments,
+                clinicAppointments,
+                homeVisitAppointments,
+            },
         });
     }
     catch (error) {
         console.error("Error getting doctor appointments:", error);
         res.status(500).json({
             success: false,
-            message: "Error retrieving appointments",
-            error: error.message,
+            message: "We couldn't load the doctor appointments.",
+            action: error.message,
         });
     }
 });
@@ -299,43 +317,28 @@ exports.getDoctorAppointments = getDoctorAppointments;
 // Get all appointments for patient
 const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const userId = req.user.id; // Assuming the logged-in user is a patient
+        const userId = req.user.id;
         // Find the patient record
         const patient = yield patient_model_1.default.findOne({ userId });
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "getPatientAppointments:patient-not-found",
             });
             return;
         }
-        const now = new Date();
-        // Helper function to update appointment statuses
-        const updateStatuses = (appointments, Model) => __awaiter(void 0, void 0, void 0, function* () {
-            const updates = appointments.map((appt) => __awaiter(void 0, void 0, void 0, function* () {
-                var _a, _b;
-                const endDate = new Date((_b = (_a = appt.slot) === null || _a === void 0 ? void 0 : _a.time) === null || _b === void 0 ? void 0 : _b.end); // assuming slot.time.end exists
-                if (endDate && endDate < now) {
-                    if (appt.status === "pending") {
-                        appt.status = "expired";
-                        yield Model.updateOne({ _id: appt._id }, { status: "cancelled" });
-                    }
-                    else if (appt.status === "accepted") {
-                        appt.status = "completed";
-                        yield Model.updateOne({ _id: appt._id }, { status: "completed" });
-                    }
-                }
-                return appt;
-            }));
-            return Promise.all(updates);
-        });
+        const patientId = patient._id;
         // Find all online appointments for this patient (patientId references User)
-        let onlineAppointments = yield online_appointment_model_1.default.find({
-            patientId: userId,
-        })
+        let onlineAppointments = yield online_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
         })
             .populate({
             path: "doctorId",
@@ -345,18 +348,16 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
                 select: "firstName lastName countryCode gender email profilePic",
             },
         })
-            .sort({ "slot.day": 1, "slot.time.start": 1 }); // Sort by date and time
-        onlineAppointments = yield updateStatuses(onlineAppointments, online_appointment_model_1.default);
+            .sort({ "slot.day": 1, "slot.time.start": 1 });
         // Find all emergency appointments for this patient (patientId references Patient)
-        let emergencyAppointments = yield emergency_appointment_model_1.default.find({
-            patientId: patient._id,
-        })
+        let emergencyAppointments = yield emergency_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
             .populate({
             path: "patientId",
-            select: "userId healthMetrics insurance mapLocation",
+            select: "userId",
             populate: {
                 path: "userId",
-                select: "firstName lastName countryCode gender email profilePic phone dob address wallet",
+                select: "firstName lastName countryCode gender email profilePic",
             },
         })
             .populate({
@@ -367,29 +368,37 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
                 select: "firstName lastName countryCode gender email profilePic",
             },
         })
-            .sort({ createdAt: -1 }); // Sort by most recent created first
-        emergencyAppointments = yield updateStatuses(emergencyAppointments, emergency_appointment_model_1.default);
+            .sort({ createdAt: -1 });
         // Find all clinic appointments for this patient
-        let clinicAppointments = yield clinic_appointment_model_1.default.find({
-            patientId: userId,
-        })
-            .populate("doctorId", "userId specialization clinicVisit")
-            .populate({
-            path: "doctorId",
-            populate: {
-                path: "userId",
-                select: "firstName lastName profilePic",
-            },
-        })
-            .sort({ "slot.day": -1 });
-        clinicAppointments = yield updateStatuses(clinicAppointments, clinic_appointment_model_1.default);
-        // Find all home visit appointments for this patient
-        let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({
-            patientId: userId,
-        })
+        let clinicAppointments = yield clinic_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
+        })
+            .populate({
+            path: "doctorId",
+            select: "qualifications specialization userId clinicVisit",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
+        })
+            .sort({ "slot.day": 1, "slot.time.start": 1 });
+        // Find all home visit appointments for this patient
+        let homeVisitAppointments = yield homevisit_appointment_model_1.default.find({ patientId })
+            .select("-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning")
+            .populate({
+            path: "patientId",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
         })
             .populate({
             path: "doctorId",
@@ -400,29 +409,30 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
             },
         })
             .sort({ "slot.day": -1, "slot.time.start": -1 });
-        homeVisitAppointments = yield updateStatuses(homeVisitAppointments, homevisit_appointment_model_1.default);
         res.status(200).json({
             success: true,
-            onlineAppointment: onlineAppointments,
-            emergencyAppointment: emergencyAppointments,
-            clinicAppointment: clinicAppointments,
-            homevisitAppointment: homeVisitAppointments,
-            message: "Patient appointments retrieved successfully",
+            message: "Patient appointments retrieved successfully.",
+            action: "getPatientAppointments:success",
+            data: {
+                onlineAppointments,
+                emergencyAppointments,
+                clinicAppointments,
+                homeVisitAppointments,
+            },
         });
     }
     catch (error) {
         console.error("Error getting patient appointments:", error);
         res.status(500).json({
             success: false,
-            message: "Error retrieving appointments",
-            error: error.message,
+            message: "We couldn't load the patient appointments.",
+            action: error.message,
         });
     }
 });
 exports.getPatientAppointments = getPatientAppointments;
-/* Update appointment status by doctor (if accept -> create twilio room, if reject -> unfreeze amount) */
+/* step 2 - Update appointment status by doctor (if accept -> create twilio room, if reject -> unfreeze amount) */
 const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
     try {
         const { appointmentId } = req.params;
         const { status } = req.body;
@@ -431,7 +441,8 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
         if (!status || !["pending", "accepted", "rejected"].includes(status)) {
             res.status(400).json({
                 success: false,
-                message: "Valid status (pending, accepted, rejected) is required",
+                message: "Status must be one of pending, accepted, or rejected.",
+                action: "updateAppointmentStatus:invalid-status",
             });
             return;
         }
@@ -439,7 +450,8 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "updateAppointmentStatus:doctor-not-found",
             });
             return;
         }
@@ -451,34 +463,36 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
         if (!appointment) {
             res.status(404).json({
                 success: false,
-                message: "Appointment not found or you don't have permission to modify it",
+                message: "We couldn't find that appointment or you don't have permission to modify it.",
+                action: "updateAppointmentStatus:appointment-not-found",
             });
             return;
         }
         // if status is reject unfreeze the amount from patient's user wallet.
-        if (status === "rejected" || status === "cancel") {
-            const patientUserId = appointment.patientId;
-            const patientUserDetail = yield user_model_1.default.findById(patientUserId);
-            if (!patientUserDetail) {
-                res.status(400).json({
-                    success: false,
-                    message: "Patient not found",
-                });
-                return;
-            }
-            const amount = (_a = appointment.paymentDetails) === null || _a === void 0 ? void 0 : _a.patientWalletFrozen;
-            const unfreezeSuccess = patientUserDetail.unfreezeAmount(amount);
-            if (unfreezeSuccess) {
-                yield patientUserDetail.save();
-            }
-            else {
-                res.status(400).json({
-                    success: false,
-                    message: "Error in adding frozen amount in patient wallet.",
-                });
-                return;
-            }
-        }
+        // if (status === "rejected" || status === "cancel") {
+        //   const patientUserId = appointment.patientId;
+        //   const patientUserDetail = await User.findById(patientUserId);
+        //   if (!patientUserDetail) {
+        //     res.status(400).json({
+        //       success: false,
+        //       message: "We couldn't find the patient profile.",
+        //       action: "updateAppointmentStatus:patient-not-found",
+        //     });
+        //     return;
+        //   }
+        //   const amount = appointment.paymentDetails?.patientWalletFrozen;
+        //   const unfreezeSuccess = (patientUserDetail as any).unfreezeAmount(amount);
+        //   if (unfreezeSuccess) {
+        //     await patientUserDetail.save();
+        //   } else {
+        //     res.status(400).json({
+        //       success: false,
+        //       message: "We couldn't restore the reserved wallet amount.",
+        //       action: "updateAppointmentStatus:unfreeze-failed",
+        //     });
+        //     return;
+        //   }
+        // }
         // if status is accepted create room
         const client = (0, twilio_1.default)(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
         if (status === "accepted") {
@@ -488,7 +502,6 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
                 type: "group",
                 maxParticipants: 2,
             });
-            console.log("Room created:", roomName);
             appointment.roomName = room.uniqueName;
         }
         // Update status of the appointment
@@ -498,7 +511,11 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
         const updatedAppointment = yield online_appointment_model_1.default.findById(appointment._id)
             .populate({
             path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
+            select: "userId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName countryCode gender email profilePic",
+            },
         })
             .populate({
             path: "doctorId",
@@ -510,16 +527,17 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
         });
         res.status(200).json({
             success: true,
+            message: `Appointment status updated to ${status} successfully.`,
+            action: "updateAppointmentStatus:success",
             data: updatedAppointment,
-            message: `Appointment status updated to ${status} successfully`,
         });
     }
     catch (error) {
         console.error("Error updating appointment status:", error);
         res.status(500).json({
             success: false,
-            message: "Error updating appointment status",
-            error: error.message,
+            message: "We couldn't update the appointment status.",
+            action: error.message,
         });
     }
 });
@@ -588,34 +606,48 @@ const createRoomAccessToken = (req, res) => __awaiter(void 0, void 0, void 0, fu
     try {
         const { roomName } = req.body;
         if (!roomName) {
-            res
-                .status(400)
-                .json({ success: false, message: "Room name is required" });
+            res.status(400).json({
+                success: false,
+                message: "Room name is required.",
+                action: "createRoomAccessToken:missing-room-name",
+            });
             return;
         }
         const identity = req.user.id; //user id of user who joined
         // finding the appointment using rommName
         const appointment = yield online_appointment_model_1.default.findOne({ roomName });
-        // if (!appointment) {
         if (!appointment || (appointment === null || appointment === void 0 ? void 0 : appointment.status) !== "accepted") {
             res.status(400).json({
                 success: false,
-                message: "Appointment not found in DB or appointment is not accepted",
+                message: "We couldn't find an accepted appointment for this room.",
+                action: "createRoomAccessToken:appointment-not-found",
             });
             return;
         }
         const doctorId = appointment === null || appointment === void 0 ? void 0 : appointment.doctorId;
-        const patientUserId = appointment === null || appointment === void 0 ? void 0 : appointment.patientId;
+        const patientId = appointment === null || appointment === void 0 ? void 0 : appointment.patientId;
         // doctor's user id
         const doctor = yield doctor_model_1.default.findById(doctorId);
         if (!doctor) {
             res.status(400).json({
                 success: false,
-                message: "Doctor not found in DB",
+                message: "We couldn't find the doctor's user profile.",
+                action: "createRoomAccessToken:doctorUser-not-found",
             });
             return;
         }
         const doctorUserId = doctor === null || doctor === void 0 ? void 0 : doctor.userId;
+        // patient's user id
+        const patient = yield patient_model_1.default.findById(patientId);
+        if (!patient) {
+            res.status(400).json({
+                success: false,
+                message: "We couldn't find the patient's user profile.",
+                action: "createRoomAccessToken:patientUser-not-found",
+            });
+            return;
+        }
+        const patientUserId = patient === null || patient === void 0 ? void 0 : patient.userId;
         let whoJoined = "";
         if (identity == doctorUserId)
             whoJoined = "doctor";
@@ -624,7 +656,8 @@ const createRoomAccessToken = (req, res) => __awaiter(void 0, void 0, void 0, fu
         if (!whoJoined) {
             res.status(403).json({
                 success: false,
-                message: "You are not authorized to join this room",
+                message: "You are not authorized to join this room.",
+                action: "createRoomAccessToken:unauthorised",
             });
             return;
         }
@@ -636,6 +669,8 @@ const createRoomAccessToken = (req, res) => __awaiter(void 0, void 0, void 0, fu
         const jwtToken = token.toJwt();
         res.status(200).json({
             success: true,
+            message: "Access token generated successfully.",
+            action: "createRoomAccessToken:success",
             token: jwtToken,
             role: whoJoined,
             identity: `${whoJoined}_${identity}`,
@@ -644,13 +679,15 @@ const createRoomAccessToken = (req, res) => __awaiter(void 0, void 0, void 0, fu
     }
     catch (err) {
         console.error("Failed to generate Twilio access token:", err);
-        res
-            .status(500)
-            .json({ success: false, message: "Token generation failed" });
+        res.status(500).json({
+            success: false,
+            message: "We couldn't generate the room access token.",
+            action: err instanceof Error ? err.message : String(err),
+        });
     }
 });
 exports.createRoomAccessToken = createRoomAccessToken;
-/* doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
+/* step 3 - doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
     try {
@@ -659,28 +696,33 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         if (!roomName) {
             res.status(400).json({
                 success: false,
-                message: "Missing room name",
+                message: "Room name is required.",
+                action: "onlineFinalPayment:missing-room-name",
             });
             return;
         }
-        console.log('ROOM NAME ', roomName);
         // find the appointment with this room name
         const appointment = yield online_appointment_model_1.default.findOne({ roomName });
         if (!appointment) {
             res.status(400).json({
                 success: false,
-                message: "This appointment does not exist in DB.",
+                message: "We couldn't find an appointment for this room.",
+                action: "onlineFinalPayment:appointment-not-found",
             });
             return;
         }
         // check payment status of this appointment
         const paymentStatus = (_a = appointment.paymentDetails) === null || _a === void 0 ? void 0 : _a.paymentStatus;
         if (paymentStatus === "pending") {
-            const patientUserDetail = yield user_model_1.default.findById(appointment.patientId);
-            if (!patientUserDetail) {
+            const patient = yield patient_model_1.default.findById(appointment.patientId);
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": appointment.patientId,
+            });
+            if (!patientUserDetail || !patient) {
                 res.status(400).json({
                     sucess: false,
-                    message: "Patient User not found.",
+                    message: "We couldn't find the patient profile.",
+                    action: "onlineFinalPayment:patient-not-found",
                 });
                 return;
             }
@@ -691,7 +733,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             if (!doctorUserDetail || !doctor) {
                 res.status(400).json({
                     sucess: false,
-                    message: "Doctor or doctor user not found.",
+                    message: "We couldn't find the doctor profile.",
+                    action: "onlineFinalPayment:doctor-not-found",
                 });
                 return;
             }
@@ -701,7 +744,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             if (!activeSub) {
                 res.status(400).json({
                     success: false,
-                    message: "Doctor has no active subscription",
+                    message: "The doctor does not have an active subscription.",
+                    action: "onlineFinalPayment:no-active-subscription",
                 });
                 return;
             }
@@ -709,7 +753,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             if (!subscription) {
                 res.status(404).json({
                     success: false,
-                    message: "Subscription not found",
+                    message: "We couldn't find the associated subscription.",
+                    action: "onlineFinalPayment:subscription-not-found",
                 });
                 return;
             }
@@ -743,26 +788,32 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
                     appointment.paymentDetails.paymentStatus = "completed";
                     appointment.paymentDetails.patientWalletDeducted = deductAmount;
                     appointment.paymentDetails.patientWalletFrozen -= deductAmount;
+                    appointment.paymentDetails.doctorPlatformFee = platformFee;
+                    appointment.paymentDetails.doctorOpsExpense = opsExpense;
+                    appointment.paymentDetails.doctorEarning = incrementAmount;
                     yield appointment.save();
                 }
                 else {
                     res.status(500).json({
                         success: false,
-                        message: "Failed to process final payment",
+                        message: "We couldn't process the final payment.",
+                        action: "onlineFinalPayment:wallet-deduction-failed",
                     });
                     return;
                 }
             }
             res.status(200).json({
                 success: true,
-                message: "Final payment completed",
+                message: "Final payment completed.",
+                action: "onlineFinalPayment:success",
             });
             return;
         }
         else if (paymentStatus === "completed") {
             res.status(200).json({
-                sucess: true,
+                success: true,
                 message: "Final payment is already processed.",
+                action: "onlineFinalPayment:already-processed",
             });
             return;
         }
@@ -771,8 +822,8 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         console.error("Error processing final payment: ", err);
         res.status(500).json({
             success: false,
-            message: "Error in processing final payment",
-            error: err.message,
+            message: "We couldn't process the final payment.",
+            action: err.message,
         });
     }
 });
@@ -785,7 +836,8 @@ const getDoctorAppointmentByDate = (req, res) => __awaiter(void 0, void 0, void 
         if (!date) {
             res.status(400).json({
                 success: false,
-                message: "Date is required in request body",
+                message: "Date is required in request body.",
+                action: "getDoctorAppointmentByDate:missing-date",
             });
             return;
         }
@@ -794,7 +846,8 @@ const getDoctorAppointmentByDate = (req, res) => __awaiter(void 0, void 0, void 
         if (!doctor) {
             res.status(404).json({
                 success: false,
-                message: "Doctor not found",
+                message: "We couldn't find your doctor profile.",
+                action: "getDoctorAppointmentByDate:doctor-not-found",
             });
             return;
         }
@@ -825,17 +878,20 @@ const getDoctorAppointmentByDate = (req, res) => __awaiter(void 0, void 0, void 
             .sort({ "slot.time.start": 1 }); // Sort by appointment start time
         res.status(200).json({
             success: true,
-            data: appointments,
-            message: `Appointments for ${date} retrieved successfully`,
-            count: appointments.length,
+            message: `Appointments for ${date} retrieved successfully.`,
+            action: "getDoctorAppointmentByDate:success",
+            data: {
+                appointments,
+                count: appointments.length,
+            },
         });
     }
     catch (error) {
         console.error("Error getting doctor appointments by date:", error);
         res.status(500).json({
             success: false,
-            message: "Error retrieving appointments by date",
-            error: error.message,
+            message: "We couldn't retrieve appointments for that date.",
+            action: error.message,
         });
     }
 });
@@ -852,42 +908,106 @@ const getAllPatients = (req, res) => __awaiter(void 0, void 0, void 0, function*
             .sort({ createdAt: -1 }); // Sort by most recent created first
         res.status(200).json({
             success: true,
-            data: patients,
-            message: "All patients retrieved successfully",
-            count: patients.length,
+            message: "All patients retrieved successfully.",
+            action: "getAllPatients:success",
+            data: {
+                patients,
+                count: patients.length,
+            },
         });
     }
     catch (error) {
         console.error("Error getting all patients:", error);
         res.status(500).json({
             success: false,
-            message: "Error retrieving patients",
-            error: error.message,
+            message: "We couldn't load patients right now.",
+            action: error.message,
         });
     }
 });
 exports.getAllPatients = getAllPatients;
-// script for cron job
-const updateAppointmentExpiredStatus = () => __awaiter(void 0, void 0, void 0, function* () {
+//***** script for cron job
+const updateOnlineStatusCron = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const now = new Date();
-        // Find appointments that have passed their slot end time and are still pending or accepted
-        const expiredAppointments = yield online_appointment_model_1.default.find({
+        // run the cron at 6:30 PM UTC(12:00 AM IST)
+        const appointments = yield online_appointment_model_1.default.find({
             "slot.time.end": { $lt: now },
             status: { $in: ["pending", "accepted"] },
         });
-        if (expiredAppointments.length > 0) {
-            const updateResult = yield online_appointment_model_1.default.updateMany({
-                "slot.time.end": { $lt: now },
-                status: { $in: ["pending", "accepted"] },
-            }, {
-                $set: { status: "expired" },
-            });
-            console.log(`Updated ${updateResult.modifiedCount} expired appointments`);
+        if (appointments.length === 0) {
+            return {
+                success: true,
+                message: "No online appointments to update.",
+                summary: { expired: 0, completed: 0, unattended: 0 },
+            };
         }
+        let expired = 0;
+        let completed = 0;
+        let unattended = 0;
+        // loop through all the appointments
+        for (const appt of appointments) {
+            const { status, paymentDetails, patientId } = appt;
+            if (!status || !paymentDetails || !patientId) {
+                console.warn("Skipping appointment due to missing fields:", appt._id);
+                continue;
+            }
+            const patientUserDetail = yield user_model_1.default.findOne({
+                "roleRefs.patient": patientId,
+            });
+            if (!patientUserDetail) {
+                console.warn("Patient user not found for appointment:", appt._id);
+                continue;
+            }
+            // pending -> expired
+            if (status === "pending") {
+                appt.status = "expired";
+                const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                if (!unFreezeSuccess) {
+                    console.warn("Unfreeze failed for appointment:", appt._id);
+                    continue;
+                }
+                yield patientUserDetail.save();
+                if (appt.paymentDetails) {
+                    appt.paymentDetails.patientWalletFrozen = 0;
+                }
+                expired++;
+            }
+            // accepted → completed or unattended
+            else if (status === "accepted") {
+                if ((paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.paymentStatus) === "completed") {
+                    appt.status = "completed";
+                    completed++;
+                }
+                else {
+                    appt.status = "unattended";
+                    const unFreezeSuccess = patientUserDetail.unfreezeAmount(paymentDetails === null || paymentDetails === void 0 ? void 0 : paymentDetails.patientWalletFrozen);
+                    if (!unFreezeSuccess) {
+                        console.warn("Unfreeze failed for appointment:", appt._id);
+                        continue;
+                    }
+                    yield patientUserDetail.save();
+                    if (appt.paymentDetails) {
+                        appt.paymentDetails.patientWalletFrozen = 0;
+                    }
+                    unattended++;
+                }
+            }
+            yield appt.save();
+        }
+        return {
+            success: true,
+            message: "Online Statuses updated.",
+            summary: { expired, completed, unattended },
+        };
     }
     catch (error) {
-        console.error("Error updating expired appointments:", error.message);
+        console.error("Cron job error in updateOnlineStatusCron:", error);
+        return {
+            success: false,
+            message: "Cron job failed to update online appointments.",
+            error: error.message,
+        };
     }
 });
-exports.updateAppointmentExpiredStatus = updateAppointmentExpiredStatus;
+exports.updateOnlineStatusCron = updateOnlineStatusCron;

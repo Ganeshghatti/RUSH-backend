@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getHealthMetrics = exports.updateHealthMetrics = exports.getAppointmentsDoctorForPatient = exports.updatePersonalInfo = exports.updateBankDetail = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
+exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -24,8 +24,6 @@ const razorpay_1 = require("../../config/razorpay");
 const signed_url_1 = require("../../utils/signed-url");
 const emergency_appointment_model_1 = __importDefault(require("../../models/appointment/emergency-appointment-model"));
 const emergency_appointment_1 = require("../appointment/emergency-appointment");
-const validation_1 = require("../../validation/validation");
-const health_metrics_model_1 = require("../../models/health-metrics-model");
 const crypto_1 = __importDefault(require("crypto"));
 const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -33,7 +31,8 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!req.body.data) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields: JSON data is required",
+                message: "Please include the required form data.",
+                action: "subscribePatient:missing-json",
             });
             return;
         }
@@ -45,7 +44,8 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
         catch (error) {
             res.status(400).json({
                 success: false,
-                message: "Invalid JSON data format",
+                message: "We couldn't read the submitted information.",
+                action: "subscribePatient:invalid-json",
             });
             return;
         }
@@ -54,7 +54,8 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!patientId || !subscriptionId) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields: patientId, subscriptionId, or paymentDetails.upiId",
+                message: "Missing required details. Please provide the patient and subscription IDs.",
+                action: "subscribePatient:missing-fields",
             });
             return;
         }
@@ -66,7 +67,8 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "User not found",
+                message: "We couldn't find the patient for this subscription.",
+                action: "subscribePatient:patient-not-found",
             });
             return;
         }
@@ -76,14 +78,16 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
         if (!subscription) {
             res.status(404).json({
                 success: false,
-                message: "Subscription plan not found",
+                message: "We couldn't find that subscription plan.",
+                action: "subscribePatient:plan-not-found",
             });
             return;
         }
         if (!subscription.isActive) {
             res.status(400).json({
                 success: false,
-                message: "Subscription plan is not active",
+                message: "This subscription plan is currently inactive.",
+                action: "subscribePatient:plan-inactive",
             });
             return;
         }
@@ -98,7 +102,8 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.log("order created: ", order);
         res.status(200).json({
             success: true,
-            message: "Patient subscribed successfully",
+            message: "Subscription order created successfully.",
+            action: "subscribePatient:order-created",
             data: {
                 order,
                 prefill: {
@@ -114,8 +119,8 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.error("Error in subscribing patient:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to subscribe patient",
-            error: error,
+            message: "We couldn't start the subscription.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -131,7 +136,8 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             !userId) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, userId",
+                message: "Please provide all payment verification details.",
+                action: "verifyPaymentSubscription:validate-input",
             });
             return;
         }
@@ -146,7 +152,8 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             if (!patient) {
                 res.status(404).json({
                     success: false,
-                    message: "User not found",
+                    message: "We couldn't find the patient for this subscription.",
+                    action: "verifyPaymentSubscription:patient-not-found",
                 });
                 return;
             }
@@ -154,14 +161,16 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             if (!subscription) {
                 res.status(404).json({
                     success: false,
-                    message: "Subscription plan not found",
+                    message: "We couldn't find that subscription plan.",
+                    action: "verifyPaymentSubscription:plan-not-found",
                 });
                 return;
             }
             if (!subscription.isActive) {
                 res.status(400).json({
                     success: false,
-                    message: "Subscription plan is not active",
+                    message: "This subscription plan is currently inactive.",
+                    action: "verifyPaymentSubscription:plan-inactive",
                 });
                 return;
             }
@@ -210,7 +219,8 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
                 default:
                     res.status(400).json({
                         success: false,
-                        message: "Invalid subscription duration",
+                        message: "This subscription duration is not supported.",
+                        action: `verifyPaymentSubscription:invalid-duration:${subscription.duration}`,
                     });
                     return;
             }
@@ -226,19 +236,25 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
             yield patient.save();
             res.status(200).json({
                 success: true,
-                message: "Payment verified successfully",
+                message: "Subscription payment verified successfully.",
+                action: "verifyPaymentSubscription:success",
                 data: patient,
             });
         }
         else {
             res.status(400).json({
                 success: false,
-                message: "Invalid payment signature",
+                message: "We could not verify the payment signature.",
+                action: "verifyPaymentSubscription:signature-mismatch",
             });
         }
     }
     catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({
+            success: false,
+            message: "We couldn't verify the subscription payment.",
+            action: err.message,
+        });
     }
 });
 exports.verifyPaymentSubscription = verifyPaymentSubscription;
@@ -249,7 +265,8 @@ const getPatientById = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid patient ID format",
+                message: "The patient ID provided is invalid.",
+                action: "getPatientById:validate-id",
             });
             return;
         }
@@ -263,7 +280,8 @@ const getPatientById = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find a patient with that ID.",
+                action: "getPatientById:not-found",
             });
             return;
         }
@@ -271,7 +289,8 @@ const getPatientById = (req, res) => __awaiter(void 0, void 0, void 0, function*
         const patientWithSignedUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(patient);
         res.status(200).json({
             success: true,
-            message: "Patient details fetched successfully",
+            message: "Patient details fetched successfully.",
+            action: "getPatientById:success",
             data: patientWithSignedUrls,
         });
     }
@@ -279,7 +298,8 @@ const getPatientById = (req, res) => __awaiter(void 0, void 0, void 0, function*
         console.error("Error fetching patient details:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch patient details",
+            message: "We couldn't fetch the patient details.",
+            action: error instanceof Error ? error.message : String(error),
         });
     }
 });
@@ -292,7 +312,8 @@ const patientOnboard = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
             res.status(400).json({
                 success: false,
-                message: "Invalid user ID format",
+                message: "The user ID provided is invalid.",
+                action: "patientOnboard:validate-user-id",
             });
             return;
         }
@@ -301,7 +322,8 @@ const patientOnboard = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!user) {
             res.status(404).json({
                 success: false,
-                message: "User not found or not a patient",
+                message: "We couldn't find the user or they are not a patient.",
+                action: "patientOnboard:user-not-found",
             });
             return;
         }
@@ -309,7 +331,8 @@ const patientOnboard = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!gender || !dob || !address) {
             res.status(400).json({
                 success: false,
-                message: "Missing required fields",
+                message: "Please fill in all required patient details.",
+                action: "patientOnboard:missing-fields",
             });
             return;
         }
@@ -336,13 +359,15 @@ const patientOnboard = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!updatedPatient) {
             res.status(500).json({
                 success: false,
-                message: "Failed to update patient information",
+                message: "We couldn't update the patient information.",
+                action: "patientOnboard:update-failed",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Patient onboarded successfully",
+            message: "Patient information saved successfully.",
+            action: "patientOnboard:success",
             data: updatedPatient,
         });
     }
@@ -350,8 +375,8 @@ const patientOnboard = (req, res) => __awaiter(void 0, void 0, void 0, function*
         console.error("Error in patient onboarding:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to onboard patient",
-            error: error.message,
+            message: "We couldn't complete the patient onboarding.",
+            action: error.message,
         });
     }
 });
@@ -363,7 +388,8 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!patient) {
             res.status(404).json({
                 success: false,
-                message: "Patient not found",
+                message: "We couldn't find your patient profile.",
+                action: "getPatientDashboard:patient-not-found",
             });
             return;
         }
@@ -487,7 +513,8 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
         const processedDoctors = yield Promise.all(recommendedDoctors.map((doctor) => (0, signed_url_1.generateSignedUrlsForDoctor)(doctor)));
         res.status(200).json({
             success: true,
-            message: "Patient dashboard data retrieved successfully",
+            message: "Patient dashboard data retrieved successfully.",
+            action: "getPatientDashboard:success",
             data: {
                 appointmentCounts,
                 emergencyAppointments: emergencyAppointmentsWithUrls,
@@ -499,76 +526,12 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
         console.error("Error getting patient dashboard:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to get patient dashboard data",
-            error: error.message,
+            message: "We couldn't load the patient dashboard.",
+            action: error.message,
         });
     }
 });
 exports.getPatientDashboard = getPatientDashboard;
-const updateBankDetail = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const { bankDetails } = req.body;
-        if (!bankDetails || Object.keys(bankDetails).length === 0) {
-            res.status(400).json({
-                success: false,
-                message: "No bank details provided",
-            });
-            return;
-        }
-        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, { $set: { bankDetails } }, // replace bankDetails object
-        { new: true, runValidators: true, select: "-password" });
-        if (!updatedUser) {
-            res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Bank details updated successfully",
-            data: updatedUser.bankDetails, // return just bankDetails
-        });
-    }
-    catch (error) {
-        console.error("Error updating bank details:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error updating bank details",
-            error: error.message,
-        });
-    }
-});
-exports.updateBankDetail = updateBankDetail;
-const updatePersonalInfo = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const { firstName, lastName, email, phone } = req.body;
-        const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, {
-            firstName,
-            lastName,
-            email,
-            phone,
-        }, { new: true, runValidators: true }).select("-password");
-        if (!updatedUser) {
-            res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-            return;
-        }
-        res.json({
-            message: "Personal info updated successfully",
-            user: updatedUser,
-        });
-    }
-    catch (error) {
-        console.error("Error updating personal info:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-});
-exports.updatePersonalInfo = updatePersonalInfo;
 const getAppointmentsDoctorForPatient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
@@ -631,7 +594,8 @@ const getAppointmentsDoctorForPatient = (req, res) => __awaiter(void 0, void 0, 
             new Date(a.createdAt || 0).getTime());
         res.status(200).json({
             success: true,
-            message: "Appointments for patient retrieved successfully",
+            message: "Appointments retrieved successfully.",
+            action: "getAppointmentsDoctorForPatient:success",
             data: appointmentsWithSignedUrls,
         });
     }
@@ -639,105 +603,113 @@ const getAppointmentsDoctorForPatient = (req, res) => __awaiter(void 0, void 0, 
         console.error("Error in getting appointments for patient:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to get appointments for patient",
-            error: error.message,
+            message: "We couldn't fetch the patient's appointments.",
+            action: error.message,
         });
     }
 });
 exports.getAppointmentsDoctorForPatient = getAppointmentsDoctorForPatient;
-const updateHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        // Validate request body
-        const validationResult = validation_1.updateHealthMetricsSchema.safeParse(req.body);
-        if (!validationResult.success) {
-            res.status(400).json({
-                success: false,
-                message: "Validation failed",
-                errors: validationResult.error.errors,
-            });
-            return;
-        }
-        // Find patient by userId
-        const patient = yield patient_model_1.default.findOne({ userId });
-        if (!patient) {
-            res.status(404).json({
-                success: false,
-                message: "Patient not found",
-            });
-            return;
-        }
-        const updateData = validationResult.data;
-        // Try to find existing health metrics for this patient
-        let healthMetrics = yield health_metrics_model_1.HealthMetrics.findOne({ patientId: patient._id });
-        if (healthMetrics) {
-            // Update existing health metrics document
-            healthMetrics = yield health_metrics_model_1.HealthMetrics.findOneAndUpdate({ patientId: patient._id }, { $set: updateData }, { new: true, runValidators: true });
-            res.status(200).json({
-                success: true,
-                message: "Health metrics updated successfully",
-                data: healthMetrics,
-            });
-        }
-        else {
-            // Create new health metrics document if none exists
-            healthMetrics = new health_metrics_model_1.HealthMetrics(Object.assign({ patientId: patient._id }, updateData));
-            const savedHealthMetrics = yield healthMetrics.save();
-            patient.healthMetricsId = savedHealthMetrics._id;
-            yield patient.save();
-            res.status(201).json({
-                success: true,
-                message: "Health metrics created successfully",
-                data: savedHealthMetrics,
-            });
-        }
-    }
-    catch (error) {
-        console.error("Error updating health metrics:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update health metrics",
-            error: error.message,
-        });
-    }
-});
-exports.updateHealthMetrics = updateHealthMetrics;
-const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        // Find patient by userId
-        const patient = yield patient_model_1.default.findOne({ userId });
-        if (!patient) {
-            res.status(404).json({
-                success: false,
-                message: "Patient not found",
-            });
-            return;
-        }
-        // Find health metrics for this patient
-        const healthMetrics = yield health_metrics_model_1.HealthMetrics.findOne({
-            patientId: patient._id,
-        });
-        if (!healthMetrics) {
-            res.status(404).json({
-                success: false,
-                message: "Health metrics not found",
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Health metrics retrieved successfully",
-            data: healthMetrics,
-        });
-    }
-    catch (error) {
-        console.error("Error fetching health metrics:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch health metrics",
-            error: error.message,
-        });
-    }
-});
-exports.getHealthMetrics = getHealthMetrics;
+// export const updateHealthMetrics = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const userId = req.user.id;
+//     // Validate request body
+//     const validationResult = updateHealthMetricsSchema.safeParse(req.body);
+//     if (!validationResult.success) {
+//       res.status(400).json({
+//         success: false,
+//         message: "Validation failed",
+//         errors: validationResult.error.errors,
+//       });
+//       return;
+//     }
+//     // Find patient by userId
+//     const patient = await Patient.findOne({ userId });
+//     if (!patient) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Patient not found",
+//       });
+//       return;
+//     }
+//     const updateData = validationResult.data;
+//     // Try to find existing health metrics for this patient
+//     let healthMetrics = await HealthMetrics.findOne({ patientId: patient._id });
+//     if (healthMetrics) {
+//       // Update existing health metrics document
+//       healthMetrics = await HealthMetrics.findOneAndUpdate(
+//         { patientId: patient._id },
+//         { $set: updateData },
+//         { new: true, runValidators: true }
+//       );
+//       res.status(200).json({
+//         success: true,
+//         message: "Health metrics updated successfully",
+//         data: healthMetrics,
+//       });
+//     } else {
+//       // Create new health metrics document if none exists
+//       healthMetrics = new HealthMetrics({
+//         patientId: patient._id,
+//         ...updateData,
+//       });
+//       const savedHealthMetrics = await healthMetrics.save();
+//       patient.healthMetricsId = savedHealthMetrics._id;
+//       await patient.save();
+//       res.status(201).json({
+//         success: true,
+//         message: "Health metrics created successfully",
+//         data: savedHealthMetrics,
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Error updating health metrics:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to update health metrics",
+//       error: (error as Error).message,
+//     });
+//   }
+// };
+// export const getHealthMetrics = async (
+//   req: Request,
+//   res: Response
+// ): Promise<void> => {
+//   try {
+//     const userId = req.user.id;
+//     // Find patient by userId
+//     const patient = await Patient.findOne({ userId });
+//     if (!patient) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Patient not found",
+//       });
+//       return;
+//     }
+//     // Find health metrics for this patient
+//     const healthMetrics = await HealthMetrics.findOne({
+//       patientId: patient._id,
+//     });
+//     if (!healthMetrics) {
+//       res.status(404).json({
+//         success: false,
+//         message: "Health metrics not found",
+//       });
+//       return;
+//     }
+//     res.status(200).json({
+//       success: true,
+//       message: "Health metrics retrieved successfully",
+//       data: healthMetrics,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching health metrics:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch health metrics",
+//       error: (error as Error).message,
+//     });
+//   }
+// };

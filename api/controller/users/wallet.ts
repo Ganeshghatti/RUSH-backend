@@ -1,5 +1,4 @@
 import { razorpayConfig } from "./../../config/razorpay";
-import { razorpayAxios } from "../../config/razorpayX";
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
 import mongoose from "mongoose";
@@ -20,7 +19,8 @@ export const updateWallet = async (
     if (typeof wallet !== "number") {
       res.status(400).json({
         success: false,
-        message: "wallet must be a number",
+        message: "Wallet amount must be a number.",
+        action: "updateWallet:validate-wallet-type",
       });
       return;
     }
@@ -28,7 +28,8 @@ export const updateWallet = async (
     if (!mongoose.Types.ObjectId.isValid(id)) {
       res.status(400).json({
         success: false,
-        message: "Invalid user ID format",
+        message: "Invalid user ID provided.",
+        action: "updateWallet:validate-user-id",
       });
       return;
     }
@@ -39,7 +40,8 @@ export const updateWallet = async (
     if (!user) {
       res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "We couldn't find your account.",
+        action: "updateWallet:user-not-found",
       });
       return;
     }
@@ -64,7 +66,8 @@ export const updateWallet = async (
 
     res.status(200).json({
       success: true,
-      message: "Order created successfully",
+      message: "Payment order created successfully.",
+      action: "updateWallet:order-created",
       data: {
         order,
         prefill: {
@@ -79,8 +82,8 @@ export const updateWallet = async (
     console.error("Error creating order:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to update wallet",
-      error: error instanceof Error ? error.message : String(error),
+      message: "We couldn't create the payment order.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
@@ -106,7 +109,8 @@ export const verifyPaymentWallet = async (req: Request, res: Response) => {
       res.status(400).json({
         success: false,
         message:
-          "Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, userId",
+          "Please provide all payment details (order, payment, signature, wallet).",
+        action: "verifyPaymentWallet:validate-input",
       });
       return;
     }
@@ -122,7 +126,8 @@ export const verifyPaymentWallet = async (req: Request, res: Response) => {
       if (!user) {
         res.status(404).json({
           success: false,
-          message: "User not found",
+          message: "We couldn't find your account.",
+          action: "verifyPaymentWallet:user-not-found",
         });
         return;
       }
@@ -140,7 +145,8 @@ export const verifyPaymentWallet = async (req: Request, res: Response) => {
 
       res.status(200).json({
         success: true,
-        message: "Payment verified successfully",
+        message: "Payment verified successfully.",
+        action: "verifyPaymentWallet:success",
         data: {
           currentBalance: user.wallet,
         },
@@ -148,11 +154,16 @@ export const verifyPaymentWallet = async (req: Request, res: Response) => {
     } else {
       res.status(400).json({
         success: false,
-        message: "Payment failed",
+        message: "The payment signature did not match.",
+        action: "verifyPaymentWallet:signature-mismatch",
       });
     }
   } catch (err: any) {
-    res.status(500).json({ error: (err as Error).message });
+    res.status(500).json({
+      success: false,
+      message: "We couldn't verify the payment.",
+      action: (err as Error).message,
+    });
   }
 };
 
@@ -169,7 +180,8 @@ export const deductWallet = async (
     if (typeof amount !== "number") {
       res.status(400).json({
         success: false,
-        message: "amount must be a number",
+        message: "Amount must be a number.",
+        action: "deductWallet:validate-amount-type",
       });
       return;
     }
@@ -177,7 +189,8 @@ export const deductWallet = async (
     if (amount <= 0) {
       res.status(400).json({
         success: false,
-        message: "amount must be greater than 0",
+        message: "Amount must be greater than zero.",
+        action: "deductWallet:validate-amount-positive",
       });
       return;
     }
@@ -185,7 +198,8 @@ export const deductWallet = async (
     if (!mongoose.Types.ObjectId.isValid(id)) {
       res.status(400).json({
         success: false,
-        message: "Invalid user ID format",
+        message: "Invalid user ID provided.",
+        action: "deductWallet:validate-user-id",
       });
       return;
     }
@@ -196,7 +210,8 @@ export const deductWallet = async (
     if (!user) {
       res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "We couldn't find your account.",
+        action: "deductWallet:user-not-found",
       });
       return;
     }
@@ -209,7 +224,8 @@ export const deductWallet = async (
       res.status(400).json({
         success: false,
         message:
-          "A pending debit transaction already exists. Please wait for it to be processed.",
+          "You already have a debit request in progress. Please wait for it to finish.",
+        action: "deductWallet:pending-debit",
       });
       return;
     }
@@ -219,7 +235,8 @@ export const deductWallet = async (
     if (currentBalance < amount) {
       res.status(400).json({
         success: false,
-        message: "Insufficient wallet balance",
+        message: "Your wallet balance is too low for this withdrawal.",
+        action: "deductWallet:insufficient-balance",
         data: {
           currentBalance,
         },
@@ -230,7 +247,8 @@ export const deductWallet = async (
     if (!bankDetails) {
       res.status(400).json({
         success: false,
-        message: "bankDetails are required for debit request",
+        message: "Bank or UPI details are required to process a debit.",
+        action: "deductWallet:missing-bank-details",
       });
       return;
     }
@@ -246,7 +264,8 @@ export const deductWallet = async (
       res.status(400).json({
         success: false,
         message:
-          "Provide at least a valid UPI ID or all required bank account details (accountNumber, ifscCode, bankName, accountName)",
+          "Share a valid UPI ID or complete bank account details (accountNumber, ifscCode, bankName, accountName).",
+        action: "deductWallet:invalid-bank-details",
       });
       return;
     }
@@ -281,7 +300,8 @@ export const deductWallet = async (
 
     res.status(200).json({
       success: true,
-      message: "Debit request created. Awaiting admin approval.",
+      message: "Debit request submitted. Our team will review it soon.",
+      action: "deductWallet:debit-request-created",
       data: {
         currentBalance: user.wallet,
       },
@@ -290,8 +310,8 @@ export const deductWallet = async (
     console.error("Error deducting from wallet:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to deduct from wallet",
-      error: error instanceof Error ? error.message : String(error),
+      message: "We couldn't create the debit request.",
+      action: error instanceof Error ? error.message : String(error),
     });
   }
 };
