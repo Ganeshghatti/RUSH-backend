@@ -182,7 +182,7 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
     // Validate request body using Zod
     const validationResult = updateProfileSchema.safeParse(req.body);
-    
+
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
@@ -217,18 +217,18 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
     // Fixed to exclude date fields and other non-image fields
     const processImageFields = async (data: any, parentKey?: string): Promise<any> => {
       if (!data || typeof data !== 'object') return data;
-      
+
       const processedData = { ...data };
-      
+
       // List of fields that should NOT be processed for image URLs
       const excludeFields = ['dob', 'year', 'fromYear', 'toYear', 'minute', 'price'];
-      
+
       for (const [key, value] of Object.entries(processedData)) {
         // Skip processing for excluded fields
         if (excludeFields.includes(key)) {
           continue;
         }
-        
+
         if (typeof value === 'string' && value.includes('https://')) {
           // This is likely a presigned URL, convert to key
           const extractedKey = await getKeyFromSignedUrl(value);
@@ -245,14 +245,14 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
           processedData[key] = await processImageFields(value, key);
         }
       }
-      
+
       return processedData;
     };
 
     // Update User model if user data is provided
     if (user && Object.keys(user).length > 0) {
       const userUpdateData: any = { ...user };
-      
+
       // Convert dob string to Date if provided (do this BEFORE processing image fields)
       if (user?.dob && typeof user?.dob === "string") {
         userUpdateData.dob = new Date(user.dob);

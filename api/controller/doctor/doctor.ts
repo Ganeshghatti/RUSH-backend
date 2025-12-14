@@ -369,9 +369,9 @@ export const doctorOnboardV2 = async (
       },
       taxProof: parsedTaxProof
         ? {
-            ...parsedTaxProof,
-            image: taxProofImageUrl,
-          }
+          ...parsedTaxProof,
+          image: taxProofImageUrl,
+        }
         : undefined,
     };
 
@@ -949,14 +949,14 @@ export const getDoctorAppointmentStats = async (
         appointmentType: "clinic",
         clinicDetails: clinic
           ? {
-              clinicName: clinic.clinicName,
-              address: clinic.address,
-              consultationFee: clinic.consultationFee,
-              frontDeskNumber: clinic.frontDeskNumber,
-              operationalDays: clinic.operationalDays,
-              timeSlots: clinic.timeSlots,
-              isActive: clinic.isActive,
-            }
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
           : null,
       };
     });
@@ -1358,11 +1358,7 @@ export const updateDoctorActiveStatus = async (
 
     res.status(200).json({
       success: true,
-      message: `Doctor status updated to ${isActive ? "active" : "inactive"}${
-        isActive
-          ? ". The system will automatically set it to inactive soon."
-          : ""
-      }`,
+      message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". Will automatically disable after 1 hour." : ""}`,
       action: "updateDoctorActiveStatus:success",
       data: {
         isActive: updatedDoctor.isActive,

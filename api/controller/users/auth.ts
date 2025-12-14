@@ -11,6 +11,7 @@ import Patient from "../../models/user/patient-model";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import Admin from "../../models/user/admin-model";
 import * as dotenv from "dotenv";
+import { sendNewUserMail, UserMailData } from "../../utils/mail/user_notifications";
 
 dotenv.config();
 
@@ -27,7 +28,7 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
 
     // Remove '+' from phone number
     const formattedPhoneNumber = phoneNumber.replace('+91', '');
-    console.log("formattedPhoneNumber",formattedPhoneNumber);
+    console.log("formattedPhoneNumber", formattedPhoneNumber);
 
     const message = encodeURIComponent(
       `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`
@@ -117,7 +118,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
-    
+
     // Check if an OTP already exists for the phone number
     const existingOTP = await OTP.findOne({ phone });
 
@@ -133,6 +134,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 
     // Generate new OTP - 6 digits
     const newOTP = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`OTP for ${phone}: ${newOTP}`);
 
     // Save or update OTP in the database
     await OTP.findOneAndUpdate(
@@ -334,6 +336,19 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       }
 
       await user.save();
+    }
+
+    // Send new user registration email to admin
+    const mailData: UserMailData = {
+      userName: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      role: role,
+      phone: user.phone,
+    };
+
+    if (role === 'doctor') {
+      mailData.status = 'pending';
+      await sendNewUserMail(mailData);
     }
 
     // Delete the OTP after successful verification
@@ -583,14 +598,14 @@ export const findCurrentUser = async (
       select: "-password"
     });
     if (user.roleRefs?.patient) populatePaths.push({
-      path: "roleRefs.patient", 
+      path: "roleRefs.patient",
       select: "-password"
     });
 
     if (populatePaths.length > 0) {
       user = await user.populate(populatePaths);
     }
-    
+
     const userWithUrls = await generateSignedUrlsForUser(user);
 
     res.status(200).json({

@@ -21,6 +21,7 @@ import { HealthMetrics } from "../../models/health-metrics-model";
 import { updateProfileSchema } from "../../validation/validation";
 import crypto from "crypto";
 
+
 export const subscribePatient = async (
   req: Request,
   res: Response
@@ -428,6 +429,10 @@ export const patientOnboard = async (
       return;
     }
 
+    //profile change Email
+
+
+
     res.status(200).json({
       success: true,
       message: "Patient information saved successfully.",
@@ -676,14 +681,14 @@ export const getAppointmentsDoctorForPatient = async (
         appointmentType: "clinic",
         clinicDetails: clinic
           ? {
-              clinicName: clinic.clinicName,
-              address: clinic.address,
-              consultationFee: clinic.consultationFee,
-              frontDeskNumber: clinic.frontDeskNumber,
-              operationalDays: clinic.operationalDays,
-              timeSlots: clinic.timeSlots,
-              isActive: clinic.isActive,
-            }
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
           : null,
       };
     });

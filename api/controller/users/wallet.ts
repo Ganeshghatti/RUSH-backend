@@ -3,6 +3,9 @@ import { Request, Response } from "express";
 import User from "../../models/user/user-model";
 import mongoose from "mongoose";
 import crypto from "crypto";
+import {
+  sendNewDebitRequestMail
+} from "../../utils/mail/transaction_notifications";
 
 export const updateWallet = async (
   req: Request,
@@ -285,6 +288,15 @@ export const deductWallet = async (
     user.transaction_history.push(transaction);
 
     await user.save();
+
+    // Send new debit request email to admin
+    const newTransaction = user.transaction_history[user.transaction_history.length - 1];
+    await sendNewDebitRequestMail({
+      userName: user.firstName,
+      email: user.email, // Required by interface, but will be sent to admin
+      transactionId: newTransaction._id.toString(),
+      amount: amount.toString(),
+    });
 
     res.status(200).json({
       success: true,
