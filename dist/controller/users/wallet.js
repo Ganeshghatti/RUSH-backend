@@ -17,6 +17,7 @@ const razorpay_1 = require("./../../config/razorpay");
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const crypto_1 = __importDefault(require("crypto"));
+const transaction_notifications_1 = require("../../utils/mail/transaction_notifications");
 const updateWallet = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.user;
@@ -260,6 +261,14 @@ const deductWallet = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         };
         user.transaction_history.push(transaction);
         yield user.save();
+        // Send new debit request email to admin
+        const newTransaction = user.transaction_history[user.transaction_history.length - 1];
+        yield (0, transaction_notifications_1.sendNewDebitRequestMail)({
+            userName: user.firstName,
+            email: user.email, // Required by interface, but will be sent to admin
+            transactionId: newTransaction._id.toString(),
+            amount: amount.toString(),
+        });
         res.status(200).json({
             success: true,
             message: "Debit request submitted. Our team will review it soon.",

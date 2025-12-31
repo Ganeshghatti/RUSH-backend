@@ -16,6 +16,13 @@ import DoctorSubscription from "../../models/doctor-subscription";
 import { sendNewAppointmentNotification } from "../../utils/mail/appointment-notifications";
 import { sendTravelCostNoticeMail } from "../../utils/mail/patient_notifications";
 
+type PopulatedUser = {
+  _id: mongoose.Types.ObjectId;
+  firstName: string;
+  lastName?: string;
+  email: string;
+};
+
 // Common population helper
 const populateAppointment = (id: any) =>
   HomeVisitAppointment.findById(id)
@@ -78,7 +85,8 @@ export const bookHomeVisitAppointment = async (
 
     // Check if doctor exists and has home visit enabled
     const doctor = await Doctor.findById(doctorId).populate({
-      path: "userId", select: "firstName lastName email"
+      path: "userId",
+      select: "firstName lastName email",
     });
     if (!doctor) {
       res.status(404).json({
@@ -98,7 +106,12 @@ export const bookHomeVisitAppointment = async (
     }
 
     // Check if patient exists
-    const patient = await Patient.findOne({ userId: patientUserId });
+    const patient = await Patient.findOne({ userId: patientUserId }).populate<{
+      userId: PopulatedUser;
+    }>({
+      path: "userId",
+      select: "firstName lastName email",
+    });
     if (!patient) {
       res.status(404).json({
         success: false,
@@ -208,18 +221,27 @@ export const bookHomeVisitAppointment = async (
     // Send mail notification to admin for new home visit appointment
     try {
       await sendNewAppointmentNotification({
-        patientName: patient.firstName + ' ' + (patient.lastName || ''),
-        patientEmail: patient.email,
+        patientName:
+          patient.userId.firstName + " " + (patient.userId.lastName || ""),
+        patientEmail: patient.userId.email,
         appointmentId: newAppointment._id.toString(),
         status: newAppointment.status,
-        doctorName: (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || ''),
+        doctorName:
+          (doctor.userId as any).firstName +
+          " " +
+          ((doctor.userId as any).lastName || ""),
         doctorEmail: (doctor.userId as any).email,
-        type: 'Home Visit',
+        type: "Home Visit",
         scheduledFor: new Date(slot.time.start).toLocaleString(),
       });
-      console.log("✅ Doctor home visit appointment notification sent successfully.");
+      console.log(
+        "✅ Doctor home visit appointment notification sent successfully."
+      );
     } catch (mailError) {
-      console.error("🚨 Failed to send home visit appointment notification:", mailError);
+      console.error(
+        "🚨 Failed to send home visit appointment notification:",
+        mailError
+      );
     }
 
     // Populate the response
@@ -274,7 +296,9 @@ export const acceptHomeVisitRequest = async (
 
     // (travelCost validated by schema)
 
-    const doctor = await Doctor.findOne({ userId: doctorId }).populate('userId');
+    const doctor = await Doctor.findOne({ userId: doctorUserId }).populate(
+      "userId"
+    );
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -326,15 +350,21 @@ export const acceptHomeVisitRequest = async (
       const patientInfo = appointment.patientId as any;
       if (patientInfo && patientInfo.email) {
         await sendTravelCostNoticeMail(patientInfo.email, {
-          patientName: `${patientInfo.firstName} ${patientInfo.lastName || ''}`,
+          patientName: `${patientInfo.firstName} ${patientInfo.lastName || ""}`,
           appointmentId: appointment._id.toString(),
-          doctorName: (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || ''),
+          doctorName:
+            (doctor.userId as any).firstName +
+            " " +
+            ((doctor.userId as any).lastName || ""),
           visitStatus: "Doctor Accepted",
           travelCost: travelCost.toString(),
         });
       }
     } catch (mailError) {
-      console.error("🚨 Failed to send travel cost notification to patient:", mailError);
+      console.error(
+        "🚨 Failed to send travel cost notification to patient:",
+        mailError
+      );
     }
 
     // Populate the response

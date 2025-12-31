@@ -364,6 +364,7 @@ const patientOnboard = (req, res) => __awaiter(void 0, void 0, void 0, function*
             });
             return;
         }
+        //profile change Email
         res.status(200).json({
             success: true,
             message: "Patient information saved successfully.",

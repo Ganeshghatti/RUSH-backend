@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateOnlineStatusCron = exports.getAllPatients = exports.getDoctorAppointmentByDate = exports.finalPayment = exports.createRoomAccessToken = exports.updateAppointmentStatus = exports.getPatientAppointments = exports.getDoctorAppointments = exports.bookOnlineAppointment = void 0;
+exports.updateOnlineStatusCron = exports.getAllPatients = exports.getDoctorAppointmentByDate = exports.finalPayment = exports.createRoomAccessToken = exports.cancelAppointment = exports.updateAppointmentStatus = exports.getPatientAppointments = exports.getDoctorAppointments = exports.bookOnlineAppointment = void 0;
 const twilio_1 = __importDefault(require("twilio"));
 const twilio_2 = require("twilio");
 const online_appointment_model_1 = __importDefault(require("../../models/appointment/online-appointment-model"));
@@ -23,6 +23,7 @@ const doctor_model_1 = __importDefault(require("../../models/user/doctor-model")
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
+const appointment_notifications_1 = require("../../utils/mail/appointment-notifications");
 /* step 1 - Book appointment by patient + Amount freeze*/
 const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -54,7 +55,11 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        // Check if patient user exists
+        // Check if doctor exists
+        const doctor = yield doctor_model_1.default.findById(doctorId).populate({
+            path: "userId",
+            select: "firstName lastName email",
+        });
         const patientUserDetail = yield user_model_1.default.findById(patientUserId);
         if (!patientUserDetail) {
             res.status(404).json({
@@ -75,16 +80,6 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             return;
         }
         const patientId = patient._id;
-        // Check if doctor exists
-        const doctor = yield doctor_model_1.default.findById(doctorId);
-        if (!doctor) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find the selected doctor.",
-                action: "bookOnlineAppointment:doctor-not-found",
-            });
-            return;
-        }
         const matchedDuration = (_a = doctor === null || doctor === void 0 ? void 0 : doctor.onlineAppointment) === null || _a === void 0 ? void 0 : _a.duration.find((item) => item.minute === slot.duration);
         if (!matchedDuration) {
             res.status(400).json({
@@ -159,6 +154,22 @@ const bookOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             },
         });
         yield newAppointment.save();
+        try {
+            yield (0, appointment_notifications_1.sendNewAppointmentNotification)({
+                patientName: patientUserDetail.firstName + ' ' + (patientUserDetail.lastName || ''),
+                patientEmail: patientUserDetail.email,
+                appointmentId: newAppointment._id.toString(), // Changed from appointment._id to newAppointment._id
+                status: newAppointment.status,
+                doctorName: (doctor === null || doctor === void 0 ? void 0 : doctor.userId).firstName + ' ' + ((doctor === null || doctor === void 0 ? void 0 : doctor.userId).lastName || ''),
+                doctorEmail: (doctor === null || doctor === void 0 ? void 0 : doctor.userId).email,
+                type: 'Online',
+                scheduledFor: new Date(slot.time.start).toLocaleString(),
+            });
+            console.log("✅ Doctor online appointment notification sent successfully.");
+        }
+        catch (mailError) {
+            console.error("🚨 Failed to send online appointment notification:", mailError);
+        }
         // Populate the response with detailed patient and doctor information
         const populatedAppointment = yield online_appointment_model_1.default.findById(newAppointment._id)
             .populate({
@@ -433,6 +444,7 @@ const getPatientAppointments = (req, res) => __awaiter(void 0, void 0, void 0, f
 exports.getPatientAppointments = getPatientAppointments;
 /* step 2 - Update appointment status by doctor (if accept -> create twilio room, if reject -> unfreeze amount) */
 const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
         const { appointmentId } = req.params;
         const { status } = req.body;
@@ -459,7 +471,9 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
         const appointment = yield online_appointment_model_1.default.findOne({
             _id: appointmentId,
             doctorId: doctor._id,
-        });
+        })
+            .populate({ path: 'patientId', select: 'firstName lastName email' })
+            .populate({ path: 'doctorId', populate: { path: 'userId', select: 'firstName lastName email' } });
         if (!appointment) {
             res.status(404).json({
                 success: false,
@@ -507,6 +521,25 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
         // Update status of the appointment
         appointment.status = status;
         yield appointment.save();
+        // Send status update notification
+        if (status === 'accepted' || status === 'rejected') {
+            try {
+                const patientInfo = appointment.patientId;
+                const doctorInfo = (_a = appointment.doctorId) === null || _a === void 0 ? void 0 : _a.userId;
+                yield (0, appointment_notifications_1.sendAppointmentStatusNotification)({
+                    appointmentId: appointment._id.toString(),
+                    status: appointment.status,
+                    patientName: `${patientInfo.firstName} ${patientInfo.lastName}`,
+                    patientEmail: patientInfo.email,
+                    doctorName: `${doctorInfo.firstName} ${doctorInfo.lastName}`,
+                    doctorEmail: doctorInfo.email,
+                    type: 'Online',
+                });
+            }
+            catch (mailError) {
+                console.error("🚨 Failed to send appointment status notification:", mailError);
+            }
+        }
         // Populate the response with detailed patient and doctor information
         const updatedAppointment = yield online_appointment_model_1.default.findById(appointment._id)
             .populate({
@@ -543,62 +576,63 @@ const updateAppointmentStatus = (req, res) => __awaiter(void 0, void 0, void 0, 
 });
 exports.updateAppointmentStatus = updateAppointmentStatus;
 /* cancel appointment by patient */
-// export const cancelAppointment = async (
-//   req: Request,
-//   res: Response
-// ): Promise<void> => {
-//   try {
-//     const { appointmentId } = req.params;
-//     console.log("Appointment Id ", appointmentId);
-//     const user_Id = req.user.id;
-//     console.log("User ", user_Id);
-//     const appointment = await OnlineAppointment.findOne({
-//       _id: appointmentId,
-//     });
-//     if (!appointment) {
-//       res.status(404).json({
-//         success: false,
-//         message: "Appointment not found in DB.",
-//       });
-//       return;
-//     }
-//     if (!appointment.slot?.time?.start) {
-//       res.status(400).json({
-//         success: false,
-//         message: "Appointment has no start time",
-//       });
-//       return;
-//     }
-//     const curr = Date.now();
-//     const appointmentStartTime = new Date(
-//       appointment.slot?.time?.start
-//     ).getTime();
-//     if (curr > appointmentStartTime) {
-//       res.status(404).json({
-//         success: false,
-//         message: "Appointment can't be cancelled after start time",
-//       });
-//       return;
-//     }
-//     appointment.status = "cancelled";
-//     await appointment.save();
-//     const updatedAppointment = await OnlineAppointment.findById(
-//       appointment._id
-//     );
-//     res.status(200).json({
-//       success: true,
-//       data: updatedAppointment,
-//       message: `Appointment cancelled successfully`,
-//     });
-//   } catch (err: any) {
-//     console.error("Error cancelling appointment: ", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "Error cancelling appointment",
-//       error: err.message,
-//     });
-//   }
-// };
+const cancelAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d;
+    try {
+        const { appointmentId } = req.params;
+        const userId = req.user.id;
+        const appointment = yield online_appointment_model_1.default.findById(appointmentId)
+            .populate({ path: 'patientId', select: 'firstName lastName email' })
+            .populate({ path: 'doctorId', populate: { path: 'userId', select: 'firstName lastName email' } });
+        if (!appointment) {
+            res.status(404).json({
+                success: false,
+                message: "Appointment not found.",
+            });
+            return;
+        }
+        // Check if user is authorized to cancel
+        const doctorUserId = (_b = (_a = appointment.doctorId) === null || _a === void 0 ? void 0 : _a.userId) === null || _b === void 0 ? void 0 : _b._id.toString();
+        const patientUserId = (_c = appointment.patientId) === null || _c === void 0 ? void 0 : _c._id.toString();
+        if (userId !== doctorUserId && userId !== patientUserId) {
+            res.status(403).json({
+                success: false,
+                message: "You are not authorized to cancel this appointment.",
+            });
+            return;
+        }
+        if (appointment.status === 'completed') {
+            res.status(400).json({
+                success: false,
+                message: `Cannot cancel an appointment that is already ${appointment.status}.`,
+            });
+            return;
+        }
+        // Unfreeze amount if it was frozen
+        if (((_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.paymentStatus) === 'pending' && appointment.paymentDetails.patientWalletFrozen > 0) {
+            const patientUser = yield user_model_1.default.findById(appointment.patientId);
+            if (patientUser) {
+                patientUser.unfreezeAmount(appointment.paymentDetails.patientWalletFrozen);
+                yield patientUser.save();
+            }
+        }
+        yield appointment.save();
+        res.status(200).json({
+            success: true,
+            data: appointment,
+            message: `Appointment cancelled successfully`,
+        });
+    }
+    catch (err) {
+        console.error("Error cancelling appointment: ", err);
+        res.status(500).json({
+            success: false,
+            message: "Error cancelling appointment",
+            error: err.message,
+        });
+    }
+});
+exports.cancelAppointment = cancelAppointment;
 /* create room access token */
 const AccessToken = twilio_2.jwt.AccessToken;
 const VideoGrant = AccessToken.VideoGrant;

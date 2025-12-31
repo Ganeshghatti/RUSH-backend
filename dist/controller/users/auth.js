@@ -1,22 +1,22 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function (o, m, k, k2) {
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
     if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-        desc = { enumerable: true, get: function () { return m[k]; } };
+      desc = { enumerable: true, get: function() { return m[k]; } };
     }
     Object.defineProperty(o, k2, desc);
-}) : (function (o, m, k, k2) {
+}) : (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     o[k2] = m[k];
 }));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function (o, v) {
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
     Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function (o, v) {
+}) : function(o, v) {
     o["default"] = v;
 });
 var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function (o) {
+    var ownKeys = function(o) {
         ownKeys = Object.getOwnPropertyNames || function (o) {
             var ar = [];
             for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
@@ -57,6 +57,7 @@ const patient_model_1 = __importDefault(require("../../models/user/patient-model
 const signed_url_1 = require("../../utils/signed-url");
 const admin_model_1 = __importDefault(require("../../models/user/admin-model"));
 const dotenv = __importStar(require("dotenv"));
+const user_notifications_1 = require("../../utils/mail/user_notifications");
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const sendSMSV3 = (phoneNumber, otp) => __awaiter(void 0, void 0, void 0, function* () {
@@ -156,6 +157,7 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
         // Generate new OTP - 6 digits
         const newOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log(`OTP for ${phone}: ${newOTP}`);
         // Save or update OTP in the database
         yield otp_model_1.default.findOneAndUpdate({ phone }, { phone, otp: newOTP }, { upsert: true, new: true });
         console.log(phone);
@@ -334,6 +336,17 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 user.roleRefs.admin = adminProfile._id;
             }
             yield user.save();
+        }
+        // Send new user registration email to admin
+        const mailData = {
+            userName: `${user.firstName} ${user.lastName}`,
+            email: user.email,
+            role: role,
+            phone: user.phone,
+        };
+        if (role === 'doctor') {
+            mailData.status = 'pending';
+            yield (0, user_notifications_1.sendNewUserMail)(mailData);
         }
         // Delete the OTP after successful verification
         yield otp_model_1.default.deleteOne({ _id: otpRecord._id });

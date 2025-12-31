@@ -1064,9 +1064,7 @@ const updateDoctorActiveStatus = (req, res) => __awaiter(void 0, void 0, void 0,
         }
         res.status(200).json({
             success: true,
-            message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive
-                ? ". The system will automatically set it to inactive soon."
-                : ""}`,
+            message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". Will automatically disable after 1 hour." : ""}`,
             action: "updateDoctorActiveStatus:success",
             data: {
                 isActive: updatedDoctor.isActive,

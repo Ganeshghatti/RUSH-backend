@@ -31,6 +31,12 @@ const doctorSchema = new Schema({
         },
     ],
     specialization: [{ type: String }],
+    treatableSymptoms: [
+        {
+            type: String,
+            trim: true,
+        },
+    ],
     signatureImage: { type: String },
     experience: [
         {
@@ -62,7 +68,7 @@ const doctorSchema = new Schema({
             },
             razorpay_order_id: { type: String },
             razorpay_payment_id: { type: String },
-            amount_paid: { type: Number }
+            amount_paid: { type: Number },
         },
     ],
     status: {
