@@ -5,7 +5,10 @@ import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import { getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
 import { updateProfileSchema } from "../../validation/validation";
 
-export const updateDoctorOnlineAppointment = async (req: Request, res: Response): Promise<void> => {
+export const updateDoctorOnlineAppointment = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { doctorId } = req.params;
     const { availability, duration, isActive } = req.body;
@@ -39,14 +42,23 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
         if (!slot.day || !Array.isArray(slot.duration)) {
           res.status(400).json({
             success: false,
-            message: "Each availability slot must include a day and time ranges.",
+            message:
+              "Each availability slot must include a day and time ranges.",
             action: "updateDoctorOnlineAppointment:invalid-slot",
           });
           return;
         }
 
         // Validate day value
-        const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+        const validDays = [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ];
         if (!validDays.includes(slot.day.toLowerCase())) {
           res.status(400).json({
             success: false,
@@ -109,7 +121,7 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
         }
 
         // Validate price value
-        if (typeof slot.price !== 'number' || slot.price <= 0) {
+        if (typeof slot.price !== "number" || slot.price <= 0) {
           res.status(400).json({
             success: false,
             message: "Price must be a positive number.",
@@ -123,7 +135,7 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
     }
 
     // Handle isActive update if provided
-    if (typeof isActive === 'boolean') {
+    if (typeof isActive === "boolean") {
       updateFields["onlineAppointment.isActive"] = isActive;
     }
 
@@ -143,10 +155,10 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
       {
         $set: {
           ...updateFields,
-          "onlineAppointment.updatedAt": new Date()
+          "onlineAppointment.updatedAt": new Date(),
         },
       },
-      { new: true, select: '-password' }
+      { new: true, select: "-password" }
     ).populate("userId");
 
     if (!updatedDoctor) {
@@ -176,13 +188,17 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
   }
 };
 
-export const updateDoctorProfile = async (req: Request, res: Response): Promise<void> => {
+export const updateDoctorProfile = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const userId = req.user.id;
+    console.log("Req.boyd ",req.body)
 
     // Validate request body using Zod
     const validationResult = updateProfileSchema.safeParse(req.body);
-
+    console.log("VALL result ", validationResult);
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
@@ -197,8 +213,8 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
     const { user, doctor } = validationResult.data;
 
-    console.log("user to update", user)
-    console.log("doctor to update", doctor)
+    console.log("user to update", user);
+    console.log("doctor to update", doctor);
 
     // Find the doctor record using userId
     const existingDoctor = await Doctor.findOne({ userId }).populate("userId");
@@ -215,13 +231,23 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
     // Helper function to process image fields and convert URLs to keys
     // Fixed to exclude date fields and other non-image fields
-    const processImageFields = async (data: any, parentKey?: string): Promise<any> => {
-      if (!data || typeof data !== 'object') return data;
+    const processImageFields = async (
+      data: any,
+      parentKey?: string
+    ): Promise<any> => {
+      if (!data || typeof data !== "object") return data;
 
       const processedData = { ...data };
 
       // List of fields that should NOT be processed for image URLs
-      const excludeFields = ['dob', 'year', 'fromYear', 'toYear', 'minute', 'price'];
+      const excludeFields = [
+        "dob",
+        "year",
+        "fromYear",
+        "toYear",
+        "minute",
+        "price",
+      ];
 
       for (const [key, value] of Object.entries(processedData)) {
         // Skip processing for excluded fields
@@ -229,7 +255,7 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
           continue;
         }
 
-        if (typeof value === 'string' && value.includes('https://')) {
+        if (typeof value === "string" && value.includes("https://")) {
           // This is likely a presigned URL, convert to key
           const extractedKey = await getKeyFromSignedUrl(value);
           if (extractedKey) {
@@ -240,7 +266,7 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
           processedData[key] = await Promise.all(
             value.map(async (item) => await processImageFields(item, key))
           );
-        } else if (typeof value === 'object' && value !== null) {
+        } else if (typeof value === "object" && value !== null) {
           // Process nested objects recursively
           processedData[key] = await processImageFields(value, key);
         }
@@ -260,13 +286,13 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
       // Process image fields in user data (dob is now a Date object, so won't be processed)
       const processedUserData = await processImageFields(userUpdateData);
-      console.log("processed user data", processedUserData)
+      console.log("processed user data", processedUserData);
 
       updatePromises.push(
         User.findByIdAndUpdate(
           userId,
           { $set: processedUserData },
-          { new: true, runValidators: true, select: '-password' }
+          { new: true, runValidators: true, select: "-password" }
         )
       );
     }
@@ -276,13 +302,13 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
       // Process image fields in doctor data
       const processedDoctorData = await processImageFields(doctor);
 
-      console.log("processed doctor data", processedDoctorData)
+      console.log("processed doctor data", processedDoctorData);
 
       updatePromises.push(
         Doctor.findByIdAndUpdate(
           existingDoctor._id,
           { $set: processedDoctorData },
-          { new: true, runValidators: true, select: '-password' }
+          { new: true, runValidators: true, select: "-password" }
         )
       );
     }
@@ -305,7 +331,6 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
       action: "updateDoctorProfile:success",
       data: {},
     });
-
   } catch (error: any) {
     console.error("Error updating doctor profile:", error);
     res.status(500).json({

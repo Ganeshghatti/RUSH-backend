@@ -122,6 +122,7 @@ exports.doctorUpdateSchema = zod_1.z
         isActive: zod_1.z.boolean().optional(),
     })
         .optional(),
+    treatableSymptoms: zod_1.z.array(zod_1.z.string()).optional(),
 })
     .strict();
 // Complete profile update validation schema

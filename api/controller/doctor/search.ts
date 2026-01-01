@@ -17,6 +17,8 @@ export const searchDoctor = async (
       specialization,
     } = req.query;
 
+    console.log("hhhshshs ", query);
+
     const parsedLimit = Number(limit);
     const loggedInUserId = (req as any).userId;
 
@@ -68,12 +70,18 @@ export const searchDoctor = async (
 
     let doctorsBySpecialization: any[] = [];
     if (query && !specialization) {
+      console.log("Hi")
       const queryRegex = new RegExp(String(query), "i");
-
-      const filter: any = { ...doctorFilter };
-      if (!specialization) {
-        filter.specialization = { $regex: queryRegex };
-      }
+      console.log("doc ",doctorFilter)
+      const filter: any = {
+        ...doctorFilter,
+        $or: [
+          { specialization: { $regex: queryRegex } },
+          { treatableSymptoms: { $regex: queryRegex } },
+        ],
+      };
+      console.log("Filter ",filter)
+     
       doctorsBySpecialization = await Doctor.find(filter)
         .select("-password -earnings")
         .populate({

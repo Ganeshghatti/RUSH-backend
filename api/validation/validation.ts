@@ -139,6 +139,7 @@ export const doctorUpdateSchema = z
         isActive: z.boolean().optional(),
       })
       .optional(),
+    treatableSymptoms: z.array(z.string()).optional(),
   })
   .strict();
 
