@@ -22,6 +22,8 @@ const twilio_1 = __importDefault(require("twilio"));
 const twilio_2 = require("twilio");
 const upload_media_1 = require("../../utils/aws_s3/upload-media");
 const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
+const emergency_appointments_1 = require("../../utils/mail/emergency_appointments");
+const appointment_notifications_1 = require("../../utils/mail/appointment-notifications");
 const client = (0, twilio_1.default)(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 // Helper function to convert media keys and profile pic to signed URLs
 const convertMediaKeysToUrls = (appointments) => __awaiter(void 0, void 0, void 0, function* () {
@@ -142,6 +144,25 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
             },
         });
         yield newEmergencyAppointment.save();
+        try {
+            // Validate before sending email
+            if (!name || !title || !description || !contactNumber || !location) {
+                console.error("❌ Missing required emergency appointment details.");
+                throw new Error("All fields (name, title, description, contactNumber, location) are required to send an emergency notification.");
+            }
+            // Send admin notification
+            yield (0, emergency_appointments_1.sendAdminEmergencyNotification)({
+                name,
+                title,
+                description,
+                contactNumber,
+                location,
+            });
+            console.log("✅ Admin emergency notification sent successfully.");
+        }
+        catch (emailError) {
+            console.error("🚨 Failed to send emergency appointment email:", emailError.message || emailError);
+        }
         // Populate the response with patient information
         const populatedAppointment = yield emergency_appointment_model_1.default.findById(newEmergencyAppointment._id).populate({
             path: "patientId",
@@ -255,13 +276,12 @@ const getPatientEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, 
     }
 });
 exports.getPatientEmergencyAppointments = getPatientEmergencyAppointments;
-/* step-2 doctor accepts emergency appointment + emergency online room is created */
 const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
         const doctorUserId = req.user.id;
         // Find doctor by userId
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId }).populate('userId');
         if (!doctor) {
             res.status(404).json({
                 success: false,
@@ -290,7 +310,7 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
             return;
         }
         // Find patient
-        const patient = yield patient_model_1.default.findById(emergencyAppointment.patientId);
+        const patient = yield patient_model_1.default.findById(emergencyAppointment.patientId).populate('userId');
         if (!patient) {
             res.status(404).json({
                 success: false,
@@ -311,6 +331,24 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         emergencyAppointment.status = "in-progress";
         emergencyAppointment.roomName = room.uniqueName;
         yield emergencyAppointment.save();
+        // Send email notifications
+        try {
+            const doctorName = doctor.userId.firstName + ' ' + (doctor.userId.lastName || '');
+            const patientName = patient.userId.firstName + ' ' + (patient.userId.lastName || '');
+            yield (0, appointment_notifications_1.sendAppointmentStatusNotification)({
+                appointmentId: emergencyAppointment._id.toString(),
+                status: emergencyAppointment.status,
+                patientName: patientName,
+                patientEmail: patient.userId.email,
+                doctorName: doctorName,
+                doctorEmail: doctor.userId.email,
+                type: 'Emergency',
+            });
+            console.log("✅ Emergency appointment acceptance notification sent successfully.");
+        }
+        catch (mailError) {
+            console.error("🚨 Failed to send emergency appointment acceptance notification:", mailError);
+        }
         // Populate the response with both patient and doctor information
         const updatedAppointment = yield emergency_appointment_model_1.default.findById(id)
             .populate({
@@ -439,7 +477,6 @@ const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, v
     }
 });
 exports.createEmergencyRoomAccessToken = createEmergencyRoomAccessToken;
-/* step-3 doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
     try {

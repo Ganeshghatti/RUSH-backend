@@ -163,8 +163,8 @@ export const bookOnlineAppointment = async (
         patientEmail: patientUserDetail.email,
         appointmentId: newAppointment._id.toString(), // Changed from appointment._id to newAppointment._id
         status: newAppointment.status,
-        doctorName: (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || ''),
-        doctorEmail: (doctor.userId as any).email,
+        doctorName: (doctor?.userId as any).firstName + ' ' + ((doctor?.userId as any).lastName || ''),
+        doctorEmail: (doctor?.userId as any).email,
         type: 'Online',
         scheduledFor: new Date(slot.time.start).toLocaleString(),
       });
