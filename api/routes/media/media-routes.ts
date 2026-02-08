@@ -85,7 +85,14 @@ router.post(
   upload.array("images"),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const files = req.files as Express.Multer.File[];
+      const files = req.files as Express.Multer.File[] | undefined;
+      if (!files || !Array.isArray(files) || files.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: "No files uploaded. Please attach one or more images.",
+        });
+        return;
+      }
 
       const { pathType, familyId } = req.body;
       if (!pathType || !(pathType in uploadPathMap)) {

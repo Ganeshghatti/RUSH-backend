@@ -118,25 +118,31 @@ export const checkRole = (role: string) => {
   };
 };
 
-export const authOptional = (req: Request, res: Response, next: NextFunction) => {
+export const authOptional = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   const token = req.cookies?.token || req.headers.authorization?.split(" ")[1];
-  if (!token) return next(); 
+  if (!token) return next();
   try {
     const JWT_SECRET = process.env.JWT_SECRET;
-    if (!JWT_SECRET) {
-      return next();
+    if (!JWT_SECRET) return next();
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      id: string;
+      email?: string;
+      role?: string;
+    };
+    const user = await User.findById(decoded.id);
+    if (user) {
+      req.user = {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+      };
     }
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    (req as any).userId = decoded.id;
-  } catch (err) {
-    console.error("JWT decode failed:", err);
-    res.status(500).json({
-      success: false,
-      message: "Please login to continue",
-      action: err instanceof Error ? err.message : String(err),
-    });
-    return;
+  } catch {
+    // Optional auth: treat invalid/expired token as unauthenticated
   }
-
   next();
 };

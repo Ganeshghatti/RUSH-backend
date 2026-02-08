@@ -11,20 +11,7 @@ import {
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
-
-// useful for partial update
-type AnyObject = Record<string, any>;
-const flattenObject = (obj: AnyObject, parentKey = "", res: AnyObject = {}) => {
-  for (const key in obj) {
-    const propName = parentKey ? `${parentKey}.${key}` : key;
-    if (typeof obj[key] === "object" && !Array.isArray(obj[key]) && obj[key] !== null) {
-      flattenObject(obj[key], propName, res);
-    } else {
-      res[propName] = obj[key];
-    }
-  }
-  return res;
-};
+import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
 
 // Add a new family
 export const addFamily = async (req: Request, res: Response): Promise<void> => {
@@ -61,7 +48,6 @@ export const addFamily = async (req: Request, res: Response): Promise<void> => {
     const savedFamily = await newFamily.save();
     
     const familyWithUrls = await generateSignedUrlsForFamily(savedFamily);
-    // console.log("Family with url ",familyWithUrls);
 
     res.status(201).json({
       success: true,
@@ -96,7 +82,6 @@ export const updateFamily = async (
       });
       return;
     }
-    console.log("Req.boyd ",req.body)
     const validationResult = updateFamilySchema.safeParse(req.body);
     if (!validationResult.success) {
       res.status(400).json({
@@ -121,22 +106,72 @@ export const updateFamily = async (
     }
 
     const validatedData = validationResult.data;
-    console.log('Validated data')
-    if (validatedData.insurance && Array.isArray(validatedData.insurance)){
+    if (validatedData.idProof?.idImage && validatedData.idProof.idImage.includes("https://")) {
+      const key = await getKeyFromSignedUrl(validatedData.idProof.idImage);
+      validatedData.idProof.idImage = key ?? validatedData.idProof.idImage;
+    }
+    if (validatedData.insurance && Array.isArray(validatedData.insurance)) {
       for (const item of validatedData.insurance) {
         if (item.image && item.image.includes("https://")) {
-          console.log("Hello there ",item.image)
           const key = await getKeyFromSignedUrl(item.image);
-          console.log("hey ",key)
           item.image = key ?? undefined;
         }
       }
     }
-    const flattenedData = flattenObject(validatedData);
-    console.log("Flattened data ",flattenedData)
+
+    const existingFamily = await Family.findOne({
+      _id: familyId,
+      patientId: patient._id,
+    });
+    const newIdImageKey = validatedData.idProof?.idImage;
+    const newInsuranceImageKeys = new Set(
+      (validatedData.insurance ?? [])
+        .map((i: { image?: string }) => i?.image)
+        .filter(Boolean) as string[]
+    );
+    if (existingFamily) {
+      if (
+        existingFamily.idProof?.idImage &&
+        newIdImageKey &&
+        existingFamily.idProof.idImage !== newIdImageKey
+      ) {
+        try {
+          await DeleteMediaFromS3({ key: existingFamily.idProof.idImage });
+        } catch (err) {
+          console.warn("Failed to delete old family idProof image from S3:", err);
+        }
+      }
+      if (Array.isArray(existingFamily.insurance)) {
+        for (const item of existingFamily.insurance) {
+          const oldKey = item?.image;
+          if (oldKey && !newInsuranceImageKeys.has(oldKey)) {
+            try {
+              await DeleteMediaFromS3({ key: oldKey });
+            } catch (err) {
+              console.warn("Failed to delete old family insurance image from S3:", err);
+            }
+          }
+        }
+      }
+    }
+
+    // Flatten nested payload to dot-notation for $set so only provided nested fields are updated (e.g. { basicDetails: { name: "x" } } → { "basicDetails.name": "x" }).
+    const flattenedData: Record<string, unknown> = {};
+    const flatten = (obj: Record<string, unknown>, parentKey = "") => {
+      for (const key in obj) {
+        const propName = parentKey ? `${parentKey}.${key}` : key;
+        const val = obj[key];
+        if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+          flatten(val as Record<string, unknown>, propName);
+        } else {
+          flattenedData[propName] = val;
+        }
+      }
+    };
+    flatten(validatedData as Record<string, unknown>);
     const updatedFamily = await Family.findOneAndUpdate(
       { _id: familyId, patientId: patient._id },
-      { $set: flattenedData},// set operator tells db only update the fields present in this object.
+      { $set: flattenedData },
       { new: true, runValidators: true }
     );
 

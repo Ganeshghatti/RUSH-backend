@@ -197,9 +197,6 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
     const { user, doctor } = validationResult.data;
 
-    console.log("user to update", user)
-    console.log("doctor to update", doctor)
-
     // Find the doctor record using userId
     const existingDoctor = await Doctor.findOne({ userId }).populate("userId");
     if (!existingDoctor) {
@@ -260,7 +257,6 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
 
       // Process image fields in user data (dob is now a Date object, so won't be processed)
       const processedUserData = await processImageFields(userUpdateData);
-      console.log("processed user data", processedUserData)
 
       updatePromises.push(
         User.findByIdAndUpdate(
@@ -275,8 +271,6 @@ export const updateDoctorProfile = async (req: Request, res: Response): Promise<
     if (doctor && Object.keys(doctor).length > 0) {
       // Process image fields in doctor data
       const processedDoctorData = await processImageFields(doctor);
-
-      console.log("processed doctor data", processedDoctorData)
 
       updatePromises.push(
         Doctor.findByIdAndUpdate(

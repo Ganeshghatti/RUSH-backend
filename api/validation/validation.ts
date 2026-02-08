@@ -285,7 +285,7 @@ export const healthMetricsSchemaZod = z
       .nullable()
       .optional(),
   })
-  .strict();
+  .strip();
 
 // Family add validation schema
 export const addFamilySchema = z
@@ -395,6 +395,7 @@ export const updateFamilySchema = z
         })
       )
       .optional(),
+    healthMetricsId: z.string().optional(),
   })
   .strict();
 

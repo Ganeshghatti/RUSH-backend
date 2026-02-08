@@ -1,6 +1,7 @@
 import User from "../../models/user/user-model";
 import { Request, Response } from "express";
 import { getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
+import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
 
 export const updatePersonalInfo = async (
   req: Request,
@@ -8,7 +9,7 @@ export const updatePersonalInfo = async (
 ): Promise<void> => {
   try {
     const userId = req.user.id;
-    const {
+    let {
       profilePic,
       firstName,
       lastName,
@@ -18,6 +19,24 @@ export const updatePersonalInfo = async (
       gender,
       address,
     } = req.body;
+
+    if (profilePic && typeof profilePic === "string" && profilePic.includes("https://")) {
+      const key = await getKeyFromSignedUrl(profilePic);
+      if (key) profilePic = key;
+    }
+
+    const existingUser = await User.findById(userId).select("profilePic");
+    if (
+      existingUser?.profilePic &&
+      profilePic &&
+      existingUser.profilePic !== profilePic
+    ) {
+      try {
+        await DeleteMediaFromS3({ key: existingUser.profilePic });
+      } catch (err) {
+        console.warn("Failed to delete old profile pic from S3:", err);
+      }
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -79,13 +98,19 @@ export const updateIdentityProof = async (
       return;
     }
 
-    // make sure we are saving S3 key in the DB not urls
-      if(personalIdProof.image && personalIdProof.image.includes('https://')) 
-        personalIdProof.image = await getKeyFromSignedUrl(personalIdProof.image);
-      if(addressProof.image && addressProof.image.includes('https://')) 
-        addressProof.image = await getKeyFromSignedUrl(addressProof.image);
-      if(taxProof.image && taxProof.image.includes('https://')) 
-        taxProof.image = await getKeyFromSignedUrl(taxProof.image);
+    // Store S3 keys in the DB, not presigned URLs
+    if (personalIdProof.image && personalIdProof.image.includes("https://")) {
+      const key = await getKeyFromSignedUrl(personalIdProof.image);
+      if (key) personalIdProof.image = key;
+    }
+    if (addressProof.image && addressProof.image.includes("https://")) {
+      const key = await getKeyFromSignedUrl(addressProof.image);
+      if (key) addressProof.image = key;
+    }
+    if (taxProof.image && taxProof.image.includes("https://")) {
+      const key = await getKeyFromSignedUrl(taxProof.image);
+      if (key) taxProof.image = key;
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,

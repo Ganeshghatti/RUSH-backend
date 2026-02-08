@@ -1,14 +1,12 @@
-import { getPatientById } from './../../controller/patient/patient';
+import { getPatientById, getPatientDashboard, getAppointmentsDoctorForPatient } from "../../controller/patient/patient";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { Router } from "express";
-import { patientOnboard, getPatientDashboard, getAppointmentsDoctorForPatient } from "../../controller/patient/patient";
-import { updatePersonalInfo, updateIdentityProof, updateInsuranceDetails, updateBankDetail } from '../../controller/patient/settings';
+import { updatePersonalInfo, updateIdentityProof, updateInsuranceDetails, updateBankDetail } from "../../controller/patient/settings";
 import { addFamily, updateFamily, removeFamily, getFamilyDetails } from "../../controller/patient/family";
-import { getHealthMetrics, getHealthMetricsById, addHealthMetrics } from '../../controller/patient/health-metrics';
+import { getHealthMetrics, getHealthMetricsById, addOrUpdateHealthMetrics } from "../../controller/patient/health-metrics";
 
 const router = Router();
 
-router.route("/onboard/patient/:userId").put(verifyToken, checkRole("patient"), patientOnboard);
 router.route("/dashboard").get(verifyToken, checkRole("patient"), getPatientDashboard);
 
 // patients settings route
@@ -18,13 +16,10 @@ router.route("/profile/insurance-details").put(verifyToken ,checkRole("patient")
 router.route("/profile/bank-detail").put(verifyToken ,checkRole("patient"), updateBankDetail);
 
 router.route("/appointments/doctor").get(verifyToken, checkRole("patient"), getAppointmentsDoctorForPatient);
-// router.route("/health-metrics").put(verifyToken, checkRole("patient"), updateHealthMetrics);
-// router.route("/health-metrics").get(verifyToken, checkRole("patient"), getHealthMetrics);
-
-// health metrics routes
-router.route("/get/health-metrics").get(verifyToken, checkRole("patient"),getHealthMetrics);
-router.route("/health-metrics/:healthMetricsId").get(verifyToken, checkRole("patient"),getHealthMetricsById);
-router.route("/add/health-metrics").post(verifyToken, checkRole("patient"),addHealthMetrics);
+// health metrics: GET list (current patient), GET by id, POST create/update
+router.route("/health-metrics").get(verifyToken, checkRole("patient"), getHealthMetrics);
+router.route("/health-metrics").post(verifyToken, checkRole("patient"), addOrUpdateHealthMetrics);
+router.route("/health-metrics/:healthMetricsId").get(verifyToken, checkRole("patient"), getHealthMetricsById);
 
 router.route("/family").post(verifyToken, checkRole("patient"), addFamily);
 router.route("/family").get(verifyToken, checkRole("patient"), getFamilyDetails);

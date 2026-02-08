@@ -14,10 +14,20 @@ interface UploadImgToS3Params {
   fileName: string;
 }
 
+/** Decode key so it matches S3 (Node URL.pathname is percent-encoded). */
+function decodeS3Key(key: string): string {
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    return key;
+  }
+}
+
 export const GetSignedUrl = async (key: string) => {
+  const decodedKey = decodeS3Key(key);
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_STORAGE_BUCKET_NAME,
-    Key: key
+    Key: decodedKey
   });
 
   try {
@@ -34,7 +44,7 @@ export const getKeyFromSignedUrl = async (presignedUrl: string) => {
     const url = new URL(presignedUrl);
     const pathname = url.pathname;
     const key = pathname.startsWith('/') ? pathname.substring(1) : pathname;
-    return key;
+    return decodeS3Key(key);
   } catch (error) {
     console.error("Error parsing URL:", error);
     return null;
