@@ -4,9 +4,9 @@ import { Router } from "express";
 import {
   updatePersonalInfo,
   updateIdentityProof,
-  updateInsuranceDetails,
   updateBankDetail,
 } from "../../controller/patient/settings";
+import { updateProfessionalDetails } from "../../controller/doctor/update-profile";
 
 const router = Router();
 
@@ -16,7 +16,7 @@ router
   .post(verifyToken, doctorOnboardV2);
 router.route("/user/:userId").get(getDoctorById);
 
-// Profile settings (same 4 APIs as patient, shared User model)
+// Profile settings - Doctor specific
 router
   .route("/profile/personal-info")
   .put(verifyToken, checkRole("doctor"), updatePersonalInfo);
@@ -24,8 +24,8 @@ router
   .route("/profile/identity-proof")
   .put(verifyToken, checkRole("doctor"), updateIdentityProof);
 router
-  .route("/profile/insurance-details")
-  .put(verifyToken, checkRole("doctor"), updateInsuranceDetails);
+  .route("/profile/professional-details")
+  .put(verifyToken, checkRole("doctor"), updateProfessionalDetails);
 router
   .route("/profile/bank-detail")
   .put(verifyToken, checkRole("doctor"), updateBankDetail);

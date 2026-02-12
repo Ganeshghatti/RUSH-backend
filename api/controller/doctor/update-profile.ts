@@ -1,9 +1,6 @@
 import { Request, Response } from "express";
 import Doctor from "../../models/user/doctor-model";
-import User from "../../models/user/user-model";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
-import { getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
-import { updateProfileSchema } from "../../validation/validation";
 
 export const updateDoctorOnlineAppointment = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -176,135 +173,111 @@ export const updateDoctorOnlineAppointment = async (req: Request, res: Response)
   }
 };
 
-export const updateDoctorProfile = async (req: Request, res: Response): Promise<void> => {
+export const updateProfessionalDetails = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user.id;
-
-    // Validate request body using Zod
-    const validationResult = updateProfileSchema.safeParse(req.body);
-    
-    if (!validationResult.success) {
-      res.status(400).json({
-        success: false,
-        message: "Please review the profile details and try again.",
-        action: "updateDoctorProfile:validation-error",
-        data: {
-          errors: validationResult.error.errors,
-        },
-      });
-      return;
-    }
-
-    const { user, doctor } = validationResult.data;
+    const { qualifications, registrations, experiences, signatureImage } = req.body;
 
     // Find the doctor record using userId
-    const existingDoctor = await Doctor.findOne({ userId }).populate("userId");
-    if (!existingDoctor) {
+    const doctor = await Doctor.findOne({ userId });
+    if (!doctor) {
       res.status(404).json({
         success: false,
         message: "We couldn't find a doctor profile for this user.",
-        action: "updateDoctorProfile:doctor-not-found",
+        action: "updateProfessionalDetails:doctor-not-found",
       });
       return;
     }
 
-    const updatePromises = [];
+    const updateFields: any = {};
 
-    // Helper function to process image fields and convert URLs to keys
-    // Fixed to exclude date fields and other non-image fields
-    const processImageFields = async (data: any, parentKey?: string): Promise<any> => {
-      if (!data || typeof data !== 'object') return data;
-      
-      const processedData = { ...data };
-      
-      // List of fields that should NOT be processed for image URLs
-      const excludeFields = ['dob', 'year', 'fromYear', 'toYear', 'minute', 'price'];
-      
-      for (const [key, value] of Object.entries(processedData)) {
-        // Skip processing for excluded fields
-        if (excludeFields.includes(key)) {
-          continue;
-        }
-        
-        if (typeof value === 'string' && value.includes('https://')) {
-          // This is likely a presigned URL, convert to key
-          const extractedKey = await getKeyFromSignedUrl(value);
-          if (extractedKey) {
-            processedData[key] = extractedKey;
-          }
-        } else if (Array.isArray(value)) {
-          // Process arrays recursively
-          processedData[key] = await Promise.all(
-            value.map(async (item) => await processImageFields(item, key))
-          );
-        } else if (typeof value === 'object' && value !== null) {
-          // Process nested objects recursively
-          processedData[key] = await processImageFields(value, key);
+    // Update qualifications if provided
+    if (qualifications && Array.isArray(qualifications)) {
+      // Validate each qualification
+      for (const qual of qualifications) {
+        if (qual.year && (qual.year < 1900 || qual.year > new Date().getFullYear())) {
+          res.status(400).json({
+            success: false,
+            message: "Invalid year in qualifications.",
+            action: "updateProfessionalDetails:invalid-year",
+          });
+          return;
         }
       }
-      
-      return processedData;
-    };
+      updateFields.qualifications = qualifications;
+    }
 
-    // Update User model if user data is provided
-    if (user && Object.keys(user).length > 0) {
-      const userUpdateData: any = { ...user };
-      
-      // Convert dob string to Date if provided (do this BEFORE processing image fields)
-      if (user?.dob && typeof user?.dob === "string") {
-        userUpdateData.dob = new Date(user.dob);
+    // Update registrations if provided
+    if (registrations && Array.isArray(registrations)) {
+      updateFields.registration = registrations;
+    }
+
+    // Update experiences if provided
+    if (experiences && Array.isArray(experiences)) {
+      // Validate experience years
+      for (const exp of experiences) {
+        if (exp.fromYear && (exp.fromYear < 1900 || exp.fromYear > new Date().getFullYear())) {
+          res.status(400).json({
+            success: false,
+            message: "Invalid fromYear in experience.",
+            action: "updateProfessionalDetails:invalid-from-year",
+          });
+          return;
+        }
+        if (exp.toYear && (exp.toYear < 1900 || exp.toYear > new Date().getFullYear())) {
+          res.status(400).json({
+            success: false,
+            message: "Invalid toYear in experience.",
+            action: "updateProfessionalDetails:invalid-to-year",
+          });
+          return;
+        }
       }
-
-      // Process image fields in user data (dob is now a Date object, so won't be processed)
-      const processedUserData = await processImageFields(userUpdateData);
-
-      updatePromises.push(
-        User.findByIdAndUpdate(
-          userId,
-          { $set: processedUserData },
-          { new: true, runValidators: true, select: '-password' }
-        )
-      );
+      updateFields.experience = experiences;
     }
 
-    // Update Doctor model if doctor data is provided
-    if (doctor && Object.keys(doctor).length > 0) {
-      // Process image fields in doctor data
-      const processedDoctorData = await processImageFields(doctor);
-
-      updatePromises.push(
-        Doctor.findByIdAndUpdate(
-          existingDoctor._id,
-          { $set: processedDoctorData },
-          { new: true, runValidators: true, select: '-password' }
-        )
-      );
+    // Update signature image if provided
+    if (signatureImage !== undefined) {
+      updateFields.signatureImage = signatureImage;
     }
 
-    // Execute all update promises
-    const updateResults = await Promise.all(updatePromises);
+    if (Object.keys(updateFields).length === 0) {
+      res.status(400).json({
+        success: false,
+        message: "No professional details provided to update.",
+        action: "updateProfessionalDetails:no-fields",
+      });
+      return;
+    }
 
-    if (!updateResults) {
+    // Update the doctor document
+    const updatedDoctor = await Doctor.findByIdAndUpdate(
+      doctor._id,
+      { $set: updateFields },
+      { new: true, runValidators: true, select: '-password' }
+    ).populate("userId");
+
+    if (!updatedDoctor) {
       res.status(500).json({
         success: false,
-        message: "We couldn't update the doctor information.",
-        action: "updateDoctorProfile:update-failed",
+        message: "We couldn't update the professional details.",
+        action: "updateProfessionalDetails:update-failed",
       });
       return;
     }
 
     res.status(200).json({
       success: true,
-      message: "Doctor profile updated successfully.",
-      action: "updateDoctorProfile:success",
-      data: {},
+      message: "Professional details updated successfully.",
+      action: "updateProfessionalDetails:success",
+      data: updatedDoctor,
     });
 
   } catch (error: any) {
-    console.error("Error updating doctor profile:", error);
+    console.error("Error updating professional details:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't update the doctor profile.",
+      message: "We couldn't update the professional details.",
       action: error.message,
     });
   }
