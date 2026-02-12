@@ -6,7 +6,10 @@ import {
   deleteSubscription,
 } from "../../controller/subscription/doctor-subscription";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
-import { subscribeDoctor, verifyPaymentSubscription } from "../../controller/doctor/doctor";
+import {
+  subscribeDoctor,
+  verifyPaymentSubscription,
+} from "../../controller/doctor/doctor";
 import { Router } from "express";
 import { upload } from "../media/media-routes";
 
@@ -14,18 +17,11 @@ const router = Router();
 
 router
   .route("/subscription")
-  .post(
-    verifyToken,
-    checkRole("admin"),
-    createSubscription
-  );
+  .post(verifyToken, checkRole("admin"), createSubscription);
 
 router
   .route("/subscription/:id")
-  .put(verifyToken, checkRole("admin"), updateSubscription);
-
-router
-  .route("/subscription/:id")
+  .put(verifyToken, checkRole("admin"), updateSubscription)
   .delete(verifyToken, checkRole("admin"), deleteSubscription);
 
 router
@@ -34,13 +30,11 @@ router
 
 router
   .route("/subscription/purchase/:doctorId")
-  .post(
-    verifyToken,
-    upload.single("paymentImage"),
-    subscribeDoctor
-  );
+  .post(verifyToken, upload.single("paymentImage"), subscribeDoctor);
 
-router.route("/subscription/verify-payment").post(verifyToken, verifyPaymentSubscription);
+router
+  .route("/subscription/verify-payment")
+  .post(verifyToken, verifyPaymentSubscription);
 
 router.route("/subscription/active").get(getActiveSubscriptions);
 
