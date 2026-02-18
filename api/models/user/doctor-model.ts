@@ -47,10 +47,6 @@ const doctorSchema = new Schema({
     {
       startDate: { type: Date, required: true, default: Date.now },
       endDate: { type: Date },
-      // paymentDetails: {
-      //   upiId: { type: String },
-      //   paymentImage: { type: String },
-      // },
       SubscriptionId: {
         type: Schema.Types.ObjectId,
         ref: "DoctorSubscription",
@@ -58,7 +54,10 @@ const doctorSchema = new Schema({
       },
       razorpay_order_id: { type: String },
       razorpay_payment_id: { type: String },
-      amount_paid: {type: Number}
+      amount_paid: { type: Number },
+      couponCode: { type: String },
+      discountPercent: { type: Number },
+      amountBeforeDiscount: { type: Number },
     },
   ],
   status: {

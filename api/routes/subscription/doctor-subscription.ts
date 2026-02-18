@@ -9,6 +9,7 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import {
   subscribeDoctor,
   verifyPaymentSubscription,
+  validateCoupon,
 } from "../../controller/doctor/doctor";
 import { Router } from "express";
 import { upload } from "../media/media-routes";
@@ -27,6 +28,10 @@ router
 router
   .route("/subscription")
   .get(verifyToken, checkRole("admin"), getSubscriptions);
+
+router
+  .route("/subscription/validate-coupon")
+  .post(verifyToken, validateCoupon);
 
 router
   .route("/subscription/purchase/:doctorId")

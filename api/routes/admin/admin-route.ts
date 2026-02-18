@@ -3,6 +3,7 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { Router } from "express";
 import { addUnregisteredPatient, getUnregisteredPatient } from '../../controller/admin/unregistered-patient';
 import { getPendingDebitRequests, processDebitRequest, getTransactionsByDate  } from '../../controller/admin/transaction';
+import { getCoupons, createCoupon, updateCoupon, deleteCoupon } from '../../controller/admin/coupon';
 
 const router = Router();
 
@@ -17,5 +18,8 @@ router.route("/admin/getpatient").get(verifyToken, checkRole("admin"), getUnregi
 router.route("/admin/debit/requests").get(verifyToken, checkRole("admin"), getPendingDebitRequests);
 router.route("/admin/debit/process").put(verifyToken, checkRole("admin"), processDebitRequest);
 router.route("/admin/transactions").get(verifyToken, checkRole("admin"), getTransactionsByDate);
+
+router.route("/admin/coupons").get(verifyToken, checkRole("admin"), getCoupons).post(verifyToken, checkRole("admin"), createCoupon);
+router.route("/admin/coupons/:id").put(verifyToken, checkRole("admin"), updateCoupon).delete(verifyToken, checkRole("admin"), deleteCoupon);
 
 export default router;

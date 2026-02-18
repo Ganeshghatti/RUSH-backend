@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import User from "../../models/user/user-model";
 import Doctor from "../../models/user/doctor-model";
 import DoctorSubscription from "../../models/doctor-subscription";
+import DoctorSubscriptionCoupon from "../../models/doctor-subscription-coupon";
 import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
@@ -248,12 +249,94 @@ interface MulterRequest extends Request {
   file?: Express.Multer.File;
 }
 
+/** Validates coupon for a subscription; returns discount info or error message. */
+async function validateCouponForSubscription(
+  code: string,
+  subscriptionId: string
+): Promise<{ valid: true; discountPercent: number } | { valid: false; message: string }> {
+  const normalizedCode = String(code).trim().toUpperCase();
+  if (!normalizedCode) {
+    return { valid: false, message: "Coupon code is required." };
+  }
+
+  const subscription = await DoctorSubscription.findById(subscriptionId);
+  if (!subscription) {
+    return { valid: false, message: "Subscription plan not found." };
+  }
+
+  const coupon = await DoctorSubscriptionCoupon.findOne({ code: normalizedCode });
+  if (!coupon) {
+    return { valid: false, message: "Invalid coupon code." };
+  }
+  if (!coupon.isActive) {
+    return { valid: false, message: "This coupon is no longer active." };
+  }
+
+  const now = new Date();
+  if (coupon.validFrom && now < new Date(coupon.validFrom)) {
+    return { valid: false, message: "This coupon is not yet valid." };
+  }
+  if (coupon.validUntil && now > new Date(coupon.validUntil)) {
+    return { valid: false, message: "This coupon has expired." };
+  }
+  if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
+    return { valid: false, message: "This coupon has reached its usage limit." };
+  }
+
+  const applicableIds = coupon.applicableSubscriptionIds || [];
+  const appliesToAll = applicableIds.length === 0;
+  const appliesToThis = applicableIds.some(
+    (id: any) => id && id.toString() === subscriptionId
+  );
+  if (!appliesToAll && !appliesToThis) {
+    return { valid: false, message: "This coupon does not apply to the selected plan." };
+  }
+
+  return { valid: true, discountPercent: coupon.discountPercent };
+}
+
+export const validateCoupon = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { code, subscriptionId } = req.body;
+    if (!code || !subscriptionId) {
+      res.status(400).json({
+        success: false,
+        message: "Code and subscriptionId are required.",
+        action: "validateCoupon:missing-fields",
+      });
+      return;
+    }
+    const result = await validateCouponForSubscription(code, subscriptionId);
+    if (!result.valid) {
+      res.status(200).json({
+        success: true,
+        valid: false,
+        message: result.message,
+        data: { valid: false, message: result.message },
+      });
+      return;
+    }
+    res.status(200).json({
+      success: true,
+      valid: true,
+      message: "Coupon applied.",
+      data: { valid: true, discountPercent: result.discountPercent },
+    });
+  } catch (error) {
+    console.error("Error validating coupon:", error);
+    res.status(500).json({
+      success: false,
+      message: "We couldn't validate the coupon.",
+      action: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
 export const subscribeDoctor = async (
   req: MulterRequest,
   res: Response
 ): Promise<void> => {
   try {
-    // Check for required form data
     if (!req.body.data) {
       res.status(400).json({
         success: false,
@@ -263,8 +346,7 @@ export const subscribeDoctor = async (
       return;
     }
 
-    // Parse JSON data from form
-    let formData;
+    let formData: { subscriptionId: string; couponCode?: string };
     try {
       formData = JSON.parse(req.body.data);
     } catch (error) {
@@ -276,7 +358,7 @@ export const subscribeDoctor = async (
       return;
     }
 
-    const { subscriptionId } = formData;
+    const { subscriptionId, couponCode } = formData;
     const { doctorId } = req.params;
 
     if (!doctorId || !subscriptionId) {
@@ -289,7 +371,6 @@ export const subscribeDoctor = async (
       return;
     }
 
-    // Find doctor
     const doctor: any = await Doctor.findOne({ userId: doctorId }).populate({
       path: "userId",
       select: "firstName lastName email phone countryCode",
@@ -304,7 +385,6 @@ export const subscribeDoctor = async (
       return;
     }
 
-    // Find subscription
     const subscription = await DoctorSubscription.findById(subscriptionId);
     if (!subscription) {
       res.status(404).json({
@@ -324,9 +404,25 @@ export const subscribeDoctor = async (
       return;
     }
 
-    // Convert amount to paise (integer)
+    let discountPercent = 0;
+    let finalAmount = subscription.price;
+    if (couponCode && String(couponCode).trim()) {
+      const couponResult = await validateCouponForSubscription(
+        String(couponCode).trim(),
+        subscriptionId
+      );
+      if (couponResult.valid) {
+        discountPercent = couponResult.discountPercent;
+        finalAmount = Math.max(
+          0,
+          subscription.price * (1 - discountPercent / 100)
+        );
+      }
+    }
+
+    const amountPaise = Math.round(finalAmount * 100);
     const options = {
-      amount: Math.round(subscription.price * 100),
+      amount: amountPaise,
       currency: "INR",
       receipt: "receipt_" + Math.random().toString(36).substring(7),
     };
@@ -345,6 +441,10 @@ export const subscribeDoctor = async (
           contact: doctor.userId.phone,
           countryCode: doctor.userId.countryCode || "+91",
         },
+        originalAmount: subscription.price,
+        discountPercent,
+        finalAmount,
+        couponCode: discountPercent > 0 ? String(couponCode).trim().toUpperCase() : undefined,
       },
     });
   } catch (error) {
@@ -367,6 +467,9 @@ export const verifyPaymentSubscription = async (
       razorpay_payment_id,
       razorpay_signature,
       subscriptionId,
+      couponCode,
+      discountPercent,
+      amountBeforeDiscount,
     } = req.body;
 
     const userId = req.user.id;
@@ -478,7 +581,8 @@ export const verifyPaymentSubscription = async (
           return;
       }
 
-      const newSubscription = {
+      const amountBefore = amountBeforeDiscount != null ? Number(amountBeforeDiscount) : subscription.price;
+      const newSubscription: any = {
         startDate: new Date(),
         endDate,
         razorpay_order_id,
@@ -486,10 +590,22 @@ export const verifyPaymentSubscription = async (
         SubscriptionId: subscription._id,
         amount_paid: subscription.price,
       };
+      if (couponCode && discountPercent != null) {
+        newSubscription.couponCode = String(couponCode).trim().toUpperCase();
+        newSubscription.discountPercent = Number(discountPercent);
+        newSubscription.amountBeforeDiscount = amountBefore;
+        newSubscription.amount_paid = Math.max(0, amountBefore * (1 - Number(discountPercent) / 100));
+      }
 
       doctor.subscriptions.push(newSubscription);
-
       await doctor.save();
+
+      if (newSubscription.couponCode) {
+        await DoctorSubscriptionCoupon.findOneAndUpdate(
+          { code: newSubscription.couponCode },
+          { $inc: { usedCount: 1 } }
+        );
+      }
 
       res.status(200).json({
         success: true,
