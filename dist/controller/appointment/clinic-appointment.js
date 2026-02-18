@@ -21,6 +21,7 @@ const validation_1 = require("../../validation/validation");
 const mongoose_1 = __importDefault(require("mongoose"));
 const otp_utils_1 = require("../../utils/otp-utils");
 const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
+const appointment_notifications_1 = require("../../utils/mail/appointment-notifications");
 // Helper function to populate clinic details from doctor's embedded clinics
 const populateClinicDetails = (appointments, doctor) => {
     return appointments.map((appointment) => {
@@ -340,7 +341,9 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             return;
         }
         //***** Validate doctor *****\\
-        const doctor = yield doctor_model_1.default.findById(doctorId);
+        const doctor = yield doctor_model_1.default.findById(doctorId).populate({
+            path: "userId", select: "firstName lastName email"
+        });
         if (!doctor) {
             res.status(404).json({
                 success: false,
@@ -443,6 +446,23 @@ const bookClinicAppointment = (req, res) => __awaiter(void 0, void 0, void 0, fu
             },
         });
         yield appointment.save();
+        // Send mail notification to admin for new clinic appointment
+        try { // This should be sendNewAppointmentNotification and sent to the doctor
+            yield (0, appointment_notifications_1.sendNewAppointmentNotification)({
+                patientName: patientUserDetail.firstName + ' ' + (patientUserDetail.lastName || ''),
+                patientEmail: patientUserDetail.email,
+                appointmentId: appointment._id.toString(),
+                status: appointment.status,
+                doctorName: doctor.userId.firstName + ' ' + (doctor.userId.lastName || ''),
+                doctorEmail: doctor.userId.email,
+                type: 'Clinic',
+                scheduledFor: new Date(slot.time.start).toLocaleString(),
+            });
+            console.log("✅ Doctor clinic appointment notification sent successfully.");
+        }
+        catch (mailError) {
+            console.error("🚨 Failed to send clinic appointment notification:", mailError);
+        }
         res.status(201).json({
             success: true,
             message: "Clinic appointment booked successfully.",
@@ -917,6 +937,9 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
         const appointment = yield clinic_appointment_model_1.default.findOne({
             _id: appointmentId,
             doctorId: doctor._id,
+        }).populate({
+            path: "patientId",
+            select: "firstName lastName email",
         });
         if (!appointment) {
             res.status(404).json({
@@ -1032,6 +1055,24 @@ const validateVisitOTP = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 });
                 return;
             }
+        }
+        yield appointment.save();
+        // Send completion notification to patient
+        try {
+            const patientInfo = appointment.patientId;
+            const doctorInfo = doctor.userId;
+            yield (0, appointment_notifications_1.sendAppointmentStatusNotification)({
+                appointmentId: appointment._id.toString(),
+                status: 'completed',
+                patientName: `${patientInfo.firstName} ${patientInfo.lastName}`,
+                patientEmail: patientInfo.email,
+                doctorName: `${doctorInfo.firstName} ${doctorInfo.lastName}`,
+                doctorEmail: doctorInfo.email,
+                type: 'Clinic',
+            });
+        }
+        catch (mailError) {
+            console.error("🚨 Failed to send clinic completion notification:", mailError);
         }
         res.status(200).json({
             success: true,

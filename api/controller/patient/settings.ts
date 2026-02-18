@@ -62,6 +62,7 @@ export const updatePersonalInfo = async (
       return;
     }
 
+
     res.json({
       success: true,
       message: "Your personal information has been updated.",
@@ -135,6 +136,7 @@ export const updateIdentityProof = async (
       });
       return;
     }
+
 
     res.status(200).json({
       success: true,

@@ -15,6 +15,8 @@ import {
   isMaxAttemptsReached,
 } from "../../utils/otp-utils";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { sendNewAppointmentNotification, sendAppointmentStatusNotification } from "../../utils/mail/appointment-notifications";
+
 
 // Interface for authenticated request
 interface AuthRequest extends Request {
@@ -37,14 +39,14 @@ const populateClinicDetails = (appointments: any[], doctor: any) => {
       ...appointment.toObject(),
       clinicDetails: clinic
         ? {
-            clinicName: clinic.clinicName,
-            address: clinic.address,
-            consultationFee: clinic.consultationFee,
-            frontDeskNumber: clinic.frontDeskNumber,
-            operationalDays: clinic.operationalDays,
-            timeSlots: clinic.timeSlots,
-            isActive: clinic.isActive,
-          }
+          clinicName: clinic.clinicName,
+          address: clinic.address,
+          consultationFee: clinic.consultationFee,
+          frontDeskNumber: clinic.frontDeskNumber,
+          operationalDays: clinic.operationalDays,
+          timeSlots: clinic.timeSlots,
+          isActive: clinic.isActive,
+        }
         : null,
     };
   });
@@ -394,7 +396,9 @@ export const bookClinicAppointment = async (
     }
 
     //***** Validate doctor *****\\
-    const doctor = await Doctor.findById(doctorId);
+    const doctor = await Doctor.findById(doctorId).populate({
+      path: "userId", select: "firstName lastName email"
+    });
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -507,6 +511,23 @@ export const bookClinicAppointment = async (
     });
 
     await appointment.save();
+
+    // Send mail notification to admin for new clinic appointment
+    try { // This should be sendNewAppointmentNotification and sent to the doctor
+      await sendNewAppointmentNotification({
+        patientName: patientUserDetail.firstName + ' ' + (patientUserDetail.lastName || ''),
+        patientEmail: patientUserDetail.email,
+        appointmentId: appointment._id.toString(),
+        status: appointment.status,
+        doctorName: (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || ''),
+        doctorEmail: (doctor.userId as any).email,
+        type: 'Clinic',
+        scheduledFor: new Date(slot.time.start).toLocaleString(),
+      });
+      console.log("✅ Doctor clinic appointment notification sent successfully.");
+    } catch (mailError) {
+      console.error("🚨 Failed to send clinic appointment notification:", mailError);
+    }
 
     res.status(201).json({
       success: true,
@@ -764,14 +785,14 @@ export const getPatientClinicAppointments = async (
         ...appointment.toObject(),
         clinicDetails: clinic
           ? {
-              clinicName: clinic.clinicName,
-              address: clinic.address,
-              consultationFee: clinic.consultationFee,
-              frontDeskNumber: clinic.frontDeskNumber,
-              operationalDays: clinic.operationalDays,
-              timeSlots: clinic.timeSlots,
-              isActive: clinic.isActive,
-            }
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
           : null,
       };
     });
@@ -836,14 +857,14 @@ export const getDoctorClinicAppointments = async (
         ...appointment.toObject(),
         clinicDetails: clinic
           ? {
-              clinicName: clinic.clinicName,
-              address: clinic.address,
-              consultationFee: clinic.consultationFee,
-              frontDeskNumber: clinic.frontDeskNumber,
-              operationalDays: clinic.operationalDays,
-              timeSlots: clinic.timeSlots,
-              isActive: clinic.isActive,
-            }
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
           : null,
       };
     });
@@ -1042,6 +1063,9 @@ export const validateVisitOTP = async (
     const appointment = await ClinicAppointment.findOne({
       _id: appointmentId,
       doctorId: doctor._id,
+    }).populate({
+      path: "patientId",
+      select: "firstName lastName email",
     });
     if (!appointment) {
       res.status(404).json({
@@ -1175,6 +1199,26 @@ export const validateVisitOTP = async (
         });
         return;
       }
+    }
+
+    await appointment.save();
+
+    // Send completion notification to patient
+    try {
+      const patientInfo = appointment.patientId as any;
+      const doctorInfo = doctor.userId as any;
+
+      await sendAppointmentStatusNotification({
+        appointmentId: appointment._id.toString(),
+        status: 'completed',
+        patientName: `${patientInfo.firstName} ${patientInfo.lastName}`,
+        patientEmail: patientInfo.email,
+        doctorName: `${doctorInfo.firstName} ${doctorInfo.lastName}`,
+        doctorEmail: doctorInfo.email,
+        type: 'Clinic',
+      });
+    } catch (mailError) {
+      console.error("🚨 Failed to send clinic completion notification:", mailError);
     }
 
     res.status(200).json({

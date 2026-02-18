@@ -21,6 +21,7 @@ import { HealthMetrics } from "../../models/health-metrics-model";
 import { updateProfileSchema } from "../../validation/validation";
 import crypto from "crypto";
 
+
 export const subscribePatient = async (
   req: Request,
   res: Response
@@ -342,6 +343,112 @@ export const getPatientById = async (
   }
 };
 
+export const patientOnboard = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    const {
+      prefix,
+      profilePic,
+      gender,
+      dob,
+      address,
+      personalIdProof,
+      addressProof,
+      bankDetails,
+      mapLocation,
+      insurance,
+      healthMetrics,
+    } = req.body;
+
+    // Validate userId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(400).json({
+        success: false,
+        message: "The user ID provided is invalid.",
+        action: "patientOnboard:validate-user-id",
+      });
+      return;
+    }
+
+    // Check if user exists and has patient role
+    const user = await User.findOne({ _id: userId });
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find the user or they are not a patient.",
+        action: "patientOnboard:user-not-found",
+      });
+      return;
+    }
+
+    // Validate required fields
+    if (!gender || !dob || !address) {
+      res.status(400).json({
+        success: false,
+        message: "Please fill in all required patient details.",
+        action: "patientOnboard:missing-fields",
+      });
+      return;
+    }
+
+    // Prepare update data
+    const updateData = {
+      prefix,
+      profilePic,
+      gender,
+      dob: new Date(dob),
+      address,
+      personalIdProof,
+      addressProof,
+      bankDetails,
+      mapLocation,
+      insurance,
+      healthMetrics: healthMetrics,
+    };
+
+    // Update patient using discriminator model
+    const updatedPatient = await Patient.findOneAndUpdate(
+      { userId },
+      { $set: updateData },
+      {
+        new: true,
+        runValidators: true,
+        select: "-password",
+      }
+    );
+
+    if (!updatedPatient) {
+      res.status(500).json({
+        success: false,
+        message: "We couldn't update the patient information.",
+        action: "patientOnboard:update-failed",
+      });
+      return;
+    }
+
+    //profile change Email
+
+
+
+    res.status(200).json({
+      success: true,
+      message: "Patient information saved successfully.",
+      action: "patientOnboard:success",
+      data: updatedPatient,
+    });
+  } catch (error) {
+    console.error("Error in patient onboarding:", error);
+    res.status(500).json({
+      success: false,
+      message: "We couldn't complete the patient onboarding.",
+      action: (error as Error).message,
+    });
+  }
+};
+
 export const getPatientDashboard = async (
   req: Request,
   res: Response
@@ -574,14 +681,14 @@ export const getAppointmentsDoctorForPatient = async (
         appointmentType: "clinic",
         clinicDetails: clinic
           ? {
-              clinicName: clinic.clinicName,
-              address: clinic.address,
-              consultationFee: clinic.consultationFee,
-              frontDeskNumber: clinic.frontDeskNumber,
-              operationalDays: clinic.operationalDays,
-              timeSlots: clinic.timeSlots,
-              isActive: clinic.isActive,
-            }
+            clinicName: clinic.clinicName,
+            address: clinic.address,
+            consultationFee: clinic.consultationFee,
+            frontDeskNumber: clinic.frontDeskNumber,
+            operationalDays: clinic.operationalDays,
+            timeSlots: clinic.timeSlots,
+            isActive: clinic.isActive,
+          }
           : null,
       };
     });

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import User from "../../models/user/user-model";
 import mongoose from "mongoose";
+import { sendDebitStatusUpdateMail } from "../../utils/mail/transaction_notifications";
 
 // GET: List all pending debit requests
 export const getPendingDebitRequests = async (req: Request, res: Response) => {
@@ -59,7 +60,7 @@ export const getPendingDebitRequests = async (req: Request, res: Response) => {
 // PUT: Process a pending debit request (approve or reject)
 export const processDebitRequest = async (req: Request, res: Response) => {
   try {
-    const { userId, transactionId, action, description , referenceId} = req.body;
+    const { userId, transactionId, action, description, referenceId } = req.body;
     console.log("Request Body:", req.body);
     // action: "approve" or "reject"
     if (
@@ -114,6 +115,18 @@ export const processDebitRequest = async (req: Request, res: Response) => {
     if (typeof referenceId !== "undefined") txn.referenceId = referenceId;
     // user.markModified("transaction_history");
     await user.save();
+
+    console.log(`Sending debit status update for transaction: ${txn._id}`);
+    await sendDebitStatusUpdateMail({
+      userName: user.firstName,
+      email: user.email,
+      transactionId: txn._id.toString(),
+      status: txn.status,
+      amount: txn.amount.toString(),
+      reason: description,
+    });
+    console.log(`Debit status update notification sent for transaction: ${txn._id}`);
+
     res.status(200).json({
       success: true,
       message: `Debit request ${action}d successfully.`,

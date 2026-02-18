@@ -20,6 +20,8 @@ const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const otp_utils_1 = require("../../utils/otp-utils");
 const validation_1 = require("../../validation/validation");
 const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
+const appointment_notifications_1 = require("../../utils/mail/appointment-notifications");
+const patient_notifications_1 = require("../../utils/mail/patient_notifications");
 // Common population helper
 const populateAppointment = (id) => homevisit_appointment_model_1.default.findById(id)
     .populate({
@@ -75,7 +77,10 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             return;
         }
         // Check if doctor exists and has home visit enabled
-        const doctor = yield doctor_model_1.default.findById(doctorId);
+        const doctor = yield doctor_model_1.default.findById(doctorId).populate({
+            path: "userId",
+            select: "firstName lastName email",
+        });
         if (!doctor) {
             res.status(404).json({
                 success: false,
@@ -93,7 +98,10 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             return;
         }
         // Check if patient exists
-        const patient = yield patient_model_1.default.findOne({ userId: patientUserId });
+        const patient = yield patient_model_1.default.findOne({ userId: patientUserId }).populate({
+            path: "userId",
+            select: "firstName lastName email",
+        });
         if (!patient) {
             res.status(404).json({
                 success: false,
@@ -194,6 +202,25 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
             },
         });
         yield newAppointment.save();
+        // Send mail notification to admin for new home visit appointment
+        try {
+            yield (0, appointment_notifications_1.sendNewAppointmentNotification)({
+                patientName: patient.userId.firstName + " " + (patient.userId.lastName || ""),
+                patientEmail: patient.userId.email,
+                appointmentId: newAppointment._id.toString(),
+                status: newAppointment.status,
+                doctorName: doctor.userId.firstName +
+                    " " +
+                    (doctor.userId.lastName || ""),
+                doctorEmail: doctor.userId.email,
+                type: "Home Visit",
+                scheduledFor: new Date(slot.time.start).toLocaleString(),
+            });
+            console.log("✅ Doctor home visit appointment notification sent successfully.");
+        }
+        catch (mailError) {
+            console.error("🚨 Failed to send home visit appointment notification:", mailError);
+        }
         // Populate the response
         const populatedAppointment = yield populateAppointment(newAppointment._id);
         res.status(201).json({
@@ -240,7 +267,8 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             });
             return;
         }
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId });
+        // (travelCost validated by schema)
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId }).populate("userId");
         if (!doctor) {
             res.status(404).json({
                 success: false,
@@ -255,6 +283,9 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             _id: appointmentId,
             doctorId,
             status: "pending",
+        }).populate({
+            path: "patientId",
+            select: "firstName lastName email",
         });
         if (!appointment) {
             res.status(404).json({
@@ -279,6 +310,24 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
         appointment.pricing.totalCost = totalCost;
         appointment.paymentDetails.amount = totalCost;
         yield appointment.save();
+        // Send notification to patient about the added travel cost
+        try {
+            const patientInfo = appointment.patientId;
+            if (patientInfo && patientInfo.email) {
+                yield (0, patient_notifications_1.sendTravelCostNoticeMail)(patientInfo.email, {
+                    patientName: `${patientInfo.firstName} ${patientInfo.lastName || ""}`,
+                    appointmentId: appointment._id.toString(),
+                    doctorName: doctor.userId.firstName +
+                        " " +
+                        (doctor.userId.lastName || ""),
+                    visitStatus: "Doctor Accepted",
+                    travelCost: travelCost.toString(),
+                });
+            }
+        }
+        catch (mailError) {
+            console.error("🚨 Failed to send travel cost notification to patient:", mailError);
+        }
         // Populate the response
         const updatedAppointment = yield populateAppointment(appointment._id);
         res.status(200).json({
