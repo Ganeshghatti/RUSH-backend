@@ -45,7 +45,8 @@ export const createSubscription = async (
       doctor_type,
       doctor_type_description,
       no_of_clinics,
-      advertisement_cost
+      advertisement_cost,
+      is_premium,
     } = req.body;
 
     if (price < 0) {
@@ -139,6 +140,7 @@ export const createSubscription = async (
       description,
       features: features || [],
       isActive: isActive,
+      is_premium: Boolean(is_premium),
       duration,
       // qrCodeImage: signedUrl,
       doctor_type,
@@ -179,6 +181,7 @@ export const updateSubscription = async (
     const { id } = req.params;
     const {
       isActive,
+      is_premium,
       name,
       description,
       features,
@@ -235,6 +238,19 @@ export const updateSubscription = async (
         return;
       }
       updateData.isActive = isActive;
+    }
+
+    // Validate and add is_premium if provided
+    if (is_premium !== undefined) {
+      if (typeof is_premium !== "boolean") {
+        res.status(400).json({
+          success: false,
+          message: "is_premium must be true or false.",
+          action: "updateDoctorSubscription:invalid-is_premium",
+        });
+        return;
+      }
+      updateData.is_premium = is_premium;
     }
 
     // Validate and add name if provided

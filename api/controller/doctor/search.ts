@@ -81,6 +81,7 @@ export const searchDoctor = async (
           match: { isDocumentVerified: true, ...(gender ? { gender } : {}) },
           select: "firstName lastName email phone profilePic gender",
         })
+        .populate({ path: "subscriptions.SubscriptionId", select: "is_premium" })
         .limit(parsedLimit);
     }
     // Step 4: If no specialization match, search by name
@@ -100,6 +101,7 @@ export const searchDoctor = async (
           },
           select: "firstName lastName email phone profilePic gender",
         })
+        .populate({ path: "subscriptions.SubscriptionId", select: "is_premium" })
         .limit(parsedLimit);
 
       finalDoctors = doctorsByName.filter((doc) => doc.userId);
@@ -112,10 +114,27 @@ export const searchDoctor = async (
           match: { isDocumentVerified: true, ...(gender ? { gender } : {}) },
           select: "firstName lastName email phone profilePic gender",
         })
+        .populate({ path: "subscriptions.SubscriptionId", select: "is_premium" })
         .limit(parsedLimit);
 
       finalDoctors = finalDoctors.filter((doc) => doc.userId);
     }
+
+    // Step 5: Sort so doctors with premium subscription appear first
+    const hasActivePremiumSubscription = (doc: any) => {
+      const subs = doc.subscriptions || [];
+      return subs.some(
+        (s: any) =>
+          s.endDate && new Date(s.endDate) > now && s.SubscriptionId?.is_premium === true
+      );
+    };
+    finalDoctors.sort((a, b) => {
+      const aPremium = hasActivePremiumSubscription(a);
+      const bPremium = hasActivePremiumSubscription(b);
+      if (aPremium && !bPremium) return -1;
+      if (!aPremium && bPremium) return 1;
+      return 0;
+    });
 
     // Step 6: Format response
     const doctorsWithSignedUrls = await Promise.all(
