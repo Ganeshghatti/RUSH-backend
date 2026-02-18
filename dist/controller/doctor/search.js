@@ -19,6 +19,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { userId, query, limit = 10, gender, appointmentType, specialization, } = req.query;
+        console.log("hhhshshs ", query);
         const parsedLimit = Number(limit);
         const loggedInUserId = req.userId;
         // Parse appointments into an array
@@ -64,11 +65,14 @@ const searchDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         }
         let doctorsBySpecialization = [];
         if (query && !specialization) {
+            console.log("Hi");
             const queryRegex = new RegExp(String(query), "i");
-            const filter = Object.assign({}, doctorFilter);
-            if (!specialization) {
-                filter.specialization = { $regex: queryRegex };
-            }
+            console.log("doc ", doctorFilter);
+            const filter = Object.assign(Object.assign({}, doctorFilter), { $or: [
+                    { specialization: { $regex: queryRegex } },
+                    { treatableSymptoms: { $regex: queryRegex } },
+                ] });
+            console.log("Filter ", filter);
             doctorsBySpecialization = yield doctor_model_1.default.find(filter)
                 .select("-password -earnings")
                 .populate({

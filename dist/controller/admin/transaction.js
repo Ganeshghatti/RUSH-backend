@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getTransactionsByDate = exports.processDebitRequest = exports.getPendingDebitRequests = void 0;
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const mongoose_1 = __importDefault(require("mongoose"));
+const transaction_notifications_1 = require("../../utils/mail/transaction_notifications");
 // GET: List all pending debit requests
 const getPendingDebitRequests = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -124,6 +125,16 @@ const processDebitRequest = (req, res) => __awaiter(void 0, void 0, void 0, func
             txn.referenceId = referenceId;
         // user.markModified("transaction_history");
         yield user.save();
+        console.log(`Sending debit status update for transaction: ${txn._id}`);
+        yield (0, transaction_notifications_1.sendDebitStatusUpdateMail)({
+            userName: user.firstName,
+            email: user.email,
+            transactionId: txn._id.toString(),
+            status: txn.status,
+            amount: txn.amount.toString(),
+            reason: description,
+        });
+        console.log(`Debit status update notification sent for transaction: ${txn._id}`);
         res.status(200).json({
             success: true,
             message: `Debit request ${action}d successfully.`,

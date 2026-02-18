@@ -8,6 +8,9 @@ import twilio from "twilio";
 import { jwt } from "twilio";
 import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
 import DoctorSubscription from "../../models/doctor-subscription";
+import { transporter } from "../../config/email-transporter";
+import { sendAdminEmergencyNotification } from "../../utils/mail/emergency_appointments";
+import { sendAppointmentStatusNotification } from "../../utils/mail/appointment-notifications";
 
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -160,6 +163,29 @@ export const createEmergencyAppointment = async (
     });
     await newEmergencyAppointment.save();
 
+    try {
+      // Validate before sending email
+      if (!name || !title || !description || !contactNumber || !location) {
+        console.error("❌ Missing required emergency appointment details.");
+        throw new Error("All fields (name, title, description, contactNumber, location) are required to send an emergency notification.");
+      }
+
+      // Send admin notification
+      await sendAdminEmergencyNotification({
+        name,
+        title,
+        description,
+        contactNumber,
+        location,
+      });
+
+      console.log("✅ Admin emergency notification sent successfully.");
+
+    } catch (emailError: any) {
+      console.error("🚨 Failed to send emergency appointment email:", emailError.message || emailError);
+    }
+
+
     // Populate the response with patient information
     const populatedAppointment = await EmergencyAppointment.findById(
       newEmergencyAppointment._id
@@ -286,7 +312,6 @@ export const getPatientEmergencyAppointments = async (
   }
 };
 
-/* step-2 doctor accepts emergency appointment + emergency online room is created */
 export const acceptEmergencyAppointment = async (
   req: Request,
   res: Response
@@ -296,7 +321,7 @@ export const acceptEmergencyAppointment = async (
     const doctorUserId = req.user.id;
 
     // Find doctor by userId
-    const doctor = await Doctor.findOne({ userId: doctorUserId });
+    const doctor = await Doctor.findOne({ userId: doctorUserId }).populate('userId');
     if (!doctor) {
       res.status(404).json({
         success: false,
@@ -327,7 +352,7 @@ export const acceptEmergencyAppointment = async (
     }
 
     // Find patient
-    const patient = await Patient.findById(emergencyAppointment.patientId);
+    const patient = await Patient.findById(emergencyAppointment.patientId).populate('userId');
     if (!patient) {
       res.status(404).json({
         success: false,
@@ -350,6 +375,25 @@ export const acceptEmergencyAppointment = async (
     emergencyAppointment.status = "in-progress";
     emergencyAppointment.roomName = room.uniqueName;
     await emergencyAppointment.save();
+
+    // Send email notifications
+    try {
+      const doctorName = (doctor.userId as any).firstName + ' ' + ((doctor.userId as any).lastName || '');
+      const patientName = (patient.userId as any).firstName + ' ' + ((patient.userId as any).lastName || '');
+
+      await sendAppointmentStatusNotification({
+        appointmentId: emergencyAppointment._id.toString(),
+        status: emergencyAppointment.status,
+        patientName: patientName,
+        patientEmail: (patient.userId as any).email,
+        doctorName: doctorName,
+        doctorEmail: (doctor.userId as any).email,
+        type: 'Emergency',
+      });
+      console.log("✅ Emergency appointment acceptance notification sent successfully.");
+    } catch (mailError) {
+      console.error("🚨 Failed to send emergency appointment acceptance notification:", mailError);
+    }
 
     // Populate the response with both patient and doctor information
     const updatedAppointment = await EmergencyAppointment.findById(id)
@@ -493,7 +537,6 @@ export const createEmergencyRoomAccessToken = async (
   }
 };
 
-/* step-3 doctor joins video call -> reduce unfrozeAmount + wallet from patient, increase wallet of doctor, change paymentStatus of appointment */
 export const finalPayment = async (
   req: Request,
   res: Response

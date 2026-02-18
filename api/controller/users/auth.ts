@@ -10,6 +10,7 @@ import Patient from "../../models/user/patient-model";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import Admin from "../../models/user/admin-model";
 import * as dotenv from "dotenv";
+import { sendNewUserMail, UserMailData } from "../../utils/mail/user_notifications";
 
 dotenv.config();
 
@@ -138,6 +139,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
 
     // Generate new OTP - 6 digits
     const newOTP = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`OTP for ${phone}: ${newOTP}`);
 
     // Save or update OTP in the database
     await OTP.findOneAndUpdate(
@@ -345,6 +347,19 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       }
 
       await user.save();
+    }
+
+    // Send new user registration email to admin
+    const mailData: UserMailData = {
+      userName: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      role: role,
+      phone: user.phone,
+    };
+
+    if (role === 'doctor') {
+      mailData.status = 'pending';
+      await sendNewUserMail(mailData);
     }
 
     // Delete the OTP after successful verification
@@ -598,7 +613,7 @@ export const findCurrentUser = async (
     if (populatePaths.length > 0) {
       user = await user.populate(populatePaths);
     }
-    
+
     const userWithUrls = await generateSignedUrlsForUser(user);
 
     res.status(200).json({

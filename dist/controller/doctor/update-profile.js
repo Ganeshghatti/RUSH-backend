@@ -54,7 +54,15 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                     return;
                 }
                 // Validate day value
-                const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+                const validDays = [
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                    "sunday",
+                ];
                 if (!validDays.includes(slot.day.toLowerCase())) {
                     res.status(400).json({
                         success: false,
@@ -111,7 +119,7 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                     return;
                 }
                 // Validate price value
-                if (typeof slot.price !== 'number' || slot.price <= 0) {
+                if (typeof slot.price !== "number" || slot.price <= 0) {
                     res.status(400).json({
                         success: false,
                         message: "Price must be a positive number.",
@@ -123,7 +131,7 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
             updateFields["onlineAppointment.duration"] = duration;
         }
         // Handle isActive update if provided
-        if (typeof isActive === 'boolean') {
+        if (typeof isActive === "boolean") {
             updateFields["onlineAppointment.isActive"] = isActive;
         }
         // If neither availability, duration, nor isActive is provided
@@ -138,7 +146,7 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
         // Update the doctor's online appointment settings
         const updatedDoctor = yield doctor_model_1.default.findByIdAndUpdate(doctorId, {
             $set: Object.assign(Object.assign({}, updateFields), { "onlineAppointment.updatedAt": new Date() }),
-        }, { new: true, select: '-password' }).populate("userId");
+        }, { new: true, select: "-password" }).populate("userId");
         if (!updatedDoctor) {
             res.status(404).json({
                 success: false,
@@ -168,8 +176,10 @@ exports.updateDoctorOnlineAppointment = updateDoctorOnlineAppointment;
 const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
+        console.log("Req.boyd ", req.body);
         // Validate request body using Zod
         const validationResult = validation_1.updateProfileSchema.safeParse(req.body);
+        console.log("VALL result ", validationResult);
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
@@ -198,17 +208,24 @@ const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, func
         // Helper function to process image fields and convert URLs to keys
         // Fixed to exclude date fields and other non-image fields
         const processImageFields = (data, parentKey) => __awaiter(void 0, void 0, void 0, function* () {
-            if (!data || typeof data !== 'object')
+            if (!data || typeof data !== "object")
                 return data;
             const processedData = Object.assign({}, data);
             // List of fields that should NOT be processed for image URLs
-            const excludeFields = ['dob', 'year', 'fromYear', 'toYear', 'minute', 'price'];
+            const excludeFields = [
+                "dob",
+                "year",
+                "fromYear",
+                "toYear",
+                "minute",
+                "price",
+            ];
             for (const [key, value] of Object.entries(processedData)) {
                 // Skip processing for excluded fields
                 if (excludeFields.includes(key)) {
                     continue;
                 }
-                if (typeof value === 'string' && value.includes('https://')) {
+                if (typeof value === "string" && value.includes("https://")) {
                     // This is likely a presigned URL, convert to key
                     const extractedKey = yield (0, upload_media_1.getKeyFromSignedUrl)(value);
                     if (extractedKey) {
@@ -219,7 +236,7 @@ const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, func
                     // Process arrays recursively
                     processedData[key] = yield Promise.all(value.map((item) => __awaiter(void 0, void 0, void 0, function* () { return yield processImageFields(item, key); })));
                 }
-                else if (typeof value === 'object' && value !== null) {
+                else if (typeof value === "object" && value !== null) {
                     // Process nested objects recursively
                     processedData[key] = yield processImageFields(value, key);
                 }
@@ -236,14 +253,14 @@ const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, func
             // Process image fields in user data (dob is now a Date object, so won't be processed)
             const processedUserData = yield processImageFields(userUpdateData);
             console.log("processed user data", processedUserData);
-            updatePromises.push(user_model_1.default.findByIdAndUpdate(userId, { $set: processedUserData }, { new: true, runValidators: true, select: '-password' }));
+            updatePromises.push(user_model_1.default.findByIdAndUpdate(userId, { $set: processedUserData }, { new: true, runValidators: true, select: "-password" }));
         }
         // Update Doctor model if doctor data is provided
         if (doctor && Object.keys(doctor).length > 0) {
             // Process image fields in doctor data
             const processedDoctorData = yield processImageFields(doctor);
             console.log("processed doctor data", processedDoctorData);
-            updatePromises.push(doctor_model_1.default.findByIdAndUpdate(existingDoctor._id, { $set: processedDoctorData }, { new: true, runValidators: true, select: '-password' }));
+            updatePromises.push(doctor_model_1.default.findByIdAndUpdate(existingDoctor._id, { $set: processedDoctorData }, { new: true, runValidators: true, select: "-password" }));
         }
         // Execute all update promises
         const updateResults = yield Promise.all(updatePromises);

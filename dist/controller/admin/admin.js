@@ -49,6 +49,7 @@ exports.updateDocumentVerificationStatus = exports.updateDoctorStatus = exports.
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const signed_url_1 = require("../../utils/signed-url");
+const user_notifications_1 = require("../../utils/mail/user_notifications");
 const getAllDoctors = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Find all users who are doctors and populate their doctor data (excluding password)
@@ -158,6 +159,21 @@ const updateDoctorStatus = (req, res) => __awaiter(void 0, void 0, void 0, funct
             });
             return;
         }
+        // Send notification email to doctor and admin
+        const populatedDoctor = yield doctor_model_1.default.findById(updatedDoctor._id).populate("userId");
+        if (populatedDoctor && populatedDoctor.userId) {
+            yield (0, user_notifications_1.sendAccountStatusMail)({
+                userName: `${populatedDoctor.userId.firstName} ${populatedDoctor.userId.lastName}`,
+                email: populatedDoctor.userId.email,
+                status: status,
+                role: "doctor",
+                message: message
+            });
+        }
+        else {
+            // Log an error if we can't get user details for the email, but don't fail the request
+            console.error(`Could not send status update email for doctorId: ${doctorId} because user details could not be populated.`);
+        }
         res.status(200).json({
             success: true,
             message: "Doctor status updated successfully.",
@@ -195,6 +211,19 @@ const updateDocumentVerificationStatus = (req, res) => __awaiter(void 0, void 0,
                 action: "updateDocumentVerificationStatus:user-not-found",
             });
             return;
+        }
+        // Send notification email to doctor only
+        if (user.roles.includes('doctor')) {
+            yield (0, user_notifications_1.sendDocumentVerificationMail)({
+                userName: `${user.firstName} ${user.lastName}`,
+                email: user.email,
+                status: isDocumentVerified ? 'Verified' : 'Rejected',
+                role: 'doctor',
+                message: `Your document verification status has been updated.`
+            });
+        }
+        else {
+            console.warn(`Document verification status updated for a non-doctor user: ${userId}. No email sent.`);
         }
         res.status(200).json({
             success: true,

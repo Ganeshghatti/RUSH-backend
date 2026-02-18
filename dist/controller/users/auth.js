@@ -57,6 +57,7 @@ const patient_model_1 = __importDefault(require("../../models/user/patient-model
 const signed_url_1 = require("../../utils/signed-url");
 const admin_model_1 = __importDefault(require("../../models/user/admin-model"));
 const dotenv = __importStar(require("dotenv"));
+const user_notifications_1 = require("../../utils/mail/user_notifications");
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const sendSMSV3 = (phoneNumber, otp) => __awaiter(void 0, void 0, void 0, function* () {
@@ -156,6 +157,7 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
         // Generate new OTP - 6 digits
         const newOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log(`OTP for ${phone}: ${newOTP}`);
         // Save or update OTP in the database
         yield otp_model_1.default.findOneAndUpdate({ phone }, { phone, otp: newOTP }, { upsert: true, new: true });
         console.log(phone);
@@ -334,6 +336,17 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 user.roleRefs.admin = adminProfile._id;
             }
             yield user.save();
+        }
+        // Send new user registration email to admin
+        const mailData = {
+            userName: `${user.firstName} ${user.lastName}`,
+            email: user.email,
+            role: role,
+            phone: user.phone,
+        };
+        if (role === 'doctor') {
+            mailData.status = 'pending';
+            yield (0, user_notifications_1.sendNewUserMail)(mailData);
         }
         // Delete the OTP after successful verification
         yield otp_model_1.default.deleteOne({ _id: otpRecord._id });
