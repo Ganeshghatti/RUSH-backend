@@ -67,9 +67,8 @@ const sendSMSV3 = (phoneNumber, otp) => __awaiter(void 0, void 0, void 0, functi
         if (!apiKey || !clientId) {
             throw new Error("API key or Client ID not defined in environment variables.");
         }
-        // Remove '+' from phone number
-        const formattedPhoneNumber = phoneNumber.replace('+91', '');
-        console.log("formattedPhoneNumber", formattedPhoneNumber);
+        // Remove '+' from phone number for SMS API
+        const formattedPhoneNumber = phoneNumber.replace("+91", "");
         const message = encodeURIComponent(`Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`);
         const url = `https://api.mylogin.co.in/api/v2/SendSMS?SenderId=RUSHDR&Message=${message}&MobileNumbers=${formattedPhoneNumber}&TemplateId=1707175033225166571&ApiKey=${apiKey}&ClientId=${clientId}`;
         const response = yield fetch(url, {
@@ -81,8 +80,7 @@ const sendSMSV3 = (phoneNumber, otp) => __awaiter(void 0, void 0, void 0, functi
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
-        const data = yield response.text();
-        console.log("SMS sent successfully:", data);
+        yield response.text();
     }
     catch (error) {
         console.error("Failed to send SMS:", error);
@@ -145,6 +143,14 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
+        if (existingUser && existingUser.email !== normalizedEmail) {
+            res.status(400).json({
+                success: false,
+                message: "Phone number already registered with another email.",
+                action: "sendOtp:phone-email-mismatch",
+            });
+            return;
+        }
         // Check if an OTP already exists for the phone number
         const existingOTP = yield otp_model_1.default.findOne({ phone });
         if (existingOTP) {
@@ -160,7 +166,6 @@ const sendOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         console.log(`OTP for ${phone}: ${newOTP}`);
         // Save or update OTP in the database
         yield otp_model_1.default.findOneAndUpdate({ phone }, { phone, otp: newOTP }, { upsert: true, new: true });
-        console.log(phone);
         yield (0, exports.sendSMSV3)(phone, newOTP);
         res.status(200).json({
             success: true,
@@ -213,7 +218,7 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        if (password.length < 4) {
+        if (password.length < 6) {
             res.status(400).json({
                 success: false,
                 message: "Password must be at least 6 characters.",
@@ -239,7 +244,6 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        // Check if user exists
         let user = yield user_model_1.default.findOne({ email: normalizedEmail });
         // Hash the password
         const salt = yield bcrypt_1.default.genSalt(10);
@@ -297,7 +301,15 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             yield user.save();
         }
         else {
-            // Create a new user with the specified role only
+            const existingPhone = yield user_model_1.default.findOne({ phone });
+            if (existingPhone) {
+                res.status(400).json({
+                    success: false,
+                    message: "Phone number already registered.",
+                    action: "verifyOtp:phone-already-registered",
+                });
+                return;
+            }
             user = new user_model_1.default({
                 email: normalizedEmail,
                 roles: [role], // Only assign the requested role
@@ -531,7 +543,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 });
 exports.login = login;
 const findCurrentUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c;
     try {
         const { id, role } = req.user;
         if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
@@ -551,18 +563,13 @@ const findCurrentUser = (req, res) => __awaiter(void 0, void 0, void 0, function
             });
             return;
         }
-        // Conditionally populate roles
         const populatePaths = [];
         if ((_a = user.roleRefs) === null || _a === void 0 ? void 0 : _a.doctor)
-            populatePaths.push({
-                path: "roleRefs.doctor",
-                select: "-password"
-            });
+            populatePaths.push({ path: "roleRefs.doctor", select: "-password" });
         if ((_b = user.roleRefs) === null || _b === void 0 ? void 0 : _b.patient)
-            populatePaths.push({
-                path: "roleRefs.patient",
-                select: "-password"
-            });
+            populatePaths.push({ path: "roleRefs.patient", select: "-password" });
+        if ((_c = user.roleRefs) === null || _c === void 0 ? void 0 : _c.admin)
+            populatePaths.push({ path: "roleRefs.admin", select: "-password" });
         if (populatePaths.length > 0) {
             user = yield user.populate(populatePaths);
         }

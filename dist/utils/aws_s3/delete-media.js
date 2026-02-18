@@ -18,15 +18,24 @@ const path_1 = __importDefault(require("path"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config({ path: path_1.default.join(__dirname, "..", "..", "api", ".env") });
 const s3 = new client_s3_1.S3Client({ region: process.env.AWS_S3_REGION_NAME });
+function decodeS3Key(key) {
+    try {
+        return decodeURIComponent(key);
+    }
+    catch (_a) {
+        return key;
+    }
+}
 /**
- * Delete a file from S3 bucket using its key
+ * Delete a file from S3 bucket using its key (decodes key so percent-encoded keys match S3).
  * @param {string} key - The S3 key (path) of the file to delete
  * @returns {Promise<boolean>} - Returns true if deletion was successful
  */
 const DeleteMediaFromS3 = (_a) => __awaiter(void 0, [_a], void 0, function* ({ key }) {
+    const decodedKey = decodeS3Key(key);
     const command = new client_s3_1.DeleteObjectCommand({
         Bucket: process.env.AWS_STORAGE_BUCKET_NAME,
-        Key: key,
+        Key: decodedKey,
     });
     try {
         yield s3.send(command);

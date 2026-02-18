@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateClinicStatusCron = exports.validateVisitOTP = exports.getAppointmentOTP = exports.getDoctorClinicAppointments = exports.getPatientClinicAppointments = exports.acceptClinicAppointment = exports.bookClinicAppointment = exports.getDoctorClinicAvailability = exports.updateClinicDetails = void 0;
+exports.updateClinicStatusCron = exports.validateVisitOTP = exports.getAppointmentOTP = exports.getDoctorClinicAppointments = exports.getPatientClinicAppointments = exports.acceptClinicAppointment = exports.bookClinicAppointment = exports.getDoctorClinicAvailability = void 0;
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -255,115 +255,6 @@ const populateClinicDetails = (appointments, doctor) => {
 //     });
 //   }
 // };
-// single function to add, update and delete a clinic by doctor
-const updateClinicDetails = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    try {
-        const validation = validation_1.clinicPatchRequestSchema.safeParse(req.body);
-        if (!validation.success) {
-            res.status(400).json({
-                success: false,
-                message: "Please review the clinic details and try again.",
-                action: "updateClinicDetails:validation-error",
-                data: {
-                    errors: validation.error.errors,
-                },
-            });
-            return;
-        }
-        const doctorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        if (!doctorId) {
-            res.status(401).json({
-                success: false,
-                message: "You must be signed in to update clinic details.",
-                action: "updateClinicDetails:not-authenticated",
-            });
-            return;
-        }
-        const validatedData = validation.data;
-        if (Object.keys(validatedData).length === 0) {
-            res.status(400).json({
-                success: false,
-                message: "Please provide fields to update.",
-                action: "updateClinicDetails:no-fields",
-            });
-            return;
-        }
-        const updateQuery = {};
-        if (validatedData.clinics !== undefined) {
-            // Fetch doctor to get active subscription
-            const doctor = yield doctor_model_1.default.findOne({ userId: doctorId }).select("subscriptions");
-            if (!doctor) {
-                res.status(404).json({
-                    success: false,
-                    message: "We couldn't find your doctor profile.",
-                    action: "updateClinicDetails:doctor-not-found",
-                });
-                return;
-            }
-            // Find the latest/active subscription (assuming last is active)
-            const activeSub = doctor.subscriptions && doctor.subscriptions.length > 0
-                ? doctor.subscriptions[doctor.subscriptions.length - 1]
-                : null;
-            if (!activeSub || !activeSub.SubscriptionId) {
-                res.status(400).json({
-                    success: false,
-                    message: "No active subscription found. Please subscribe to a plan.",
-                    action: "updateClinicDetails:no-active-subscription",
-                });
-                return;
-            }
-            // Fetch DoctorSubscription to get no_of_clinics
-            const subDoc = yield doctor_subscription_1.default.findById(activeSub.SubscriptionId);
-            if (!subDoc) {
-                res.status(400).json({
-                    success: false,
-                    message: "We couldn't find the associated subscription plan.",
-                    action: "updateClinicDetails:subscription-not-found",
-                });
-                return;
-            }
-            const maxClinics = subDoc.no_of_clinics || 0;
-            if (Array.isArray(validatedData.clinics) &&
-                validatedData.clinics.length > maxClinics) {
-                res.status(400).json({
-                    success: false,
-                    message: `Your subscription allows only ${maxClinics} clinics. Upgrade your plan to add more clinics.`,
-                    action: "updateClinicDetails:clinic-limit",
-                });
-                return;
-            }
-            updateQuery["clinicVisit.clinics"] = validatedData.clinics;
-        }
-        if (validatedData.isActive !== undefined) {
-            updateQuery["clinicVisit.isActive"] = validatedData.isActive;
-        }
-        const updatedDoctor = yield doctor_model_1.default.findOneAndUpdate({ userId: doctorId }, { $set: updateQuery }, { new: true, select: "clinicVisit" });
-        if (!updatedDoctor) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find your doctor profile.",
-                action: "updateClinicDetails:doctor-not-found",
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Clinic details updated successfully.",
-            action: "updateClinicDetails:success",
-            data: updatedDoctor.clinicVisit,
-        });
-    }
-    catch (err) {
-        console.error("Error patching clinic details:", err);
-        res.status(500).json({
-            success: false,
-            message: "We couldn't update the clinic details.",
-            action: err instanceof Error ? err.message : String(err),
-        });
-    }
-});
-exports.updateClinicDetails = updateClinicDetails;
 // Get doctor's clinic availability for patients
 const getDoctorClinicAvailability = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {

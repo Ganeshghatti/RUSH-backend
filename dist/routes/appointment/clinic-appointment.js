@@ -11,8 +11,6 @@ const auth_middleware_1 = require("../../middleware/auth-middleware");
 // } from "../../controller/appointment/clinic-appointment";
 const clinic_appointment_1 = require("../../controller/appointment/clinic-appointment");
 const router = (0, express_1.Router)();
-// update clinic details
-router.patch("/doctor/clinics", auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), clinic_appointment_1.updateClinicDetails);
 // Patient clinic appointment booking routes
 // router
 //   .route("/appointment/clinic/doctor/:doctorId")

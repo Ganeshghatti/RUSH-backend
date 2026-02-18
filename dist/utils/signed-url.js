@@ -155,6 +155,9 @@ const generateSignedUrlsForFamily = (family) => __awaiter(void 0, void 0, void 0
     const safeGetSignedUrl = (key) => __awaiter(void 0, void 0, void 0, function* () {
         if (!key || typeof key !== "string" || key.trim() === "")
             return key;
+        // If already a URL (e.g. from old data), don't sign again to avoid double-encoded URLs
+        if (key.startsWith("http://") || key.startsWith("https://"))
+            return key;
         try {
             return yield (0, upload_media_1.GetSignedUrl)(key);
         }

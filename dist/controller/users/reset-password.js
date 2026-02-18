@@ -21,6 +21,7 @@ const reset_password_model_1 = __importDefault(require("../../models/reset-passw
 const crypto_1 = __importDefault(require("crypto"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
+const admin_model_1 = __importDefault(require("../../models/user/admin-model"));
 const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { role, email } = req.body;
@@ -32,7 +33,8 @@ const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        const user = yield user_model_1.default.findOne({ email });
+        const normalizedEmail = String(email).toLowerCase().trim();
+        const user = yield user_model_1.default.findOne({ email: normalizedEmail });
         if (!user) {
             res.status(404).json({
                 success: false,
@@ -49,8 +51,10 @@ const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, fu
             });
             return;
         }
-        // Check for existing token and its expiry
-        const existingToken = yield reset_password_model_1.default.findOne({ email, role });
+        const existingToken = yield reset_password_model_1.default.findOne({
+            email: normalizedEmail,
+            role,
+        });
         if (existingToken) {
             const now = Date.now();
             const createdAt = new Date(existingToken.createdAt).getTime();
@@ -72,7 +76,7 @@ const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, fu
         const resetLink = `${process.env.DOMAIN_NAME}/reset-password/${token}`;
         const mailOptions = {
             from: process.env.SMTP_USER,
-            to: email,
+            to: normalizedEmail,
             subject: "Reset your RUSHDR password",
             html: `
         <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 32px;">
@@ -101,8 +105,11 @@ const sendResetPasswordLink = (req, res) => __awaiter(void 0, void 0, void 0, fu
       `,
         };
         yield email_transporter_1.transporter.sendMail(mailOptions);
-        // Store token in DB
-        yield reset_password_model_1.default.create({ email, role, token });
+        yield reset_password_model_1.default.create({
+            email: normalizedEmail,
+            role,
+            token,
+        });
         res.status(200).json({
             success: true,
             message: "We emailed you a link to reset your password.",
@@ -178,6 +185,8 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
             return;
         }
+        const salt = yield bcrypt_1.default.genSalt(10);
+        const hashedPassword = yield bcrypt_1.default.hash(newPassword.toLowerCase(), salt);
         if (role === "doctor") {
             const doctor = yield doctor_model_1.default.findOne({ userId: user._id });
             if (!doctor) {
@@ -188,8 +197,6 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 });
                 return;
             }
-            const salt = yield bcrypt_1.default.genSalt(10);
-            const hashedPassword = yield bcrypt_1.default.hash(newPassword.toLowerCase(), salt);
             doctor.password = hashedPassword;
             yield doctor.save();
         }
@@ -203,10 +210,21 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 });
                 return;
             }
-            const salt = yield bcrypt_1.default.genSalt(10);
-            const hashedPassword = yield bcrypt_1.default.hash(newPassword.toLowerCase(), salt);
             patient.password = hashedPassword;
             yield patient.save();
+        }
+        else if (role === "admin") {
+            const admin = yield admin_model_1.default.findOne({ userId: user._id });
+            if (!admin) {
+                res.status(404).json({
+                    success: false,
+                    message: "Admin profile is missing for this account.",
+                    action: "resetPassword:admin-profile-missing",
+                });
+                return;
+            }
+            admin.password = hashedPassword;
+            yield admin.save();
         }
         else {
             res.status(400).json({

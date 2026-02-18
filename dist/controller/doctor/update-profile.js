@@ -12,12 +12,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateDoctorProfile = exports.updateDoctorOnlineAppointment = void 0;
+exports.updateProfessionalDetails = exports.updateDoctorOnlineAppointment = void 0;
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
-const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const signed_url_1 = require("../../utils/signed-url");
-const upload_media_1 = require("../../utils/aws_s3/upload-media");
-const validation_1 = require("../../validation/validation");
 const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { doctorId } = req.params;
@@ -54,15 +51,7 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                     return;
                 }
                 // Validate day value
-                const validDays = [
-                    "monday",
-                    "tuesday",
-                    "wednesday",
-                    "thursday",
-                    "friday",
-                    "saturday",
-                    "sunday",
-                ];
+                const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
                 if (!validDays.includes(slot.day.toLowerCase())) {
                     res.status(400).json({
                         success: false,
@@ -119,7 +108,7 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
                     return;
                 }
                 // Validate price value
-                if (typeof slot.price !== "number" || slot.price <= 0) {
+                if (typeof slot.price !== 'number' || slot.price <= 0) {
                     res.status(400).json({
                         success: false,
                         message: "Price must be a positive number.",
@@ -131,7 +120,7 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
             updateFields["onlineAppointment.duration"] = duration;
         }
         // Handle isActive update if provided
-        if (typeof isActive === "boolean") {
+        if (typeof isActive === 'boolean') {
             updateFields["onlineAppointment.isActive"] = isActive;
         }
         // If neither availability, duration, nor isActive is provided
@@ -146,7 +135,7 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
         // Update the doctor's online appointment settings
         const updatedDoctor = yield doctor_model_1.default.findByIdAndUpdate(doctorId, {
             $set: Object.assign(Object.assign({}, updateFields), { "onlineAppointment.updatedAt": new Date() }),
-        }, { new: true, select: "-password" }).populate("userId");
+        }, { new: true, select: '-password' }).populate("userId");
         if (!updatedDoctor) {
             res.status(404).json({
                 success: false,
@@ -173,119 +162,99 @@ const updateDoctorOnlineAppointment = (req, res) => __awaiter(void 0, void 0, vo
     }
 });
 exports.updateDoctorOnlineAppointment = updateDoctorOnlineAppointment;
-const updateDoctorProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+const updateProfessionalDetails = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
-        console.log("Req.boyd ", req.body);
-        // Validate request body using Zod
-        const validationResult = validation_1.updateProfileSchema.safeParse(req.body);
-        console.log("VALL result ", validationResult);
-        if (!validationResult.success) {
-            res.status(400).json({
-                success: false,
-                message: "Please review the profile details and try again.",
-                action: "updateDoctorProfile:validation-error",
-                data: {
-                    errors: validationResult.error.errors,
-                },
-            });
-            return;
-        }
-        const { user, doctor } = validationResult.data;
-        console.log("user to update", user);
-        console.log("doctor to update", doctor);
+        const { qualifications, registrations, experiences, signatureImage } = req.body;
         // Find the doctor record using userId
-        const existingDoctor = yield doctor_model_1.default.findOne({ userId }).populate("userId");
-        if (!existingDoctor) {
+        const doctor = yield doctor_model_1.default.findOne({ userId });
+        if (!doctor) {
             res.status(404).json({
                 success: false,
                 message: "We couldn't find a doctor profile for this user.",
-                action: "updateDoctorProfile:doctor-not-found",
+                action: "updateProfessionalDetails:doctor-not-found",
             });
             return;
         }
-        const updatePromises = [];
-        // Helper function to process image fields and convert URLs to keys
-        // Fixed to exclude date fields and other non-image fields
-        const processImageFields = (data, parentKey) => __awaiter(void 0, void 0, void 0, function* () {
-            if (!data || typeof data !== "object")
-                return data;
-            const processedData = Object.assign({}, data);
-            // List of fields that should NOT be processed for image URLs
-            const excludeFields = [
-                "dob",
-                "year",
-                "fromYear",
-                "toYear",
-                "minute",
-                "price",
-            ];
-            for (const [key, value] of Object.entries(processedData)) {
-                // Skip processing for excluded fields
-                if (excludeFields.includes(key)) {
-                    continue;
-                }
-                if (typeof value === "string" && value.includes("https://")) {
-                    // This is likely a presigned URL, convert to key
-                    const extractedKey = yield (0, upload_media_1.getKeyFromSignedUrl)(value);
-                    if (extractedKey) {
-                        processedData[key] = extractedKey;
-                    }
-                }
-                else if (Array.isArray(value)) {
-                    // Process arrays recursively
-                    processedData[key] = yield Promise.all(value.map((item) => __awaiter(void 0, void 0, void 0, function* () { return yield processImageFields(item, key); })));
-                }
-                else if (typeof value === "object" && value !== null) {
-                    // Process nested objects recursively
-                    processedData[key] = yield processImageFields(value, key);
+        const updateFields = {};
+        // Update qualifications if provided
+        if (qualifications && Array.isArray(qualifications)) {
+            // Validate each qualification
+            for (const qual of qualifications) {
+                if (qual.year && (qual.year < 1900 || qual.year > new Date().getFullYear())) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Invalid year in qualifications.",
+                        action: "updateProfessionalDetails:invalid-year",
+                    });
+                    return;
                 }
             }
-            return processedData;
-        });
-        // Update User model if user data is provided
-        if (user && Object.keys(user).length > 0) {
-            const userUpdateData = Object.assign({}, user);
-            // Convert dob string to Date if provided (do this BEFORE processing image fields)
-            if ((user === null || user === void 0 ? void 0 : user.dob) && typeof (user === null || user === void 0 ? void 0 : user.dob) === "string") {
-                userUpdateData.dob = new Date(user.dob);
+            updateFields.qualifications = qualifications;
+        }
+        // Update registrations if provided
+        if (registrations && Array.isArray(registrations)) {
+            updateFields.registration = registrations;
+        }
+        // Update experiences if provided
+        if (experiences && Array.isArray(experiences)) {
+            // Validate experience years
+            for (const exp of experiences) {
+                if (exp.fromYear && (exp.fromYear < 1900 || exp.fromYear > new Date().getFullYear())) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Invalid fromYear in experience.",
+                        action: "updateProfessionalDetails:invalid-from-year",
+                    });
+                    return;
+                }
+                if (exp.toYear && (exp.toYear < 1900 || exp.toYear > new Date().getFullYear())) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Invalid toYear in experience.",
+                        action: "updateProfessionalDetails:invalid-to-year",
+                    });
+                    return;
+                }
             }
-            // Process image fields in user data (dob is now a Date object, so won't be processed)
-            const processedUserData = yield processImageFields(userUpdateData);
-            console.log("processed user data", processedUserData);
-            updatePromises.push(user_model_1.default.findByIdAndUpdate(userId, { $set: processedUserData }, { new: true, runValidators: true, select: "-password" }));
+            updateFields.experience = experiences;
         }
-        // Update Doctor model if doctor data is provided
-        if (doctor && Object.keys(doctor).length > 0) {
-            // Process image fields in doctor data
-            const processedDoctorData = yield processImageFields(doctor);
-            console.log("processed doctor data", processedDoctorData);
-            updatePromises.push(doctor_model_1.default.findByIdAndUpdate(existingDoctor._id, { $set: processedDoctorData }, { new: true, runValidators: true, select: "-password" }));
+        // Update signature image if provided
+        if (signatureImage !== undefined) {
+            updateFields.signatureImage = signatureImage;
         }
-        // Execute all update promises
-        const updateResults = yield Promise.all(updatePromises);
-        if (!updateResults) {
+        if (Object.keys(updateFields).length === 0) {
+            res.status(400).json({
+                success: false,
+                message: "No professional details provided to update.",
+                action: "updateProfessionalDetails:no-fields",
+            });
+            return;
+        }
+        // Update the doctor document
+        const updatedDoctor = yield doctor_model_1.default.findByIdAndUpdate(doctor._id, { $set: updateFields }, { new: true, runValidators: true, select: '-password' }).populate("userId");
+        if (!updatedDoctor) {
             res.status(500).json({
                 success: false,
-                message: "We couldn't update the doctor information.",
-                action: "updateDoctorProfile:update-failed",
+                message: "We couldn't update the professional details.",
+                action: "updateProfessionalDetails:update-failed",
             });
             return;
         }
         res.status(200).json({
             success: true,
-            message: "Doctor profile updated successfully.",
-            action: "updateDoctorProfile:success",
-            data: {},
+            message: "Professional details updated successfully.",
+            action: "updateProfessionalDetails:success",
+            data: updatedDoctor,
         });
     }
     catch (error) {
-        console.error("Error updating doctor profile:", error);
+        console.error("Error updating professional details:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't update the doctor profile.",
+            message: "We couldn't update the professional details.",
             action: error.message,
         });
     }
 });
-exports.updateDoctorProfile = updateDoctorProfile;
+exports.updateProfessionalDetails = updateProfessionalDetails;

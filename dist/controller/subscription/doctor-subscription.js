@@ -14,9 +14,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteSubscription = exports.getActiveSubscriptions = exports.getSubscriptions = exports.updateSubscription = exports.createSubscription = void 0;
 const doctor_subscription_1 = __importDefault(require("../../models/doctor-subscription"));
+const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const upload_media_1 = require("../../utils/aws_s3/upload-media");
 const qrcode_1 = __importDefault(require("qrcode"));
-const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const signed_url_1 = require("../../utils/signed-url");
 // Validate online fee object (min15, min30, min60)
 function validateOnlineFee(fee, label) {
@@ -35,7 +35,7 @@ function validateOnlineFee(fee, label) {
 }
 const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description, no_of_clinics, advertisement_cost } = req.body;
+        const { price, name, description, features, isActive, duration, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeEmergency, opsExpenseEmergency, platformFeeHomeVisit, opsExpenseHomeVisit, doctor_type, doctor_type_description, no_of_clinics, advertisement_cost, is_premium, } = req.body;
         if (price < 0) {
             res.status(400).json({
                 success: false,
@@ -109,6 +109,7 @@ const createSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             description,
             features: features || [],
             isActive: isActive,
+            is_premium: Boolean(is_premium),
             duration,
             // qrCodeImage: signedUrl,
             doctor_type,
@@ -144,7 +145,7 @@ exports.createSubscription = createSubscription;
 const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        const { isActive, name, description, features, price, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency, no_of_clinics, advertisement_cost, } = req.body;
+        const { isActive, is_premium, name, description, features, price, platformFeeOnline, opsExpenseOnline, platformFeeClinic, opsExpenseClinic, platformFeeHomeVisit, opsExpenseHomeVisit, platformFeeEmergency, opsExpenseEmergency, no_of_clinics, advertisement_cost, } = req.body;
         // Build update object with only provided fields
         const updateData = {};
         // Validate and add no_of_clinics if provided
@@ -182,6 +183,18 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                 return;
             }
             updateData.isActive = isActive;
+        }
+        // Validate and add is_premium if provided
+        if (is_premium !== undefined) {
+            if (typeof is_premium !== "boolean") {
+                res.status(400).json({
+                    success: false,
+                    message: "is_premium must be true or false.",
+                    action: "updateDoctorSubscription:invalid-is_premium",
+                });
+                return;
+            }
+            updateData.is_premium = is_premium;
         }
         // Validate and add name if provided
         if (name !== undefined) {
@@ -230,7 +243,6 @@ const updateSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             }
             updateData.features = features.map((feature) => feature.trim());
         }
-        //add fee
         // Validate and add fee fields if provided
         const feeUpdateFields = [
             "platformFeeOnline",
@@ -327,12 +339,11 @@ exports.updateSubscription = updateSubscription;
 const getSubscriptions = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const subscriptions = yield doctor_subscription_1.default.find({});
-        const subscriptionsWithSignedUrls = yield (0, signed_url_1.generateSignedUrlsForSubscriptions)(subscriptions);
         res.status(200).json({
             success: true,
             message: "Subscriptions fetched successfully.",
             action: "getDoctorSubscriptions:success",
-            data: subscriptionsWithSignedUrls,
+            data: subscriptions,
         });
     }
     catch (error) {
@@ -403,22 +414,7 @@ const deleteSubscription = (req, res) => __awaiter(void 0, void 0, void 0, funct
             });
             return;
         }
-        // Extract QR code image URL to delete from S3
-        // const qrCodeUrl = subscription.qrCodeImage;
-        // Delete the subscription from database
         yield doctor_subscription_1.default.findByIdAndDelete(id);
-        // Extract the key from the URL for S3 deletion
-        // if (qrCodeUrl) {
-        //   try {
-        //     const urlParts = qrCodeUrl.split('/');
-        //     const key = urlParts.slice(3).join('/');
-        //     if (key) {
-        //       await DeleteMediaFromS3({ key });
-        //     }
-        //   } catch (error) {
-        //     console.error("Error deleting QR code image from S3:", error);
-        //   }
-        // }
         res.status(200).json({
             success: true,
             message: "Subscription deleted successfully.",
