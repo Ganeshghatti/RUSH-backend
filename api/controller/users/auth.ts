@@ -1,7 +1,6 @@
 import bcrypt from "bcrypt";
 import User from "../../models/user/user-model";
 import OTP from "../../models/otp-model";
-import sendSMS from "../../utils/aws_sns/sms";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import validator from "validator";
@@ -26,9 +25,8 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
       throw new Error("API key or Client ID not defined in environment variables.");
     }
 
-    // Remove '+' from phone number
-    const formattedPhoneNumber = phoneNumber.replace('+91', '');
-    console.log("formattedPhoneNumber", formattedPhoneNumber);
+    // Remove '+' from phone number for SMS API
+    const formattedPhoneNumber = phoneNumber.replace("+91", "");
 
     const message = encodeURIComponent(
       `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`
@@ -47,8 +45,7 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
-    const data = await response.text();
-    console.log("SMS sent successfully:", data);
+    await response.text();
   } catch (error) {
     console.error("Failed to send SMS:", error);
   }
@@ -109,12 +106,20 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     }
 
     const existingEmail = await User.findOne({ email: normalizedEmail });
-
     if (existingEmail && existingEmail.phone !== phone) {
       res.status(400).json({
         success: false,
         message: "Email already used with different phone number.",
         action: "sendOtp:email-phone-mismatch",
+      });
+      return;
+    }
+
+    if (existingUser && existingUser.email !== normalizedEmail) {
+      res.status(400).json({
+        success: false,
+        message: "Phone number already registered with another email.",
+        action: "sendOtp:phone-email-mismatch",
       });
       return;
     }
@@ -142,7 +147,6 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       { phone, otp: newOTP },
       { upsert: true, new: true }
     );
-    console.log(phone);
     await sendSMSV3(phone, newOTP);
 
     res.status(200).json({
@@ -212,7 +216,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (password.length < 4) {
+    if (password.length < 6) {
       res.status(400).json({
         success: false,
         message: "Password must be at least 6 characters.",
@@ -242,7 +246,6 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check if user exists
     let user = await User.findOne({ email: normalizedEmail });
 
     // Hash the password
@@ -300,7 +303,15 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
       await user.save();
     } else {
-      // Create a new user with the specified role only
+      const existingPhone = await User.findOne({ phone });
+      if (existingPhone) {
+        res.status(400).json({
+          success: false,
+          message: "Phone number already registered.",
+          action: "verifyOtp:phone-already-registered",
+        });
+        return;
+      }
       user = new User({
         email: normalizedEmail,
         roles: [role], // Only assign the requested role
@@ -591,16 +602,13 @@ export const findCurrentUser = async (
       return;
     }
 
-    // Conditionally populate roles
-    const populatePaths = [];
-    if (user.roleRefs?.doctor) populatePaths.push({
-      path: "roleRefs.doctor",
-      select: "-password"
-    });
-    if (user.roleRefs?.patient) populatePaths.push({
-      path: "roleRefs.patient",
-      select: "-password"
-    });
+    const populatePaths: { path: string; select: string }[] = [];
+    if (user.roleRefs?.doctor)
+      populatePaths.push({ path: "roleRefs.doctor", select: "-password" });
+    if (user.roleRefs?.patient)
+      populatePaths.push({ path: "roleRefs.patient", select: "-password" });
+    if (user.roleRefs?.admin)
+      populatePaths.push({ path: "roleRefs.admin", select: "-password" });
 
     if (populatePaths.length > 0) {
       user = await user.populate(populatePaths);

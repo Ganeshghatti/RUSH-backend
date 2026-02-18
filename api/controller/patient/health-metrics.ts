@@ -5,7 +5,8 @@ import Patient from "../../models/user/patient-model";
 import Family from "../../models/user/family-model";
 import { HealthMetrics } from "../../models/health-metrics-model";
 import { healthMetricsSchemaZod } from "../../validation/validation";
-import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
+import { GetSignedUrl, getKeyFromSignedUrl } from "../../utils/aws_s3/upload-media";
+import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
 
 // get health metrics for patient
 export const getHealthMetrics = async (
@@ -84,12 +85,13 @@ export const getHealthMetrics = async (
   }
 };
 
-// get health metrics by ID
+// get health metrics by ID (must belong to current patient or their family)
 export const getHealthMetricsById = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
+    const userId = req.user?.id;
     const { healthMetricsId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(healthMetricsId)) {
       res.status(400).json({
@@ -101,8 +103,6 @@ export const getHealthMetricsById = async (
     }
 
     const healthMetrics = await HealthMetrics.findById(healthMetricsId);
-    //   .populate("patientId", "name email")
-    //   .populate("familyId", "basicDetails.name relationship");
     if (!healthMetrics) {
       res.status(404).json({
         success: false,
@@ -110,6 +110,42 @@ export const getHealthMetricsById = async (
         action: "getHealthMetricsById:metrics-not-found",
       });
       return;
+    }
+
+    const patient = await Patient.findOne({ userId });
+    if (!patient) {
+      res.status(404).json({
+        success: false,
+        message: "We couldn't find your patient profile.",
+        action: "getHealthMetricsById:patient-not-found",
+      });
+      return;
+    }
+
+    const patientIdStr = patient._id.toString();
+    const metricsPatientId = healthMetrics.patientId?.toString?.();
+    if (metricsPatientId !== patientIdStr) {
+      res.status(403).json({
+        success: false,
+        message: "You don't have access to these health metrics.",
+        action: "getHealthMetricsById:forbidden",
+      });
+      return;
+    }
+
+    if (healthMetrics.ownerType === "Family" && healthMetrics.familyId) {
+      const family = await Family.findOne({
+        _id: healthMetrics.familyId,
+        patientId: patient._id,
+      });
+      if (!family) {
+        res.status(403).json({
+          success: false,
+          message: "You don't have access to these health metrics.",
+          action: "getHealthMetricsById:forbidden",
+        });
+        return;
+      }
     }
     if (
       healthMetrics?.medicalHistory &&
@@ -150,21 +186,21 @@ export const getHealthMetricsById = async (
   }
 };
 
-// add new health Metrics (for patient or family)
-export const addHealthMetrics = async (
+// Create or update health metrics (for patient or family)
+export const addOrUpdateHealthMetrics = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const userId = req.user.id;
 
-    // validate input
+    // validate input (strip document metadata like createdAt, updatedAt, __v via schema .strip())
     const validationResult = healthMetricsSchemaZod.safeParse(req.body);
     if (!validationResult.success) {
       res.status(400).json({
         success: false,
         message: "Please review the health metrics details and try again.",
-        action: "addHealthMetrics:validation-error",
+        action: "addOrUpdateHealthMetrics:validation-error",
         data: {
           errors: validationResult.error.errors,
         },
@@ -178,13 +214,24 @@ export const addHealthMetrics = async (
       res.status(404).json({
         success: false,
         message: "We couldn't find your patient profile.",
-        action: "addHealthMetrics:patient-not-found",
+        action: "addOrUpdateHealthMetrics:patient-not-found",
       });
       return;
     }
 
     const { familyMemberId, ...rest } = validationResult.data;
     const payload: any = { ...rest };
+
+    // Store only S3 keys for reports, not full URLs (client may send back presigned URLs from GET)
+    if (payload.medicalHistory && Array.isArray(payload.medicalHistory)) {
+      for (const entry of payload.medicalHistory) {
+        if (entry.reports && typeof entry.reports === "string" && entry.reports.includes("https://")) {
+          const key = await getKeyFromSignedUrl(entry.reports);
+          entry.reports = key ?? entry.reports;
+        }
+      }
+    }
+
     const ownerType = familyMemberId ? "Family" : "Patient";
 
     //***** if ownerType is family *****\\
@@ -198,7 +245,7 @@ export const addHealthMetrics = async (
         res.status(400).json({
           success: false,
           message: "We couldn't verify that family member.",
-          action: "addHealthMetrics:family-not-authorized",
+          action: "addOrUpdateHealthMetrics:family-not-authorized",
         });
         return;
       }
@@ -209,6 +256,24 @@ export const addHealthMetrics = async (
 
       // if family already has a linked health metrices update it
       if (family.healthMetricsId) {
+        const existing = await HealthMetrics.findById(family.healthMetricsId).lean();
+        const newReportKeys = new Set(
+          (payload.medicalHistory ?? [])
+            .map((h: { reports?: string }) => h?.reports)
+            .filter(Boolean) as string[]
+        );
+        if (existing?.medicalHistory?.length) {
+          for (const h of existing.medicalHistory) {
+            const oldKey = (h as { reports?: string }).reports;
+            if (oldKey && !newReportKeys.has(oldKey)) {
+              try {
+                await DeleteMediaFromS3({ key: oldKey });
+              } catch (err) {
+                console.warn("Failed to delete old health metrics report from S3:", err);
+              }
+            }
+          }
+        }
         const updated = await HealthMetrics.findByIdAndUpdate(
           family.healthMetricsId,
           {
@@ -225,7 +290,7 @@ export const addHealthMetrics = async (
           res.status(500).json({
             success: false,
             message: "We couldn't update the family health metrics.",
-            action: "addHealthMetrics:update-family-failed",
+            action: "addOrUpdateHealthMetrics:update-family-failed",
           });
           return;
         }
@@ -233,7 +298,7 @@ export const addHealthMetrics = async (
         res.status(200).json({
           success: true,
           message: "Family health metrics updated successfully.",
-          action: "addHealthMetrics:update-family-success",
+          action: "addOrUpdateHealthMetrics:update-family-success",
           data: updated,
         });
         return;
@@ -255,7 +320,7 @@ export const addHealthMetrics = async (
       res.status(201).json({
         success: true,
         message: "Family health metrics created successfully.",
-        action: "addHealthMetrics:create-family-success",
+        action: "addOrUpdateHealthMetrics:create-family-success",
         data: saved,
       });
       return;
@@ -269,6 +334,24 @@ export const addHealthMetrics = async (
 
     //if patient already has healthMetrics update it
     if (patient.healthMetricsId) {
+      const existing = await HealthMetrics.findById(patient.healthMetricsId).lean();
+      const newReportKeys = new Set(
+        (payload.medicalHistory ?? [])
+          .map((h: { reports?: string }) => h?.reports)
+          .filter(Boolean) as string[]
+      );
+      if (existing?.medicalHistory?.length) {
+        for (const h of existing.medicalHistory) {
+          const oldKey = (h as { reports?: string }).reports;
+          if (oldKey && !newReportKeys.has(oldKey)) {
+            try {
+              await DeleteMediaFromS3({ key: oldKey });
+            } catch (err) {
+              console.warn("Failed to delete old health metrics report from S3:", err);
+            }
+          }
+        }
+      }
       const updated = await HealthMetrics.findByIdAndUpdate(
         patient.healthMetricsId,
         {
@@ -284,7 +367,7 @@ export const addHealthMetrics = async (
         res.status(500).json({
           success: false,
           message: "We couldn't update the patient health metrics.",
-          action: "addHealthMetrics:update-patient-failed",
+          action: "addOrUpdateHealthMetrics:update-patient-failed",
         });
         return;
       }
@@ -292,7 +375,7 @@ export const addHealthMetrics = async (
       res.status(200).json({
         success: true,
         message: "Patient health metrics updated successfully.",
-        action: "addHealthMetrics:update-patient-success",
+        action: "addOrUpdateHealthMetrics:update-patient-success",
         data: updated,
       });
       return;
@@ -311,7 +394,7 @@ export const addHealthMetrics = async (
     res.status(201).json({
       success: true,
       message: "Patient health metrics created successfully.",
-      action: "addHealthMetrics:create-patient-success",
+      action: "addOrUpdateHealthMetrics:create-patient-success",
       data: saved,
     });
   } catch (error) {

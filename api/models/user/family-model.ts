@@ -95,7 +95,7 @@ const familySchema = new Schema<IFamily>({
       image: { type: String },
     },
   ],
-  healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrices" },
+  healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrics" },
 });
 
 const Family = mongoose.model("Family", familySchema);

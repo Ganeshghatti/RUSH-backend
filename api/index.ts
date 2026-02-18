@@ -50,6 +50,7 @@ app.use(
       "https://localhost",
       "http://localhost:3000",
       "http://localhost:5173",
+      "http://localhost:3001",
 
       "http://localhost:8080",
       "http://10.0.2.2",
@@ -116,12 +117,6 @@ app.use(homeVisitAppointmentRoutes);
 app.use(prescriptionRoutes);
 
 app.use(ratingRoute);
-
-// // Error handling middleware
-// app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-//   console.error(err);
-//   res.status(500).json({ error: "Internal Server Error" });
-// });
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

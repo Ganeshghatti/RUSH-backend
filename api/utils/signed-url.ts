@@ -187,6 +187,8 @@ export const generateSignedUrlsForFamily = async (family: any) => {
 
   const safeGetSignedUrl = async (key?: string) => {
     if (!key || typeof key !== "string" || key.trim() === "") return key;
+    // If already a URL (e.g. from old data), don't sign again to avoid double-encoded URLs
+    if (key.startsWith("http://") || key.startsWith("https://")) return key;
     try {
       return await GetSignedUrl(key);
     } catch (error) {

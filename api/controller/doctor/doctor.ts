@@ -3,9 +3,9 @@ import mongoose from "mongoose";
 import User from "../../models/user/user-model";
 import Doctor from "../../models/user/doctor-model";
 import DoctorSubscription from "../../models/doctor-subscription";
-import { UploadImgToS3, GetSignedUrl } from "../../utils/aws_s3/upload-media";
+import DoctorSubscriptionCoupon from "../../models/doctor-subscription-coupon";
+import { GetSignedUrl } from "../../utils/aws_s3/upload-media";
 import { generateSignedUrlsForDoctor } from "../../utils/signed-url";
-import path from "path";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
@@ -15,9 +15,6 @@ import crypto from "crypto";
 import Razorpay from "razorpay";
 import { razorpayConfig } from "../../config/razorpay";
 import { RatingModel } from "../../models/appointment/rating-model";
-import uploadPathMap, {
-  type UploadPathType,
-} from "../../routes/media/upload-paths";
 
 // Store timeout references for auto-disable functionality
 const doctorTimeouts = new Map<string, NodeJS.Timeout>();
@@ -29,21 +26,17 @@ export const doctorOnboardV2 = async (
   try {
     const { userId } = req.params;
 
-    // Extract and parse the `data` field from FormData
-    const data = req.body.data;
-    if (!data) {
+    // Accept JSON body: either raw body (application/json) or body.data (legacy)
+    const data = req.body?.data ?? req.body;
+    if (!data || (typeof data === "string" && !data.trim())) {
       res.status(400).json({
         success: false,
-        message: "Please include the required form data.",
+        message: "Please include the required onboarding data.",
         action: "doctorOnboardV2:missing-data",
       });
       return;
     }
-    console.log("Hello Ji ", data);
-
-    // Parse JSON string from `data` field
     const parsedData = typeof data === "string" ? JSON.parse(data) : data;
-    console.log("Parsed data ", parsedData);
 
     // Destructure fields from parsedData
     const {
@@ -67,24 +60,25 @@ export const doctorOnboardV2 = async (
     const parsedQualifications =
       typeof qualifications === "string"
         ? JSON.parse(qualifications)
-        : qualifications;
+        : qualifications ?? [];
     const parsedRegistration =
       typeof registration === "string"
         ? JSON.parse(registration)
-        : registration;
+        : registration ?? [];
     const parsedExperience =
-      typeof experience === "string" ? JSON.parse(experience) : experience;
+      typeof experience === "string" ? JSON.parse(experience) : experience ?? [];
     const parsedPersonalIdProof =
       typeof personalIdProof === "string"
         ? JSON.parse(personalIdProof)
-        : personalIdProof;
+        : personalIdProof ?? {};
     const parsedAddressProof =
       typeof addressProof === "string"
         ? JSON.parse(addressProof)
-        : addressProof;
+        : addressProof ?? {};
     const parsedBankDetails =
-      typeof bankDetails === "string" ? JSON.parse(bankDetails) : bankDetails;
-
+      typeof bankDetails === "string"
+        ? JSON.parse(bankDetails)
+        : bankDetails ?? {};
     const parsedTaxProof =
       typeof taxProof === "string" ? JSON.parse(taxProof) : taxProof;
 
@@ -113,22 +107,13 @@ export const doctorOnboardV2 = async (
       return;
     }
 
-    // Handle file uploads
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-
-    console.log("Files:", files);
-
-    // Validate required fields
+    // Required: only personal details (media uploaded via /media/upload; payload has S3 keys only)
     if (
       !firstName ||
       !lastName ||
       !gender ||
       !dob ||
       !address ||
-      !parsedQualifications ||
-      !parsedRegistration ||
-      !parsedExperience ||
-      !parsedBankDetails ||
       !specialization
     ) {
       res.status(400).json({
@@ -139,182 +124,30 @@ export const doctorOnboardV2 = async (
       return;
     }
 
-    // Helper function to generate unique file name and S3 key
-    const generateS3Key = (
-      file: Express.Multer.File,
-      pathType: UploadPathType
-    ): { key: string; fileName: string } => {
-      console.log("path type ", pathType);
-      console.log("locc ", uploadPathMap[pathType]);
-      const prefix = (uploadPathMap[pathType] as (userId: string) => string)(
-        userId
-      );
-      console.log("PREFIXXX ", prefix);
-      const timestamp = Date.now();
-      const originalName = file.originalname;
-      const extension = path.extname(originalName);
-      const cleanName = path.basename(originalName, extension);
-      const finalName = `${cleanName}_${timestamp}${extension}`;
-      const fileName = `${path.basename(
-        originalName,
-        extension
-      )}_${timestamp}${extension}`;
-      const key = `${prefix}${finalName}`;
-      console.log("KEY ", key);
-      return { key, fileName };
-    };
-
-    // Upload degreeImages and map to qualifications
-    const degreeImages = files["degreeImages"] || [];
-    let degreeImageUrls: string[] = [];
-    if (degreeImages.length > 0) {
-      const degreeImagePromises = degreeImages.map((file) => {
-        const { key, fileName } = generateS3Key(file, "doctorQualification");
-        return UploadImgToS3({
-          key,
-          fileBuffer: file.buffer,
-          fileName,
-        });
-      });
-      degreeImageUrls = await Promise.all(degreeImagePromises);
-      parsedQualifications.forEach((qual: any, index: number) => {
-        if (degreeImageUrls[index]) {
-          qual.degreeImage = degreeImageUrls[index];
-        }
-      });
-    }
-
-    parsedQualifications.forEach((qual: any, index: number) => {
-      qual.degreeImage = degreeImageUrls[index] || qual.degreeImage; // Preserve existing if no new image
-    });
-
-    // Upload licenseImages and map to registration
-    const licenseImages = files["licenseImages"] || [];
-    let licenseImageUrls: string[] = [];
-    if (licenseImages.length > 0) {
-      const licenseImagePromises = licenseImages.map((file) => {
-        const { key, fileName } = generateS3Key(file, "doctorLicense");
-        return UploadImgToS3({
-          key,
-          fileBuffer: file.buffer,
-          fileName,
-        });
-      });
-      licenseImageUrls = await Promise.all(licenseImagePromises);
-      parsedRegistration.forEach((reg: any, index: number) => {
-        if (licenseImageUrls[index]) {
-          reg.licenseImage = licenseImageUrls[index];
-        }
-      });
-    }
-
-    parsedRegistration.forEach((reg: any, index: number) => {
-      reg.licenseImage = licenseImageUrls[index] || reg.licenseImage; // Preserve existing if no new image
-    });
-
-    // Prepare all single image uploads in parallel
-    const singleImageUploads = [];
-    const singleImageKeys = [];
-
-    if (files["signatureImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["signatureImage"][0],"doctorSignature");
-      singleImageUploads.push(
-        UploadImgToS3({
-          key,
-          fileBuffer: files["signatureImage"][0].buffer,
-          fileName,
-        })
-      );
-      singleImageKeys.push("signatureImage");
-    }
-
-    if (files["upiqrImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["upiqrImage"][0], "bankingQR");
-      singleImageUploads.push(
-        UploadImgToS3({
-          key,
-          fileBuffer: files["upiqrImage"][0].buffer,
-          fileName,
-        })
-      );
-      singleImageKeys.push("upiqrImage");
-    }
-
-    if (files["profilePic"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["profilePic"][0], "userProfilePic");
-      singleImageUploads.push(
-        UploadImgToS3({
-          key,
-          fileBuffer: files["profilePic"][0].buffer,
-          fileName,
-        })
-      );
-      singleImageKeys.push("profilePic");
-    }
-
-    if (files["personalIdProofImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["personalIdProofImage"][0], "personalIdProof");
-      singleImageUploads.push(
-        UploadImgToS3({
-          key,
-          fileBuffer: files["personalIdProofImage"][0].buffer,
-          fileName,
-        })
-      );
-      singleImageKeys.push("personalIdProofImage");
-    }
-
-    if (files["addressProofImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["addressProofImage"][0], "addressProof");
-      singleImageUploads.push(
-        UploadImgToS3({
-          key,
-          fileBuffer: files["addressProofImage"][0].buffer,
-          fileName,
-        })
-      );
-      singleImageKeys.push("addressProofImage");
-    }
-
-    if (files["taxImage"]?.[0]) {
-      const { key, fileName } = generateS3Key(files["taxImage"][0],"taxProof");
-      singleImageUploads.push(
-        UploadImgToS3({
-          key,
-          fileBuffer: files["taxImage"][0].buffer,
-          fileName,
-        })
-      );
-      singleImageKeys.push("taxImage");
-    }
-
-    // Upload all single images in parallel
-    const singleImageUrls = await Promise.all(singleImageUploads);
-
-    // Map the results to their respective variables
-    const signatureImageUrl =
-      singleImageKeys.indexOf("signatureImage") !== -1
-        ? singleImageUrls[singleImageKeys.indexOf("signatureImage")]
-        : undefined;
-    const upiQrImageUrl =
-      singleImageKeys.indexOf("upiqrImage") !== -1
-        ? singleImageUrls[singleImageKeys.indexOf("upiqrImage")]
-        : undefined;
+    // All image fields are S3 keys (strings) from the client
     const profilePicUrl =
-      singleImageKeys.indexOf("profilePic") !== -1
-        ? singleImageUrls[singleImageKeys.indexOf("profilePic")]
+      typeof parsedData.profilePic === "string"
+        ? parsedData.profilePic
+        : undefined;
+    const signatureImageUrl =
+      typeof parsedData.signatureImage === "string"
+        ? parsedData.signatureImage
         : undefined;
     const personalIdProofImageUrl =
-      singleImageKeys.indexOf("personalIdProofImage") !== -1
-        ? singleImageUrls[singleImageKeys.indexOf("personalIdProofImage")]
+      typeof parsedPersonalIdProof?.image === "string"
+        ? parsedPersonalIdProof.image
         : undefined;
     const addressProofImageUrl =
-      singleImageKeys.indexOf("addressProofImage") !== -1
-        ? singleImageUrls[singleImageKeys.indexOf("addressProofImage")]
+      typeof parsedAddressProof?.image === "string"
+        ? parsedAddressProof.image
+        : undefined;
+    const upiQrImageUrl =
+      typeof parsedBankDetails?.upiQrImage === "string"
+        ? parsedBankDetails.upiQrImage
         : undefined;
     const taxProofImageUrl =
-      singleImageKeys.indexOf("taxImage") !== -1
-        ? singleImageUrls[singleImageKeys.indexOf("taxImage")]
+      typeof parsedTaxProof?.image === "string"
+        ? parsedTaxProof.image
         : undefined;
 
     // Prepare update data for doctor
@@ -369,37 +202,25 @@ export const doctorOnboardV2 = async (
       },
       taxProof: parsedTaxProof
         ? {
-          ...parsedTaxProof,
-          image: taxProofImageUrl,
-        }
+            ...parsedTaxProof,
+            image: taxProofImageUrl,
+          }
         : undefined,
     };
 
-    console.log(" main data to update", doctorUpdateData);
-    console.log("user to update ", userUpdateData);
-
-    // Update both user and doctor using discriminator model
     const [updatedUser, updatedDoctor] = await Promise.all([
       User.findByIdAndUpdate(
         userId,
         { $set: userUpdateData },
-        {
-          new: true,
-          runValidators: true,
-        }
+        { new: true, runValidators: true }
       ),
       Doctor.findOneAndUpdate(
         { userId },
         { $set: doctorUpdateData },
-        {
-          new: true,
-          runValidators: true,
-        }
+        { new: true, runValidators: true }
       ),
     ]);
-
     if (!updatedDoctor || !updatedUser) {
-      console.log("the error is here", updatedDoctor, updatedUser);
       res.status(500).json({
         success: false,
         message: "We couldn't save the doctor information.",
@@ -412,7 +233,7 @@ export const doctorOnboardV2 = async (
       success: true,
       message: "Doctor information saved successfully.",
       action: "doctorOnboardV2:success",
-      data: updatedDoctor,
+      data: doctorUpdateData,
     });
   } catch (error) {
     console.error("Error in doctor onboarding:", error);
@@ -428,23 +249,104 @@ interface MulterRequest extends Request {
   file?: Express.Multer.File;
 }
 
+/** Validates coupon for a subscription; returns discount info or error message. */
+async function validateCouponForSubscription(
+  code: string,
+  subscriptionId: string
+): Promise<{ valid: true; discountPercent: number } | { valid: false; message: string }> {
+  const normalizedCode = String(code).trim().toUpperCase();
+  if (!normalizedCode) {
+    return { valid: false, message: "Coupon code is required." };
+  }
+
+  const subscription = await DoctorSubscription.findById(subscriptionId);
+  if (!subscription) {
+    return { valid: false, message: "Subscription plan not found." };
+  }
+
+  const coupon = await DoctorSubscriptionCoupon.findOne({ code: normalizedCode });
+  if (!coupon) {
+    return { valid: false, message: "Invalid coupon code." };
+  }
+  if (!coupon.isActive) {
+    return { valid: false, message: "This coupon is no longer active." };
+  }
+
+  const now = new Date();
+  if (coupon.validFrom && now < new Date(coupon.validFrom)) {
+    return { valid: false, message: "This coupon is not yet valid." };
+  }
+  if (coupon.validUntil && now > new Date(coupon.validUntil)) {
+    return { valid: false, message: "This coupon has expired." };
+  }
+  if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
+    return { valid: false, message: "This coupon has reached its usage limit." };
+  }
+
+  const applicableIds = coupon.applicableSubscriptionIds || [];
+  const appliesToAll = applicableIds.length === 0;
+  const appliesToThis = applicableIds.some(
+    (id: any) => id && id.toString() === subscriptionId
+  );
+  if (!appliesToAll && !appliesToThis) {
+    return { valid: false, message: "This coupon does not apply to the selected plan." };
+  }
+
+  return { valid: true, discountPercent: coupon.discountPercent };
+}
+
+export const validateCoupon = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { code, subscriptionId } = req.body;
+    if (!code || !subscriptionId) {
+      res.status(400).json({
+        success: false,
+        message: "Code and subscriptionId are required.",
+        action: "validateCoupon:missing-fields",
+      });
+      return;
+    }
+    const result = await validateCouponForSubscription(code, subscriptionId);
+    if (!result.valid) {
+      res.status(200).json({
+        success: true,
+        valid: false,
+        message: result.message,
+        data: { valid: false, message: result.message },
+      });
+      return;
+    }
+    res.status(200).json({
+      success: true,
+      valid: true,
+      message: "Coupon applied.",
+      data: { valid: true, discountPercent: result.discountPercent },
+    });
+  } catch (error) {
+    console.error("Error validating coupon:", error);
+    res.status(500).json({
+      success: false,
+      message: "We couldn't validate the coupon.",
+      action: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
 export const subscribeDoctor = async (
   req: MulterRequest,
   res: Response
 ): Promise<void> => {
   try {
-    // Check for required form data
     if (!req.body.data) {
       res.status(400).json({
         success: false,
         message: "Please include the required form data.",
-        action: "subscribeDoctor:missing-data",
+        action: "subscribeDoctor:missing-json",
       });
       return;
     }
 
-    // Parse JSON data from form
-    let formData;
+    let formData: { subscriptionId: string; couponCode?: string };
     try {
       formData = JSON.parse(req.body.data);
     } catch (error) {
@@ -456,7 +358,7 @@ export const subscribeDoctor = async (
       return;
     }
 
-    const { subscriptionId } = formData;
+    const { subscriptionId, couponCode } = formData;
     const { doctorId } = req.params;
 
     if (!doctorId || !subscriptionId) {
@@ -469,7 +371,6 @@ export const subscribeDoctor = async (
       return;
     }
 
-    // Find doctor
     const doctor: any = await Doctor.findOne({ userId: doctorId }).populate({
       path: "userId",
       select: "firstName lastName email phone countryCode",
@@ -484,9 +385,6 @@ export const subscribeDoctor = async (
       return;
     }
 
-    console.log("doctor on subscribe: ", doctor);
-
-    // Find subscription
     const subscription = await DoctorSubscription.findById(subscriptionId);
     if (!subscription) {
       res.status(404).json({
@@ -506,18 +404,30 @@ export const subscribeDoctor = async (
       return;
     }
 
-    console.log("subscription active:", subscription);
+    let discountPercent = 0;
+    let finalAmount = subscription.price;
+    if (couponCode && String(couponCode).trim()) {
+      const couponResult = await validateCouponForSubscription(
+        String(couponCode).trim(),
+        subscriptionId
+      );
+      if (couponResult.valid) {
+        discountPercent = couponResult.discountPercent;
+        finalAmount = Math.max(
+          0,
+          subscription.price * (1 - discountPercent / 100)
+        );
+      }
+    }
 
-    // convert to amount to integer
+    const amountPaise = Math.round(finalAmount * 100);
     const options = {
-      amount: Math.round(subscription.price * 100),
+      amount: amountPaise,
       currency: "INR",
       receipt: "receipt_" + Math.random().toString(36).substring(7),
     };
 
     const order = await razorpayConfig.orders.create(options);
-
-    console.log("order created: ", order);
 
     res.status(200).json({
       success: true,
@@ -531,6 +441,10 @@ export const subscribeDoctor = async (
           contact: doctor.userId.phone,
           countryCode: doctor.userId.countryCode || "+91",
         },
+        originalAmount: subscription.price,
+        discountPercent,
+        finalAmount,
+        couponCode: discountPercent > 0 ? String(couponCode).trim().toUpperCase() : undefined,
       },
     });
   } catch (error) {
@@ -553,6 +467,9 @@ export const verifyPaymentSubscription = async (
       razorpay_payment_id,
       razorpay_signature,
       subscriptionId,
+      couponCode,
+      discountPercent,
+      amountBeforeDiscount,
     } = req.body;
 
     const userId = req.user.id;
@@ -567,7 +484,7 @@ export const verifyPaymentSubscription = async (
       res.status(400).json({
         success: false,
         message: "Please provide all payment verification details.",
-        action: "doctorVerifyPaymentSubscription:validate-input",
+        action: "verifyPaymentSubscription:validate-input",
       });
       return;
     }
@@ -584,7 +501,7 @@ export const verifyPaymentSubscription = async (
         res.status(404).json({
           success: false,
           message: "We couldn't find the doctor for this subscription.",
-          action: "doctorVerifyPaymentSubscription:doctor-not-found",
+          action: "verifyPaymentSubscription:doctor-not-found",
         });
         return;
       }
@@ -594,7 +511,7 @@ export const verifyPaymentSubscription = async (
         res.status(404).json({
           success: false,
           message: "We couldn't find that subscription plan.",
-          action: "doctorVerifyPaymentSubscription:plan-not-found",
+          action: "verifyPaymentSubscription:plan-not-found",
         });
         return;
       }
@@ -603,7 +520,7 @@ export const verifyPaymentSubscription = async (
         res.status(400).json({
           success: false,
           message: "This subscription plan is currently inactive.",
-          action: "doctorVerifyPaymentSubscription:plan-inactive",
+          action: "verifyPaymentSubscription:plan-inactive",
         });
         return;
       }
@@ -659,12 +576,13 @@ export const verifyPaymentSubscription = async (
           res.status(400).json({
             success: false,
             message: "This subscription duration is not supported.",
-            action: `doctorVerifyPaymentSubscription:invalid-duration:${subscription.duration}`,
+            action: `verifyPaymentSubscription:invalid-duration:${subscription.duration}`,
           });
           return;
       }
 
-      const newSubscription = {
+      const amountBefore = amountBeforeDiscount != null ? Number(amountBeforeDiscount) : subscription.price;
+      const newSubscription: any = {
         startDate: new Date(),
         endDate,
         razorpay_order_id,
@@ -672,22 +590,34 @@ export const verifyPaymentSubscription = async (
         SubscriptionId: subscription._id,
         amount_paid: subscription.price,
       };
+      if (couponCode && discountPercent != null) {
+        newSubscription.couponCode = String(couponCode).trim().toUpperCase();
+        newSubscription.discountPercent = Number(discountPercent);
+        newSubscription.amountBeforeDiscount = amountBefore;
+        newSubscription.amount_paid = Math.max(0, amountBefore * (1 - Number(discountPercent) / 100));
+      }
 
       doctor.subscriptions.push(newSubscription);
-
       await doctor.save();
+
+      if (newSubscription.couponCode) {
+        await DoctorSubscriptionCoupon.findOneAndUpdate(
+          { code: newSubscription.couponCode },
+          { $inc: { usedCount: 1 } }
+        );
+      }
 
       res.status(200).json({
         success: true,
         message: "Subscription payment verified successfully.",
-        action: "doctorVerifyPaymentSubscription:success",
+        action: "verifyPaymentSubscription:success",
         data: doctor,
       });
     } else {
       res.status(400).json({
         success: false,
         message: "We could not verify the payment signature.",
-        action: "doctorVerifyPaymentSubscription:signature-mismatch",
+        action: "verifyPaymentSubscription:signature-mismatch",
       });
     }
   } catch (err: any) {
@@ -949,14 +879,14 @@ export const getDoctorAppointmentStats = async (
         appointmentType: "clinic",
         clinicDetails: clinic
           ? {
-            clinicName: clinic.clinicName,
-            address: clinic.address,
-            consultationFee: clinic.consultationFee,
-            frontDeskNumber: clinic.frontDeskNumber,
-            operationalDays: clinic.operationalDays,
-            timeSlots: clinic.timeSlots,
-            isActive: clinic.isActive,
-          }
+              clinicName: clinic.clinicName,
+              address: clinic.address,
+              consultationFee: clinic.consultationFee,
+              frontDeskNumber: clinic.frontDeskNumber,
+              operationalDays: clinic.operationalDays,
+              timeSlots: clinic.timeSlots,
+              isActive: clinic.isActive,
+            }
           : null,
       };
     });
@@ -1054,10 +984,10 @@ export const getDoctorDashboard = async (
   res: Response
 ): Promise<void> => {
   try {
-    const doctorId = req.user.id; // Get doctor's user ID from auth middleware
+    const doctorId = req.user.id;
 
     // Find the doctor document using userId
-    const doctor = await Doctor.findOne({ userId: doctorId });
+    const doctor = await Doctor.findOne({ userId: doctorId }).select('_id');
 
     if (!doctor) {
       res.status(404).json({
@@ -1068,31 +998,70 @@ export const getDoctorDashboard = async (
       return;
     }
 
-    const noOfRating = await RatingModel.countDocuments({
-      doctorId: doctor._id,
-    });
-
-    // Get all appointments for this doctor
+    // Use aggregation for efficient stats calculation and get ratings in parallel
     const [
-      onlineAppointments,
-      emergencyAppointments,
-      clinicAppointments,
-      homeVisitAppointments,
+      onlineStats,
+      emergencyStats,
+      clinicStats,
+      homeVisitStats,
+      ratingsData,
+      recentEmergencies,
     ] = await Promise.all([
-      OnlineAppointment.find({
-        doctorId: doctor._id,
-      })
-        .populate({
-          path: "patientId",
-          select: "userId",
-          populate: {
-            path: "userId",
-            select: "firstName lastName countryCode gender email profilePic",
+      // Online appointments stats
+      OnlineAppointment.aggregate([
+        { $match: { doctorId: doctor._id } },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
           },
-        })
-        .sort({ "slot.day": -1, "slot.time.start": -1 }),
+        },
+      ]),
+      // Emergency appointments stats
+      EmergencyAppointment.aggregate([
+        { $match: { doctorId: doctor._id } },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      // Clinic appointments stats
+      ClinicAppointment.aggregate([
+        { $match: { doctorId: doctor._id } },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      // Home visit appointments stats
+      HomeVisitAppointment.aggregate([
+        { $match: { doctorId: doctor._id } },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      // Ratings data
+      RatingModel.aggregate([
+        { $match: { doctorId: doctor._id } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            average: { $avg: "$rating" },
+          },
+        },
+      ]),
+      // Recent non-completed emergency appointments (limited to 5)
       EmergencyAppointment.find({
         doctorId: doctor._id,
+        status: { $ne: "completed" },
       })
         .populate({
           path: "patientId",
@@ -1102,161 +1071,88 @@ export const getDoctorDashboard = async (
             select: "firstName lastName countryCode phone email profilePic",
           },
         })
-        .sort({ createdAt: -1 }),
-      ClinicAppointment.find({
-        doctorId: doctor._id,
-      })
-        .populate({
-          path: "patientId",
-          select: "userId",
-          populate: {
-            path: "userId",
-            select: "firstName lastName countryCode gender email profilePic",
-          },
-        })
-        .sort({ "slot.day": -1, "slot.time.start": -1 }),
-      HomeVisitAppointment.find({
-        doctorId: doctor._id,
-      })
-        .populate({
-          path: "patientId",
-          select: "userId",
-          populate: {
-            path: "userId",
-            select: "firstName lastName countryCode gender email profilePic",
-          },
-        })
-        .sort({ "slot.day": -1, "slot.time.start": -1 }),
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
     ]);
 
-    // Calculate online appointment counts by status
-    const onlineStats = {
-      total: onlineAppointments.length,
-      pending: onlineAppointments.filter((app) => app.status === "pending")
-        .length,
-      accepted: onlineAppointments.filter((app) => app.status === "accepted")
-        .length,
-      completed: onlineAppointments.filter((app) => app.status === "completed")
-        .length,
-    };
-    // Calculate emergency appointment counts by status
-    const emergencyStats = {
-      total: emergencyAppointments.length,
-      pending: emergencyAppointments.filter((app) => app.status === "pending")
-        .length,
-      inProgress: emergencyAppointments.filter(
-        (app) => app.status === "in-progress"
-      ).length,
-      completed: emergencyAppointments.filter(
-        (app) => app.status === "completed"
-      ).length,
-    };
-    const clinicStats = {
-      total: clinicAppointments.length,
-      pending: clinicAppointments.filter((app) => app.status === "pending")
-        .length,
-      accepted: clinicAppointments.filter((app) => app.status === "accepted")
-        .length,
-      completed: clinicAppointments.filter((app) => app.status === "completed")
-        .length,
-    };
-    const homeVisitStats = {
-      total: homeVisitAppointments.length,
-      pending: homeVisitAppointments.filter(
-        (app) => app.status === "pending" || app.status === "doctor_accepted"
-      ).length,
-      accepted: homeVisitAppointments.filter(
-        (app) => app.status === "patient_confirmed"
-      ).length,
-      completed: homeVisitAppointments.filter(
-        (app) => app.status === "completed"
-      ).length,
+    // Helper function to process aggregation results
+    const processStats = (stats: any[]) => {
+      const result = { pending: 0, accepted: 0, completed: 0, inProgress: 0, total: 0 };
+      stats.forEach((stat) => {
+        const status = stat._id;
+        const count = stat.count;
+        result.total += count;
+        
+        if (status === "pending") result.pending = count;
+        else if (status === "accepted") result.accepted = count;
+        else if (status === "completed") result.completed = count;
+        else if (status === "in-progress") result.inProgress = count;
+        else if (status === "doctor_accepted") result.pending += count;
+        else if (status === "patient_confirmed") result.accepted += count;
+      });
+      return result;
     };
 
-    // Calculate total appointments across both types
+    // Process stats from aggregations
+    const online = processStats(onlineStats);
+    const emergency = processStats(emergencyStats);
+    const clinic = processStats(clinicStats);
+    const homeVisit = processStats(homeVisitStats);
+
+    // Calculate total appointments across all types
     const totalStats = {
-      total:
-        onlineStats.total +
-        emergencyStats.total +
-        clinicStats.total +
-        homeVisitStats.total,
-      pending:
-        onlineStats.pending +
-        emergencyStats.pending +
-        clinicStats.pending +
-        homeVisitStats.pending,
-      active:
-        onlineStats.accepted +
-        emergencyStats.inProgress +
-        clinicStats.accepted +
-        homeVisitStats.accepted,
-      completed:
-        onlineStats.completed +
-        emergencyStats.completed +
-        clinicStats.completed +
-        homeVisitStats.completed,
+      total: online.total + emergency.total + clinic.total + homeVisit.total,
+      pending: online.pending + emergency.pending + clinic.pending + homeVisit.pending,
+      active: online.accepted + emergency.inProgress + clinic.accepted + homeVisit.accepted,
+      completed: online.completed + emergency.completed + clinic.completed + homeVisit.completed,
     };
 
     // Process emergency appointments to add presigned URLs
     const processedEmergencyAppointments = await Promise.all(
-      emergencyAppointments
-        .filter((appointment) => appointment.status !== "completed")
-        .map(async (appointment) => {
-          const appointmentObj = appointment.toObject() as any;
+      recentEmergencies.map(async (appointment: any) => {
+        const appointmentObj = { ...appointment };
 
+        try {
           // Generate presigned URLs for media array if it exists
-          if (Array.isArray(appointmentObj.media)) {
-            appointmentObj.media = await Promise.all(
-              appointmentObj.media.map(async (mediaKey: any) => {
-                if (
-                  mediaKey &&
-                  typeof mediaKey === "string" &&
-                  mediaKey.trim() !== ""
-                ) {
-                  try {
-                    return await GetSignedUrl(mediaKey);
-                  } catch (error) {
-                    console.warn(
-                      "Could not generate signed URL for media:",
-                      mediaKey,
-                      error
-                    );
-                    return mediaKey;
-                  }
-                }
-                return mediaKey;
-              })
-            );
+          if (Array.isArray(appointmentObj.media) && appointmentObj.media.length > 0) {
+            const mediaPromises = appointmentObj.media
+              .filter((key: any) => key && typeof key === "string" && key.trim() !== "")
+              .map((mediaKey: string) => 
+                GetSignedUrl(mediaKey).catch((err) => {
+                  console.warn("Failed to generate signed URL for media:", mediaKey, err);
+                  return mediaKey; // Return original key on failure
+                })
+              );
+            appointmentObj.media = await Promise.all(mediaPromises);
           }
 
           // Generate presigned URL for patient's profile picture if it exists
-          if (appointmentObj.patientId?.userId?.profilePic) {
-            try {
-              appointmentObj.patientId.userId.profilePic = await GetSignedUrl(
-                appointmentObj.patientId.userId.profilePic
-              );
-            } catch (error) {
-              console.warn(
-                "Could not generate signed URL for profile picture:",
-                appointmentObj.patientId.userId.profilePic,
-                error
-              );
-            }
+          if (appointmentObj.patientId?.userId?.profilePic && 
+              typeof appointmentObj.patientId.userId.profilePic === "string") {
+            appointmentObj.patientId.userId.profilePic = await GetSignedUrl(
+              appointmentObj.patientId.userId.profilePic
+            ).catch((err) => {
+              console.warn("Failed to generate signed URL for profile pic:", err);
+              return appointmentObj.patientId.userId.profilePic; // Return original on failure
+            });
           }
+        } catch (error) {
+          console.error("Error processing emergency appointment:", error);
+        }
 
-          return appointmentObj;
-        })
+        return appointmentObj;
+      })
     );
 
     // Prepare dashboard data
     const dashboardData = {
       appointmentStats: totalStats,
       reviews: {
-        total: noOfRating,
-        average: 0,
+        total: ratingsData[0]?.total || 0,
+        average: ratingsData[0]?.average ? Number(ratingsData[0].average.toFixed(1)) : 0,
       },
-      // recentOnlineAppointments: onlineAppointments.slice(0, 5), // Get 5 most recent appointments
-      recentEmergencyAppointments: processedEmergencyAppointments.slice(0, 5),
+      recentEmergencyAppointments: processedEmergencyAppointments,
     };
 
     res.status(200).json({
@@ -1358,7 +1254,11 @@ export const updateDoctorActiveStatus = async (
 
     res.status(200).json({
       success: true,
-      message: `Doctor status updated to ${isActive ? "active" : "inactive"}${isActive ? ". Will automatically disable after 1 hour." : ""}`,
+      message: `Doctor status updated to ${isActive ? "active" : "inactive"}${
+        isActive
+          ? ". The system will automatically set it to inactive soon."
+          : ""
+      }`,
       action: "updateDoctorActiveStatus:success",
       data: {
         isActive: updatedDoctor.isActive,

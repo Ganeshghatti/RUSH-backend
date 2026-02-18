@@ -1,13 +1,9 @@
 import { Request, Response } from "express";
 import DoctorSubscription from "../../models/doctor-subscription";
+import Doctor from "../../models/user/doctor-model";
 import { UploadImgToS3 } from "../../utils/aws_s3/upload-media";
 import QRCode from "qrcode";
-import Doctor from "../../models/user/doctor-model";
-import { DeleteMediaFromS3 } from "../../utils/aws_s3/delete-media";
-import {
-  generateSignedUrlsForSubscriptions,
-  generateSignedUrlsForSubscription,
-} from "../../utils/signed-url";
+import { generateSignedUrlsForSubscriptions } from "../../utils/signed-url";
 
 // Validate online fee object (min15, min30, min60)
 function validateOnlineFee(fee: any, label: string): string | null {
@@ -49,7 +45,8 @@ export const createSubscription = async (
       doctor_type,
       doctor_type_description,
       no_of_clinics,
-      advertisement_cost
+      advertisement_cost,
+      is_premium,
     } = req.body;
 
     if (price < 0) {
@@ -143,6 +140,7 @@ export const createSubscription = async (
       description,
       features: features || [],
       isActive: isActive,
+      is_premium: Boolean(is_premium),
       duration,
       // qrCodeImage: signedUrl,
       doctor_type,
@@ -183,6 +181,7 @@ export const updateSubscription = async (
     const { id } = req.params;
     const {
       isActive,
+      is_premium,
       name,
       description,
       features,
@@ -199,8 +198,9 @@ export const updateSubscription = async (
       advertisement_cost,
     } = req.body;
 
-  // Build update object with only provided fields
-  const updateData: any = {};
+    // Build update object with only provided fields
+    const updateData: Record<string, unknown> = {};
+
     // Validate and add no_of_clinics if provided
     if (no_of_clinics !== undefined) {
       if (typeof no_of_clinics !== "number" || no_of_clinics < 0) {
@@ -238,6 +238,19 @@ export const updateSubscription = async (
         return;
       }
       updateData.isActive = isActive;
+    }
+
+    // Validate and add is_premium if provided
+    if (is_premium !== undefined) {
+      if (typeof is_premium !== "boolean") {
+        res.status(400).json({
+          success: false,
+          message: "is_premium must be true or false.",
+          action: "updateDoctorSubscription:invalid-is_premium",
+        });
+        return;
+      }
+      updateData.is_premium = is_premium;
     }
 
     // Validate and add name if provided
@@ -292,7 +305,6 @@ export const updateSubscription = async (
       updateData.features = features.map((feature: string) => feature.trim());
     }
 
-    //add fee
     // Validate and add fee fields if provided
     const feeUpdateFields = [
       "platformFeeOnline",
@@ -403,14 +415,11 @@ export const getSubscriptions = async (
   try {
     const subscriptions = await DoctorSubscription.find({});
 
-    const subscriptionsWithSignedUrls =
-      await generateSignedUrlsForSubscriptions(subscriptions);
-
     res.status(200).json({
       success: true,
       message: "Subscriptions fetched successfully.",
       action: "getDoctorSubscriptions:success",
-      data: subscriptionsWithSignedUrls,
+      data: subscriptions,
     });
   } catch (error) {
     console.error("Error fetching subscriptions:", error);
@@ -494,26 +503,7 @@ export const deleteSubscription = async (
       return;
     }
 
-    // Extract QR code image URL to delete from S3
-    // const qrCodeUrl = subscription.qrCodeImage;
-    
-    // Delete the subscription from database
     await DoctorSubscription.findByIdAndDelete(id);
-
-    // Extract the key from the URL for S3 deletion
-    
-    // if (qrCodeUrl) {
-    //   try {
-    //     const urlParts = qrCodeUrl.split('/');
-    //     const key = urlParts.slice(3).join('/');
-        
-    //     if (key) {
-    //       await DeleteMediaFromS3({ key });
-    //     }
-    //   } catch (error) {
-    //     console.error("Error deleting QR code image from S3:", error);
-    //   }
-    // }
 
     res.status(200).json({
       success: true,

@@ -7,6 +7,7 @@ import ResetPassword from "../../models/reset-password-model";
 import crypto from "crypto";
 import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
+import Admin from "../../models/user/admin-model";
 
 export const sendResetPasswordLink = async (req: Request, res: Response) => {
   try {
@@ -21,7 +22,8 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
       return;
     }
 
-    const user = await User.findOne({ email });
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       res.status(404).json({
         success: false,
@@ -40,8 +42,10 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
       return;
     }
 
-    // Check for existing token and its expiry
-    const existingToken = await ResetPassword.findOne({ email, role });
+    const existingToken = await ResetPassword.findOne({
+      email: normalizedEmail,
+      role,
+    });
     if (existingToken) {
       const now = Date.now();
       const createdAt = new Date(existingToken.createdAt).getTime();
@@ -66,7 +70,7 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
 
     const mailOptions = {
       from: process.env.SMTP_USER,
-      to: email,
+      to: normalizedEmail,
       subject: "Reset your RUSHDR password",
       html: `
         <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 32px;">
@@ -97,8 +101,11 @@ export const sendResetPasswordLink = async (req: Request, res: Response) => {
 
     await transporter.sendMail(mailOptions);
 
-    // Store token in DB
-    await ResetPassword.create({ email, role, token });
+    await ResetPassword.create({
+      email: normalizedEmail,
+      role,
+      token,
+    });
 
     res.status(200).json({
       success: true,
@@ -181,6 +188,9 @@ export const resetPassword = async (req: Request, res: Response) => {
       return;
     }
 
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword.toLowerCase(), salt);
+
     if (role === "doctor") {
       const doctor = await Doctor.findOne({ userId: user._id });
       if (!doctor) {
@@ -191,9 +201,6 @@ export const resetPassword = async (req: Request, res: Response) => {
         });
         return;
       }
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(newPassword.toLowerCase(), salt);
-
       doctor.password = hashedPassword;
       await doctor.save();
     } else if (role === "patient") {
@@ -206,11 +213,20 @@ export const resetPassword = async (req: Request, res: Response) => {
         });
         return;
       }
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(newPassword.toLowerCase(), salt);
-      
       patient.password = hashedPassword;
       await patient.save();
+    } else if (role === "admin") {
+      const admin = await Admin.findOne({ userId: user._id });
+      if (!admin) {
+        res.status(404).json({
+          success: false,
+          message: "Admin profile is missing for this account.",
+          action: "resetPassword:admin-profile-missing",
+        });
+        return;
+      }
+      admin.password = hashedPassword;
+      await admin.save();
     } else {
       res.status(400).json({
         success: false,

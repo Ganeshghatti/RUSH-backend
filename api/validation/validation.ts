@@ -286,7 +286,7 @@ export const healthMetricsSchemaZod = z
       .nullable()
       .optional(),
   })
-  .strict();
+  .strip();
 
 // Family add validation schema
 export const addFamilySchema = z
@@ -396,6 +396,7 @@ export const updateFamilySchema = z
         })
       )
       .optional(),
+    healthMetricsId: z.string().optional(),
   })
   .strict();
 
@@ -613,6 +614,40 @@ export const homeVisitAppointmentBookSchema = z.object({
     //     .length(2, "Coordinates must be [longitude, latitude]"),
     // }),
   }),
+});
+
+/** Payload for PUT /doctor/appointment-settings with type: "online" */
+export const onlineAppointmentConfigUpdateSchema = z.object({
+  isActive: z.boolean().optional(),
+  duration: z
+    .array(
+      z.object({
+        minute: z.union([z.literal(15), z.literal(30)]),
+        price: z.number().positive("Price must be a positive number"),
+      })
+    )
+    .optional(),
+  availability: z
+    .array(
+      z.object({
+        day: z.enum([
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ]),
+        duration: z.array(
+          z.object({
+            start: z.string().min(1, "Start time is required"),
+            end: z.string().min(1, "End time is required"),
+          })
+        ),
+      })
+    )
+    .optional(),
 });
 
 export const homeVisitConfigUpdateSchema = z.object({
