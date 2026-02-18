@@ -10,7 +10,6 @@ import {
   homeVisitAppointmentAcceptSchema,
   homeVisitAppointmentCompleteSchema,
   homeVisitAppointmentCancelSchema,
-  homeVisitConfigUpdateSchema,
 } from "../../validation/validation";
 import DoctorSubscription from "../../models/doctor-subscription";
 
@@ -844,79 +843,6 @@ export const getDoctorHomeVisitAppointmentByDate = async (
     res.status(500).json({
       success: false,
       message: "We couldn't load home visit appointments for that date.",
-      action: error.message,
-    });
-  }
-};
-
-// Update home visit configuration for doctor
-export const updateHomeVisitConfig = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const doctorId = (req as any).user?.id;
-    const parsed = homeVisitConfigUpdateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        success: false,
-        message: "Please review the configuration details and try again.",
-        action: "updateHomeVisitConfig:validation-error",
-        data: {
-          errors: parsed.error.errors,
-        },
-      });
-      return;
-    }
-    const { isActive, fixedPrice, availability } = parsed.data;
-
-    if (!doctorId) {
-      res.status(401).json({
-        success: false,
-        message: "You must be signed in to update home visit settings.",
-        action: "updateHomeVisitConfig:not-authenticated",
-      });
-      return;
-    }
-
-    const doctor = await Doctor.findOne({ userId: doctorId });
-    if (!doctor) {
-      res.status(404).json({
-        success: false,
-        message: "We couldn't find your doctor profile.",
-        action: "updateHomeVisitConfig:doctor-not-found",
-      });
-      return;
-    }
-
-    // Update home visit configuration
-    if (isActive !== undefined && doctor.homeVisit) {
-      doctor.homeVisit.isActive = isActive;
-    }
-    if (fixedPrice !== undefined && doctor.homeVisit) {
-      doctor.homeVisit.fixedPrice = fixedPrice;
-    }
-    if (availability && doctor.homeVisit) {
-      // Cast because Mongoose DocumentArray typing may differ from plain parsed array
-      (doctor.homeVisit as any).availability = availability as any;
-    }
-
-    if (doctor.homeVisit) {
-      doctor.homeVisit.updatedAt = new Date();
-    }
-    await doctor.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Home visit configuration updated successfully.",
-      action: "updateHomeVisitConfig:success",
-      data: doctor.homeVisit,
-    });
-  } catch (error: any) {
-    console.error("Error updating home visit configuration:", error);
-    res.status(500).json({
-      success: false,
-      message: "We couldn't update the home visit configuration.",
       action: error.message,
     });
   }

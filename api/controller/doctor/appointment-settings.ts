@@ -5,18 +5,10 @@ import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import {
   clinicPatchRequestSchema,
   homeVisitConfigUpdateSchema,
+  onlineAppointmentConfigUpdateSchema,
 } from "../../validation/validation";
 
 const VALID_TYPES = ["online", "clinic", "homeVisit"] as const;
-const VALID_DAYS = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-];
 
 /**
  * Unified handler for updating any of the 3 appointment-type settings.
@@ -61,91 +53,27 @@ export const updateAppointmentSettings = async (
 
     // --- ONLINE ---
     if (type === "online") {
-      const { availability, duration, isActive } = payload;
-      const updateFields: any = {};
+      const parsed = onlineAppointmentConfigUpdateSchema.safeParse(payload);
+      if (!parsed.success) {
+        res.status(400).json({
+          success: false,
+          message: "Please review the configuration details and try again.",
+          action: "updateAppointmentSettings:validation-error",
+          data: { errors: parsed.error.errors },
+        });
+        return;
+      }
+
+      const { availability, duration, isActive } = parsed.data;
+      const updateFields: Record<string, unknown> = {};
 
       if (availability !== undefined) {
-        if (!Array.isArray(availability)) {
-          res.status(400).json({
-            success: false,
-            message: "Availability must be provided as a list.",
-            action: "updateAppointmentSettings:invalid-availability-type",
-          });
-          return;
-        }
-        for (const slot of availability) {
-          if (!slot.day || !Array.isArray(slot.duration)) {
-            res.status(400).json({
-              success: false,
-              message:
-                "Each availability slot must include a day and time ranges.",
-              action: "updateAppointmentSettings:invalid-slot",
-            });
-            return;
-          }
-          if (!VALID_DAYS.includes(slot.day.toLowerCase())) {
-            res.status(400).json({
-              success: false,
-              message: "Please use a valid day of the week.",
-              action: "updateAppointmentSettings:invalid-day",
-              data: { allowedDays: VALID_DAYS },
-            });
-            return;
-          }
-          for (const d of slot.duration) {
-            if (!d.start || !d.end) {
-              res.status(400).json({
-                success: false,
-                message: "Each time range must include start and end times.",
-                action: "updateAppointmentSettings:invalid-duration-range",
-              });
-              return;
-            }
-          }
-        }
         updateFields["onlineAppointment.availability"] = availability;
       }
-
       if (duration !== undefined) {
-        if (!Array.isArray(duration)) {
-          res.status(400).json({
-            success: false,
-            message: "Duration must be provided as a list.",
-            action: "updateAppointmentSettings:invalid-duration-type",
-          });
-          return;
-        }
-        for (const slot of duration) {
-          if (slot.minute == null || slot.price == null) {
-            res.status(400).json({
-              success: false,
-              message:
-                "Each duration slot must include minutes and price.",
-              action: "updateAppointmentSettings:missing-duration-fields",
-            });
-            return;
-            }
-          if (![15, 30].includes(slot.minute)) {
-            res.status(400).json({
-              success: false,
-              message: "Duration minutes must be either 15 or 30.",
-              action: "updateAppointmentSettings:invalid-minute",
-            });
-            return;
-          }
-          if (typeof slot.price !== "number" || slot.price <= 0) {
-            res.status(400).json({
-              success: false,
-              message: "Price must be a positive number.",
-              action: "updateAppointmentSettings:invalid-price",
-            });
-            return;
-          }
-        }
         updateFields["onlineAppointment.duration"] = duration;
       }
-
-      if (typeof isActive === "boolean") {
+      if (isActive !== undefined) {
         updateFields["onlineAppointment.isActive"] = isActive;
       }
 
