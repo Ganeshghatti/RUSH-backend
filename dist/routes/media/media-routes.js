@@ -72,6 +72,13 @@ router.post("/upload", auth_middleware_1.verifyToken, exports.upload.array("imag
     var _a;
     try {
         const files = req.files;
+        if (!files || !Array.isArray(files) || files.length === 0) {
+            res.status(400).json({
+                success: false,
+                message: "No files uploaded. Please attach one or more images.",
+            });
+            return;
+        }
         const { pathType, familyId } = req.body;
         if (!pathType || !(pathType in upload_paths_1.default)) {
             res.status(400).json({

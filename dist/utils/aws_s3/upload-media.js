@@ -19,10 +19,20 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const s3_request_presigner_1 = require("@aws-sdk/s3-request-presigner");
 dotenv_1.default.config({ path: path_1.default.join(__dirname, "..", "..", "api", ".env") });
 const s3 = new client_s3_1.S3Client({ region: process.env.AWS_S3_REGION_NAME });
+/** Decode key so it matches S3 (Node URL.pathname is percent-encoded). */
+function decodeS3Key(key) {
+    try {
+        return decodeURIComponent(key);
+    }
+    catch (_a) {
+        return key;
+    }
+}
 const GetSignedUrl = (key) => __awaiter(void 0, void 0, void 0, function* () {
+    const decodedKey = decodeS3Key(key);
     const command = new client_s3_1.GetObjectCommand({
         Bucket: process.env.AWS_STORAGE_BUCKET_NAME,
-        Key: key
+        Key: decodedKey
     });
     try {
         const url = yield (0, s3_request_presigner_1.getSignedUrl)(s3, command, { expiresIn: 7200 }); // 2 hrs
@@ -39,7 +49,7 @@ const getKeyFromSignedUrl = (presignedUrl) => __awaiter(void 0, void 0, void 0, 
         const url = new URL(presignedUrl);
         const pathname = url.pathname;
         const key = pathname.startsWith('/') ? pathname.substring(1) : pathname;
-        return key;
+        return decodeS3Key(key);
     }
     catch (error) {
         console.error("Error parsing URL:", error);

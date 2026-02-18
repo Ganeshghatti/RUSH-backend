@@ -2,18 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_middleware_1 = require("../../middleware/auth-middleware");
-const update_profile_1 = require("../../controller/doctor/update-profile");
+const appointment_settings_1 = require("../../controller/doctor/appointment-settings");
 const doctor_1 = require("../../controller/doctor/doctor");
 const earning_1 = require("../../controller/doctor/earning");
 const router = (0, express_1.Router)();
-// Route for updating doctor profile (uses req.user.id, no file upload needed)
+// Single route: update any of the 3 appointment-type settings (online, clinic, homeVisit)
 router
-    .route("/doctor/profile")
-    .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), update_profile_1.updateDoctorProfile);
-// Route for updating doctor's online appointment availability (uses doctorId param)
-router
-    .route("/doctor/online-appointment/:doctorId")
-    .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), update_profile_1.updateDoctorOnlineAppointment);
+    .route("/doctor/appointment-settings")
+    .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), appointment_settings_1.updateAppointmentSettings);
 router
     .route("/doctor/patients")
     .get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), doctor_1.getAllPatientsForDoctor);

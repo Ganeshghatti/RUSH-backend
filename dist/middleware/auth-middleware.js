@@ -105,28 +105,28 @@ const checkRole = (role) => {
     });
 };
 exports.checkRole = checkRole;
-const authOptional = (req, res, next) => {
+const authOptional = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
     const token = ((_a = req.cookies) === null || _a === void 0 ? void 0 : _a.token) || ((_b = req.headers.authorization) === null || _b === void 0 ? void 0 : _b.split(" ")[1]);
     if (!token)
         return next();
     try {
         const JWT_SECRET = process.env.JWT_SECRET;
-        if (!JWT_SECRET) {
+        if (!JWT_SECRET)
             return next();
-        }
         const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        req.userId = decoded.id;
+        const user = yield user_model_1.default.findById(decoded.id);
+        if (user) {
+            req.user = {
+                id: decoded.id,
+                email: decoded.email,
+                role: decoded.role,
+            };
+        }
     }
-    catch (err) {
-        console.error("JWT decode failed:", err);
-        res.status(500).json({
-            success: false,
-            message: "Please login to continue",
-            action: err instanceof Error ? err.message : String(err),
-        });
-        return;
+    catch (_c) {
+        // Optional auth: treat invalid/expired token as unauthenticated
     }
     next();
-};
+});
 exports.authOptional = authOptional;

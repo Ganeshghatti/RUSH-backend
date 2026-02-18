@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ratingSchemaZod = exports.prescriptionSchemaZod = exports.medicineSchemaZod = exports.homeVisitAppointmentCompleteSchema = exports.homeVisitAppointmentCancelSchema = exports.homeVisitAppointmentAcceptSchema = exports.homeVisitConfigUpdateSchema = exports.homeVisitAppointmentBookSchema = exports.otpValidationSchema = exports.clinicAppointmentBookSchema = exports.clinicPatchRequestSchema = exports.clinicUpdateRequestSchema = exports.clinicSchema = exports.updateHealthMetricsSchema = exports.updateFamilySchema = exports.addFamilySchema = exports.healthMetricsSchemaZod = exports.addHealthMetricsSchema = exports.createEmergencyAppointmentSchema = exports.updateProfileSchema = exports.doctorUpdateSchema = exports.userUpdateSchema = void 0;
+exports.ratingSchemaZod = exports.prescriptionSchemaZod = exports.medicineSchemaZod = exports.homeVisitAppointmentCompleteSchema = exports.homeVisitAppointmentCancelSchema = exports.homeVisitAppointmentAcceptSchema = exports.homeVisitConfigUpdateSchema = exports.onlineAppointmentConfigUpdateSchema = exports.homeVisitAppointmentBookSchema = exports.otpValidationSchema = exports.clinicAppointmentBookSchema = exports.clinicPatchRequestSchema = exports.clinicUpdateRequestSchema = exports.clinicSchema = exports.updateHealthMetricsSchema = exports.updateFamilySchema = exports.addFamilySchema = exports.healthMetricsSchemaZod = exports.addHealthMetricsSchema = exports.createEmergencyAppointmentSchema = exports.updateProfileSchema = exports.doctorUpdateSchema = exports.userUpdateSchema = void 0;
 const zod_1 = require("zod");
 const health_metrics_model_1 = require("../models/health-metrics-model");
 // User update validation schema with custom messages
@@ -261,7 +261,7 @@ exports.healthMetricsSchemaZod = zod_1.z
         .nullable()
         .optional(),
 })
-    .strict();
+    .strip();
 // Family add validation schema
 exports.addFamilySchema = zod_1.z
     .object({
@@ -362,6 +362,7 @@ exports.updateFamilySchema = zod_1.z
         image: zod_1.z.string().optional(),
     }))
         .optional(),
+    healthMetricsId: zod_1.z.string().optional(),
 })
     .strict();
 // Health metrics update validation schema
@@ -566,6 +567,33 @@ exports.homeVisitAppointmentBookSchema = zod_1.z.object({
         //     .length(2, "Coordinates must be [longitude, latitude]"),
         // }),
     }),
+});
+/** Payload for PUT /doctor/appointment-settings with type: "online" */
+exports.onlineAppointmentConfigUpdateSchema = zod_1.z.object({
+    isActive: zod_1.z.boolean().optional(),
+    duration: zod_1.z
+        .array(zod_1.z.object({
+        minute: zod_1.z.union([zod_1.z.literal(15), zod_1.z.literal(30)]),
+        price: zod_1.z.number().positive("Price must be a positive number"),
+    }))
+        .optional(),
+    availability: zod_1.z
+        .array(zod_1.z.object({
+        day: zod_1.z.enum([
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ]),
+        duration: zod_1.z.array(zod_1.z.object({
+            start: zod_1.z.string().min(1, "Start time is required"),
+            end: zod_1.z.string().min(1, "End time is required"),
+        })),
+    }))
+        .optional(),
 });
 exports.homeVisitConfigUpdateSchema = zod_1.z.object({
     isActive: zod_1.z.boolean().optional(),

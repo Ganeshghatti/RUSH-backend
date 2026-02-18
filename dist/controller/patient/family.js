@@ -19,18 +19,7 @@ const validation_1 = require("../../validation/validation");
 const signed_url_1 = require("../../utils/signed-url");
 const mongoose_1 = __importDefault(require("mongoose"));
 const upload_media_1 = require("../../utils/aws_s3/upload-media");
-const flattenObject = (obj, parentKey = "", res = {}) => {
-    for (const key in obj) {
-        const propName = parentKey ? `${parentKey}.${key}` : key;
-        if (typeof obj[key] === "object" && !Array.isArray(obj[key]) && obj[key] !== null) {
-            flattenObject(obj[key], propName, res);
-        }
-        else {
-            res[propName] = obj[key];
-        }
-    }
-    return res;
-};
+const delete_media_1 = require("../../utils/aws_s3/delete-media");
 // Add a new family
 const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -59,7 +48,6 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const newFamily = new family_model_1.default(Object.assign({ patientId: patient._id }, validationResult.data));
         const savedFamily = yield newFamily.save();
         const familyWithUrls = yield (0, signed_url_1.generateSignedUrlsForFamily)(savedFamily);
-        // console.log("Family with url ",familyWithUrls);
         res.status(201).json({
             success: true,
             message: "Family member added successfully.",
@@ -79,6 +67,7 @@ const addFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 exports.addFamily = addFamily;
 // update an existing family
 const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d;
     try {
         const userId = req.user.id;
         const { familyId } = req.params;
@@ -90,7 +79,6 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             return;
         }
-        console.log("Req.boyd ", req.body);
         const validationResult = validation_1.updateFamilySchema.safeParse(req.body);
         if (!validationResult.success) {
             res.status(400).json({
@@ -113,21 +101,67 @@ const updateFamily = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             return;
         }
         const validatedData = validationResult.data;
-        console.log('Validated data');
+        if (((_a = validatedData.idProof) === null || _a === void 0 ? void 0 : _a.idImage) && validatedData.idProof.idImage.includes("https://")) {
+            const key = yield (0, upload_media_1.getKeyFromSignedUrl)(validatedData.idProof.idImage);
+            validatedData.idProof.idImage = key !== null && key !== void 0 ? key : validatedData.idProof.idImage;
+        }
         if (validatedData.insurance && Array.isArray(validatedData.insurance)) {
             for (const item of validatedData.insurance) {
                 if (item.image && item.image.includes("https://")) {
-                    console.log("Hello there ", item.image);
                     const key = yield (0, upload_media_1.getKeyFromSignedUrl)(item.image);
-                    console.log("hey ", key);
                     item.image = key !== null && key !== void 0 ? key : undefined;
                 }
             }
         }
-        const flattenedData = flattenObject(validatedData);
-        console.log("Flattened data ", flattenedData);
-        const updatedFamily = yield family_model_1.default.findOneAndUpdate({ _id: familyId, patientId: patient._id }, { $set: flattenedData }, // set operator tells db only update the fields present in this object.
-        { new: true, runValidators: true });
+        const existingFamily = yield family_model_1.default.findOne({
+            _id: familyId,
+            patientId: patient._id,
+        });
+        const newIdImageKey = (_b = validatedData.idProof) === null || _b === void 0 ? void 0 : _b.idImage;
+        const newInsuranceImageKeys = new Set(((_c = validatedData.insurance) !== null && _c !== void 0 ? _c : [])
+            .map((i) => i === null || i === void 0 ? void 0 : i.image)
+            .filter(Boolean));
+        if (existingFamily) {
+            if (((_d = existingFamily.idProof) === null || _d === void 0 ? void 0 : _d.idImage) &&
+                newIdImageKey &&
+                existingFamily.idProof.idImage !== newIdImageKey) {
+                try {
+                    yield (0, delete_media_1.DeleteMediaFromS3)({ key: existingFamily.idProof.idImage });
+                }
+                catch (err) {
+                    console.warn("Failed to delete old family idProof image from S3:", err);
+                }
+            }
+            if (Array.isArray(existingFamily.insurance)) {
+                for (const item of existingFamily.insurance) {
+                    const oldKey = item === null || item === void 0 ? void 0 : item.image;
+                    if (oldKey && !newInsuranceImageKeys.has(oldKey)) {
+                        try {
+                            yield (0, delete_media_1.DeleteMediaFromS3)({ key: oldKey });
+                        }
+                        catch (err) {
+                            console.warn("Failed to delete old family insurance image from S3:", err);
+                        }
+                    }
+                }
+            }
+        }
+        // Flatten nested payload to dot-notation for $set so only provided nested fields are updated (e.g. { basicDetails: { name: "x" } } → { "basicDetails.name": "x" }).
+        const flattenedData = {};
+        const flatten = (obj, parentKey = "") => {
+            for (const key in obj) {
+                const propName = parentKey ? `${parentKey}.${key}` : key;
+                const val = obj[key];
+                if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+                    flatten(val, propName);
+                }
+                else {
+                    flattenedData[propName] = val;
+                }
+            }
+        };
+        flatten(validatedData);
+        const updatedFamily = yield family_model_1.default.findOneAndUpdate({ _id: familyId, patientId: patient._id }, { $set: flattenedData }, { new: true, runValidators: true });
         if (!updatedFamily) {
             res.status(404).json({
                 success: false,

@@ -12,9 +12,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
+exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const online_appointment_model_1 = __importDefault(require("../../models/appointment/online-appointment-model"));
@@ -304,83 +303,6 @@ const getPatientById = (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
 });
 exports.getPatientById = getPatientById;
-const patientOnboard = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { userId } = req.params;
-        const { prefix, profilePic, gender, dob, address, personalIdProof, addressProof, bankDetails, mapLocation, insurance, healthMetrics, } = req.body;
-        // Validate userId
-        if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
-            res.status(400).json({
-                success: false,
-                message: "The user ID provided is invalid.",
-                action: "patientOnboard:validate-user-id",
-            });
-            return;
-        }
-        // Check if user exists and has patient role
-        const user = yield user_model_1.default.findOne({ _id: userId });
-        if (!user) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find the user or they are not a patient.",
-                action: "patientOnboard:user-not-found",
-            });
-            return;
-        }
-        // Validate required fields
-        if (!gender || !dob || !address) {
-            res.status(400).json({
-                success: false,
-                message: "Please fill in all required patient details.",
-                action: "patientOnboard:missing-fields",
-            });
-            return;
-        }
-        // Prepare update data
-        const updateData = {
-            prefix,
-            profilePic,
-            gender,
-            dob: new Date(dob),
-            address,
-            personalIdProof,
-            addressProof,
-            bankDetails,
-            mapLocation,
-            insurance,
-            healthMetrics: healthMetrics,
-        };
-        // Update patient using discriminator model
-        const updatedPatient = yield patient_model_1.default.findOneAndUpdate({ userId }, { $set: updateData }, {
-            new: true,
-            runValidators: true,
-            select: "-password",
-        });
-        if (!updatedPatient) {
-            res.status(500).json({
-                success: false,
-                message: "We couldn't update the patient information.",
-                action: "patientOnboard:update-failed",
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Patient information saved successfully.",
-            action: "patientOnboard:success",
-            data: updatedPatient,
-        });
-    }
-    catch (error) {
-        console.error("Error in patient onboarding:", error);
-        res.status(500).json({
-            success: false,
-            message: "We couldn't complete the patient onboarding.",
-            action: error.message,
-        });
-    }
-});
-exports.patientOnboard = patientOnboard;
 const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;

@@ -15,10 +15,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateBankDetail = exports.updateInsuranceDetails = exports.updateIdentityProof = exports.updatePersonalInfo = void 0;
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const upload_media_1 = require("../../utils/aws_s3/upload-media");
+const delete_media_1 = require("../../utils/aws_s3/delete-media");
 const updatePersonalInfo = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = req.user.id;
-        const { profilePic, firstName, lastName, email, phone, dob, gender, address, } = req.body;
+        let { profilePic, firstName, lastName, email, phone, dob, gender, address, } = req.body;
+        if (profilePic && typeof profilePic === "string" && profilePic.includes("https://")) {
+            const key = yield (0, upload_media_1.getKeyFromSignedUrl)(profilePic);
+            if (key)
+                profilePic = key;
+        }
+        const existingUser = yield user_model_1.default.findById(userId).select("profilePic");
+        if ((existingUser === null || existingUser === void 0 ? void 0 : existingUser.profilePic) &&
+            profilePic &&
+            existingUser.profilePic !== profilePic) {
+            try {
+                yield (0, delete_media_1.DeleteMediaFromS3)({ key: existingUser.profilePic });
+            }
+            catch (err) {
+                console.warn("Failed to delete old profile pic from S3:", err);
+            }
+        }
         const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, {
             profilePic,
             firstName,
@@ -68,13 +85,22 @@ const updateIdentityProof = (req, res) => __awaiter(void 0, void 0, void 0, func
             });
             return;
         }
-        // make sure we are saving S3 key in the DB not urls
-        if (personalIdProof.image && personalIdProof.image.includes('https://'))
-            personalIdProof.image = yield (0, upload_media_1.getKeyFromSignedUrl)(personalIdProof.image);
-        if (addressProof.image && addressProof.image.includes('https://'))
-            addressProof.image = yield (0, upload_media_1.getKeyFromSignedUrl)(addressProof.image);
-        if (taxProof.image && taxProof.image.includes('https://'))
-            taxProof.image = yield (0, upload_media_1.getKeyFromSignedUrl)(taxProof.image);
+        // Store S3 keys in the DB, not presigned URLs
+        if (personalIdProof.image && personalIdProof.image.includes("https://")) {
+            const key = yield (0, upload_media_1.getKeyFromSignedUrl)(personalIdProof.image);
+            if (key)
+                personalIdProof.image = key;
+        }
+        if (addressProof.image && addressProof.image.includes("https://")) {
+            const key = yield (0, upload_media_1.getKeyFromSignedUrl)(addressProof.image);
+            if (key)
+                addressProof.image = key;
+        }
+        if (taxProof.image && taxProof.image.includes("https://")) {
+            const key = yield (0, upload_media_1.getKeyFromSignedUrl)(taxProof.image);
+            if (key)
+                taxProof.image = key;
+        }
         const updatedUser = yield user_model_1.default.findByIdAndUpdate(userId, {
             $set: {
                 personalIdProof: personalIdProof,

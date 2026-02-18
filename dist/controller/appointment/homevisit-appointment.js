@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateHomeStatusCron = exports.updateHomeVisitConfig = exports.getDoctorHomeVisitAppointmentByDate = exports.completeHomeVisitAppointment = exports.confirmHomeVisitAppointment = exports.acceptHomeVisitRequest = exports.bookHomeVisitAppointment = void 0;
+exports.updateHomeStatusCron = exports.getDoctorHomeVisitAppointmentByDate = exports.completeHomeVisitAppointment = exports.confirmHomeVisitAppointment = exports.acceptHomeVisitRequest = exports.bookHomeVisitAppointment = void 0;
 const homevisit_appointment_model_1 = __importDefault(require("../../models/appointment/homevisit-appointment-model"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -773,73 +773,6 @@ const getDoctorHomeVisitAppointmentByDate = (req, res) => __awaiter(void 0, void
     }
 });
 exports.getDoctorHomeVisitAppointmentByDate = getDoctorHomeVisitAppointmentByDate;
-// Update home visit configuration for doctor
-const updateHomeVisitConfig = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    try {
-        const doctorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        const parsed = validation_1.homeVisitConfigUpdateSchema.safeParse(req.body);
-        if (!parsed.success) {
-            res.status(400).json({
-                success: false,
-                message: "Please review the configuration details and try again.",
-                action: "updateHomeVisitConfig:validation-error",
-                data: {
-                    errors: parsed.error.errors,
-                },
-            });
-            return;
-        }
-        const { isActive, fixedPrice, availability } = parsed.data;
-        if (!doctorId) {
-            res.status(401).json({
-                success: false,
-                message: "You must be signed in to update home visit settings.",
-                action: "updateHomeVisitConfig:not-authenticated",
-            });
-            return;
-        }
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId });
-        if (!doctor) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find your doctor profile.",
-                action: "updateHomeVisitConfig:doctor-not-found",
-            });
-            return;
-        }
-        // Update home visit configuration
-        if (isActive !== undefined && doctor.homeVisit) {
-            doctor.homeVisit.isActive = isActive;
-        }
-        if (fixedPrice !== undefined && doctor.homeVisit) {
-            doctor.homeVisit.fixedPrice = fixedPrice;
-        }
-        if (availability && doctor.homeVisit) {
-            // Cast because Mongoose DocumentArray typing may differ from plain parsed array
-            doctor.homeVisit.availability = availability;
-        }
-        if (doctor.homeVisit) {
-            doctor.homeVisit.updatedAt = new Date();
-        }
-        yield doctor.save();
-        res.status(200).json({
-            success: true,
-            message: "Home visit configuration updated successfully.",
-            action: "updateHomeVisitConfig:success",
-            data: doctor.homeVisit,
-        });
-    }
-    catch (error) {
-        console.error("Error updating home visit configuration:", error);
-        res.status(500).json({
-            success: false,
-            message: "We couldn't update the home visit configuration.",
-            action: error.message,
-        });
-    }
-});
-exports.updateHomeVisitConfig = updateHomeVisitConfig;
 //***** script for cron job
 const updateHomeStatusCron = () => __awaiter(void 0, void 0, void 0, function* () {
     try {

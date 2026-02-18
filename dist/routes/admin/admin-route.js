@@ -5,6 +5,7 @@ const auth_middleware_1 = require("../../middleware/auth-middleware");
 const express_1 = require("express");
 const unregistered_patient_1 = require("../../controller/admin/unregistered-patient");
 const transaction_1 = require("../../controller/admin/transaction");
+const coupon_1 = require("../../controller/admin/coupon");
 const router = (0, express_1.Router)();
 router.route("/admin/doctors").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), admin_1.getAllDoctors);
 router.route("/admin/patients").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), admin_1.getAllPatients);
@@ -16,4 +17,6 @@ router.route("/admin/getpatient").get(auth_middleware_1.verifyToken, (0, auth_mi
 router.route("/admin/debit/requests").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.getPendingDebitRequests);
 router.route("/admin/debit/process").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.processDebitRequest);
 router.route("/admin/transactions").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.getTransactionsByDate);
+router.route("/admin/coupons").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.getCoupons).post(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.createCoupon);
+router.route("/admin/coupons/:id").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.updateCoupon).delete(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.deleteCoupon);
 exports.default = router;

@@ -57,7 +57,7 @@ const familySchema = new Schema({
             image: { type: String },
         },
     ],
-    healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrices" },
+    healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrics" },
 });
 const Family = mongoose_1.default.model("Family", familySchema);
 exports.default = Family;

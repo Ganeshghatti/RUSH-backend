@@ -72,6 +72,10 @@ const DoctorSubscriptionSchema = new mongoose_1.Schema({
         type: Boolean,
         default: true,
     },
+    is_premium: {
+        type: Boolean,
+        default: false,
+    },
     duration: {
         type: String,
         required: [true, "Subscription duration is required"],

@@ -56,6 +56,7 @@ app.use((0, cors_1.default)({
         "https://localhost",
         "http://localhost:3000",
         "http://localhost:5173",
+        "http://localhost:3001",
         "http://localhost:8080",
         "http://10.0.2.2",
         "http://10.0.2.2:8080",
@@ -103,11 +104,6 @@ app.use(clinic_appointment_1.default);
 app.use(homevisit_appointment_1.default);
 app.use(prescription_route_1.default);
 app.use(rating_route_1.default);
-// // Error handling middleware
-// app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-//   console.error(err);
-//   res.status(500).json({ error: "Internal Server Error" });
-// });
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

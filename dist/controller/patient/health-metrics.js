@@ -23,7 +23,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addHealthMetrics = exports.getHealthMetricsById = exports.getHealthMetrics = void 0;
+exports.addOrUpdateHealthMetrics = exports.getHealthMetricsById = exports.getHealthMetrics = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -31,6 +31,7 @@ const family_model_1 = __importDefault(require("../../models/user/family-model")
 const health_metrics_model_1 = require("../../models/health-metrics-model");
 const validation_1 = require("../../validation/validation");
 const upload_media_1 = require("../../utils/aws_s3/upload-media");
+const delete_media_1 = require("../../utils/aws_s3/delete-media");
 // get health metrics for patient
 const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -98,9 +99,11 @@ const getHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.getHealthMetrics = getHealthMetrics;
-// get health metrics by ID
+// get health metrics by ID (must belong to current patient or their family)
 const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c;
     try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
         const { healthMetricsId } = req.params;
         if (!mongoose_1.default.Types.ObjectId.isValid(healthMetricsId)) {
             res.status(400).json({
@@ -111,8 +114,6 @@ const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, fun
             return;
         }
         const healthMetrics = yield health_metrics_model_1.HealthMetrics.findById(healthMetricsId);
-        //   .populate("patientId", "name email")
-        //   .populate("familyId", "basicDetails.name relationship");
         if (!healthMetrics) {
             res.status(404).json({
                 success: false,
@@ -120,6 +121,39 @@ const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, fun
                 action: "getHealthMetricsById:metrics-not-found",
             });
             return;
+        }
+        const patient = yield patient_model_1.default.findOne({ userId });
+        if (!patient) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find your patient profile.",
+                action: "getHealthMetricsById:patient-not-found",
+            });
+            return;
+        }
+        const patientIdStr = patient._id.toString();
+        const metricsPatientId = (_c = (_b = healthMetrics.patientId) === null || _b === void 0 ? void 0 : _b.toString) === null || _c === void 0 ? void 0 : _c.call(_b);
+        if (metricsPatientId !== patientIdStr) {
+            res.status(403).json({
+                success: false,
+                message: "You don't have access to these health metrics.",
+                action: "getHealthMetricsById:forbidden",
+            });
+            return;
+        }
+        if (healthMetrics.ownerType === "Family" && healthMetrics.familyId) {
+            const family = yield family_model_1.default.findOne({
+                _id: healthMetrics.familyId,
+                patientId: patient._id,
+            });
+            if (!family) {
+                res.status(403).json({
+                    success: false,
+                    message: "You don't have access to these health metrics.",
+                    action: "getHealthMetricsById:forbidden",
+                });
+                return;
+            }
         }
         if ((healthMetrics === null || healthMetrics === void 0 ? void 0 : healthMetrics.medicalHistory) &&
             healthMetrics.medicalHistory.length > 0) {
@@ -156,17 +190,18 @@ const getHealthMetricsById = (req, res) => __awaiter(void 0, void 0, void 0, fun
     }
 });
 exports.getHealthMetricsById = getHealthMetricsById;
-// add new health Metrics (for patient or family)
-const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+// Create or update health metrics (for patient or family)
+const addOrUpdateHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d;
     try {
         const userId = req.user.id;
-        // validate input
+        // validate input (strip document metadata like createdAt, updatedAt, __v via schema .strip())
         const validationResult = validation_1.healthMetricsSchemaZod.safeParse(req.body);
         if (!validationResult.success) {
             res.status(400).json({
                 success: false,
                 message: "Please review the health metrics details and try again.",
-                action: "addHealthMetrics:validation-error",
+                action: "addOrUpdateHealthMetrics:validation-error",
                 data: {
                     errors: validationResult.error.errors,
                 },
@@ -179,12 +214,21 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             res.status(404).json({
                 success: false,
                 message: "We couldn't find your patient profile.",
-                action: "addHealthMetrics:patient-not-found",
+                action: "addOrUpdateHealthMetrics:patient-not-found",
             });
             return;
         }
-        const _a = validationResult.data, { familyMemberId } = _a, rest = __rest(_a, ["familyMemberId"]);
+        const _e = validationResult.data, { familyMemberId } = _e, rest = __rest(_e, ["familyMemberId"]);
         const payload = Object.assign({}, rest);
+        // Store only S3 keys for reports, not full URLs (client may send back presigned URLs from GET)
+        if (payload.medicalHistory && Array.isArray(payload.medicalHistory)) {
+            for (const entry of payload.medicalHistory) {
+                if (entry.reports && typeof entry.reports === "string" && entry.reports.includes("https://")) {
+                    const key = yield (0, upload_media_1.getKeyFromSignedUrl)(entry.reports);
+                    entry.reports = key !== null && key !== void 0 ? key : entry.reports;
+                }
+            }
+        }
         const ownerType = familyMemberId ? "Family" : "Patient";
         //***** if ownerType is family *****\\
         if (familyMemberId) {
@@ -197,7 +241,7 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 res.status(400).json({
                     success: false,
                     message: "We couldn't verify that family member.",
-                    action: "addHealthMetrics:family-not-authorized",
+                    action: "addOrUpdateHealthMetrics:family-not-authorized",
                 });
                 return;
             }
@@ -206,6 +250,23 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             }
             // if family already has a linked health metrices update it
             if (family.healthMetricsId) {
+                const existing = yield health_metrics_model_1.HealthMetrics.findById(family.healthMetricsId).lean();
+                const newReportKeys = new Set(((_a = payload.medicalHistory) !== null && _a !== void 0 ? _a : [])
+                    .map((h) => h === null || h === void 0 ? void 0 : h.reports)
+                    .filter(Boolean));
+                if ((_b = existing === null || existing === void 0 ? void 0 : existing.medicalHistory) === null || _b === void 0 ? void 0 : _b.length) {
+                    for (const h of existing.medicalHistory) {
+                        const oldKey = h.reports;
+                        if (oldKey && !newReportKeys.has(oldKey)) {
+                            try {
+                                yield (0, delete_media_1.DeleteMediaFromS3)({ key: oldKey });
+                            }
+                            catch (err) {
+                                console.warn("Failed to delete old health metrics report from S3:", err);
+                            }
+                        }
+                    }
+                }
                 const updated = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(family.healthMetricsId, {
                     $set: Object.assign(Object.assign({}, payload), { ownerType, patientId: patient._id, familyId: familyMemberId }),
                 }, { new: true, runValidators: true });
@@ -213,14 +274,14 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                     res.status(500).json({
                         success: false,
                         message: "We couldn't update the family health metrics.",
-                        action: "addHealthMetrics:update-family-failed",
+                        action: "addOrUpdateHealthMetrics:update-family-failed",
                     });
                     return;
                 }
                 res.status(200).json({
                     success: true,
                     message: "Family health metrics updated successfully.",
-                    action: "addHealthMetrics:update-family-success",
+                    action: "addOrUpdateHealthMetrics:update-family-success",
                     data: updated,
                 });
                 return;
@@ -234,7 +295,7 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
             res.status(201).json({
                 success: true,
                 message: "Family health metrics created successfully.",
-                action: "addHealthMetrics:create-family-success",
+                action: "addOrUpdateHealthMetrics:create-family-success",
                 data: saved,
             });
             return;
@@ -246,6 +307,23 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         }
         //if patient already has healthMetrics update it
         if (patient.healthMetricsId) {
+            const existing = yield health_metrics_model_1.HealthMetrics.findById(patient.healthMetricsId).lean();
+            const newReportKeys = new Set(((_c = payload.medicalHistory) !== null && _c !== void 0 ? _c : [])
+                .map((h) => h === null || h === void 0 ? void 0 : h.reports)
+                .filter(Boolean));
+            if ((_d = existing === null || existing === void 0 ? void 0 : existing.medicalHistory) === null || _d === void 0 ? void 0 : _d.length) {
+                for (const h of existing.medicalHistory) {
+                    const oldKey = h.reports;
+                    if (oldKey && !newReportKeys.has(oldKey)) {
+                        try {
+                            yield (0, delete_media_1.DeleteMediaFromS3)({ key: oldKey });
+                        }
+                        catch (err) {
+                            console.warn("Failed to delete old health metrics report from S3:", err);
+                        }
+                    }
+                }
+            }
             const updated = yield health_metrics_model_1.HealthMetrics.findByIdAndUpdate(patient.healthMetricsId, {
                 $set: Object.assign(Object.assign({}, payload), { ownerType, patientId: patient._id }),
             }, { new: true, runValidators: true });
@@ -253,14 +331,14 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 res.status(500).json({
                     success: false,
                     message: "We couldn't update the patient health metrics.",
-                    action: "addHealthMetrics:update-patient-failed",
+                    action: "addOrUpdateHealthMetrics:update-patient-failed",
                 });
                 return;
             }
             res.status(200).json({
                 success: true,
                 message: "Patient health metrics updated successfully.",
-                action: "addHealthMetrics:update-patient-success",
+                action: "addOrUpdateHealthMetrics:update-patient-success",
                 data: updated,
             });
             return;
@@ -272,7 +350,7 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         res.status(201).json({
             success: true,
             message: "Patient health metrics created successfully.",
-            action: "addHealthMetrics:create-patient-success",
+            action: "addOrUpdateHealthMetrics:create-patient-success",
             data: saved,
         });
     }
@@ -285,4 +363,4 @@ const addHealthMetrics = (req, res) => __awaiter(void 0, void 0, void 0, functio
         });
     }
 });
-exports.addHealthMetrics = addHealthMetrics;
+exports.addOrUpdateHealthMetrics = addOrUpdateHealthMetrics;

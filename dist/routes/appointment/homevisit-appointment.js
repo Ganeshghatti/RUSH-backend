@@ -20,6 +20,4 @@ router.put("/appointment/homevisit/:appointmentId/complete", auth_middleware_1.v
 // );
 // Doctor: appointments by date
 router.post("/appointment/homevisit/doctor/by-date", auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), homevisit_appointment_1.getDoctorHomeVisitAppointmentByDate);
-// Doctor: update home visit configuration
-router.put("/appointment/homevisit/config", auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), homevisit_appointment_1.updateHomeVisitConfig);
 exports.default = router;
