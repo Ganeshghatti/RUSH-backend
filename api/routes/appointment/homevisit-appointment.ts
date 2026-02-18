@@ -6,9 +6,7 @@ import {
   acceptHomeVisitRequest,
   confirmHomeVisitAppointment,
   completeHomeVisitAppointment,
-  // cancelHomeVisitAppointment,
   getDoctorHomeVisitAppointmentByDate,
-  updateHomeVisitConfig,
 } from "../../controller/appointment/homevisit-appointment";
 
 const router = Router();
@@ -58,14 +56,6 @@ router.post(
   verifyToken as RequestHandler,
   checkRole("doctor") as RequestHandler,
   getDoctorHomeVisitAppointmentByDate as RequestHandler
-);
-
-// Doctor: update home visit configuration
-router.put(
-  "/appointment/homevisit/config",
-  verifyToken as RequestHandler,
-  checkRole("doctor") as RequestHandler,
-  updateHomeVisitConfig as RequestHandler
 );
 
 export default router;

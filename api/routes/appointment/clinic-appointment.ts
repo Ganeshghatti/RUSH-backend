@@ -7,18 +7,10 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 //   getAppointmentOTP,
 //   validateVisitOTP,
 // } from "../../controller/appointment/clinic-appointment";
-import { updateClinicDetails, bookClinicAppointment, getPatientClinicAppointments, getDoctorClinicAppointments, acceptClinicAppointment, validateVisitOTP } from "../../controller/appointment/clinic-appointment";
+import { bookClinicAppointment, getPatientClinicAppointments, getDoctorClinicAppointments, acceptClinicAppointment, validateVisitOTP } from "../../controller/appointment/clinic-appointment";
 import { RequestHandler } from "express";
 
 const router = Router();
-
-// update clinic details
-router.patch(
-  "/doctor/clinics",
-  verifyToken as RequestHandler,
-  checkRole("doctor") as RequestHandler,
-  updateClinicDetails as RequestHandler
-);
 
 // Patient clinic appointment booking routes
 // router
