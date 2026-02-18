@@ -31,6 +31,12 @@ const doctorSchema = new Schema({
         },
     ],
     specialization: [{ type: String }],
+    treatableSymptoms: [
+        {
+            type: String,
+            trim: true,
+        },
+    ],
     signatureImage: { type: String },
     experience: [
         {
