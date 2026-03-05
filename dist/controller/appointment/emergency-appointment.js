@@ -187,8 +187,8 @@ const createEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         console.error("Error creating emergency appointment:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't create the emergency appointment.",
-            action: error.message,
+            message: "We couldn't create the emergency appointment. Please try again.",
+            action: "createEmergencyAppointment:error",
         });
     }
 });
@@ -222,8 +222,8 @@ const getAllEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, void
         console.error("Error getting emergency appointments:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't load emergency appointments right now.",
-            action: error.message,
+            message: "We couldn't load emergency appointments right now. Please try again.",
+            action: "getAllEmergencyAppointments:error",
         });
     }
 });
@@ -270,15 +270,16 @@ const getPatientEmergencyAppointments = (req, res) => __awaiter(void 0, void 0, 
         console.error("Error getting patient emergency appointments:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't load the patient's emergency appointments.",
-            action: error.message,
+            message: "We couldn't load the patient's emergency appointments. Please try again.",
+            action: "getPatientEmergencyAppointments:error",
         });
     }
 });
 exports.getPatientEmergencyAppointments = getPatientEmergencyAppointments;
 const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
-        const { id } = req.params;
+        const id = (_a = req.params.appointmentId) !== null && _a !== void 0 ? _a : req.params.id;
         const doctorUserId = req.user.id;
         // Find doctor by userId
         const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId }).populate('userId');
@@ -381,16 +382,16 @@ const acceptEmergencyAppointment = (req, res) => __awaiter(void 0, void 0, void 
         console.error("Error accepting emergency appointment:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't accept the emergency appointment.",
-            action: error.message,
+            message: "We couldn't accept the emergency appointment. Please try again.",
+            action: "acceptEmergencyAppointment:error",
         });
     }
 });
 exports.acceptEmergencyAppointment = acceptEmergencyAppointment;
 /* create room access token */
-const AccessToken = twilio_2.jwt.AccessToken;
-const VideoGrant = AccessToken.VideoGrant;
 const createEmergencyRoomAccessToken = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const AccessToken = twilio_2.jwt.AccessToken;
+    const VideoGrant = AccessToken.VideoGrant;
     try {
         const { roomName } = req.body;
         if (!roomName) {
@@ -509,7 +510,7 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             if (!patientUserDetail || !patient) {
                 res.status(400).json({
-                    sucess: false,
+                    success: false,
                     message: "We couldn't find the patient profile.",
                     action: "emergencyFinalPayment:patient-not-found",
                 });
@@ -521,7 +522,7 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             if (!doctorUserDetail || !doctor) {
                 res.status(400).json({
-                    sucess: false,
+                    success: false,
                     message: "We couldn't find the doctor profile.",
                     action: "emergencyFinalPayment:doctor-not-found",
                 });
@@ -594,7 +595,7 @@ const finalPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         }
         else if (paymentStatus === "completed") {
             res.status(200).json({
-                sucess: true,
+                success: true,
                 message: "Final payment is already processed.",
                 action: "emergencyFinalPayment:already-processed",
             });

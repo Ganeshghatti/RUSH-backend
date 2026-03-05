@@ -9,7 +9,7 @@ const router = Router();
 
 // get prescription by it's id
 router
-  .route("/appointment/prescription/:prescriptionId")
+  .route("/:prescriptionId")
   .get(verifyToken as RequestHandler, getPrescriptionById as RequestHandler);
 
 // doctor can add prescription

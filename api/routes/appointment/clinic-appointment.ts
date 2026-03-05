@@ -7,50 +7,24 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 //   getAppointmentOTP,
 //   validateVisitOTP,
 // } from "../../controller/appointment/clinic-appointment";
-import { bookClinicAppointment, getPatientClinicAppointments, getDoctorClinicAppointments, acceptClinicAppointment, validateVisitOTP } from "../../controller/appointment/clinic-appointment";
+import { bookClinicAppointment, confirmClinicAppointment, validateVisitOTP } from "../../controller/appointment/clinic-appointment";
 import { RequestHandler } from "express";
 
 const router = Router();
 
-// Patient clinic appointment booking routes
-// router
-//   .route("/appointment/clinic/doctor/:doctorId")
-//   .get(getDoctorClinicAvailability as RequestHandler);
-
+// Patient books clinic appointment (use generic GET /appointment/patient for listing all types)
 router
-  .route("/appointment/clinic/book")
+  .route("/book")
   .post(
     verifyToken as RequestHandler,
     checkRole("patient") as RequestHandler,
     bookClinicAppointment as RequestHandler
   );
 
-// Patient clinic appointments
+// Doctor or patient: confirm (doctor accept) or cancel (reject). Doctor can accept or reject; patient can only reject.
 router
-  .route("/appointment/clinic/patient")
-  .get(
-    verifyToken as RequestHandler,
-    checkRole("patient") as RequestHandler,
-    getPatientClinicAppointments as RequestHandler
-  );
-
-// Doctor clinic appointments
-router
-  .route("/appointment/clinic/doctor")
-  .get(
-    verifyToken as RequestHandler,
-    checkRole("doctor") as RequestHandler,
-    getDoctorClinicAppointments as RequestHandler
-  );
-
-// Confirm appointment (Doctor only)
-router
-  .route("/appointment/clinic/:appointmentId/confirm")
-  .put(
-    verifyToken as RequestHandler,
-    checkRole("doctor") as RequestHandler,
-    acceptClinicAppointment as RequestHandler
-  );
+  .route("/:appointmentId/confirm")
+  .put(verifyToken as RequestHandler, confirmClinicAppointment as RequestHandler);
 
 // Cancel appointment (Doctor only)
 // router
@@ -71,7 +45,7 @@ router
 //   );
 
 router
-  .route("/appointment/clinic/validate-visit")
+  .route("/validate-visit")
   .post(
     verifyToken as RequestHandler,
     checkRole("doctor") as RequestHandler,

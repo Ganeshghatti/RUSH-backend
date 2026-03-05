@@ -64,6 +64,10 @@ const homeVisitAppointmentSchema = new Schema({
         ],
         default: "pending",
     },
+    /** User ID of who cancelled (ref User) */
+    cancelledBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    /** Role of who cancelled */
+    cancelledByRole: { type: String, enum: ["patient", "doctor"], default: null },
     pricing: {
         fixedCost: { type: Number, required: true },
         travelCost: { type: Number, default: 0 }, // Doctor adds this after accepting

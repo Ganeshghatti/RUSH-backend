@@ -13,11 +13,10 @@ const userSchema = new Schema({
         doctor: { type: Schema.Types.ObjectId, ref: "Doctor" },
         patient: { type: Schema.Types.ObjectId, ref: "Patient" },
         admin: { type: Schema.Types.ObjectId, ref: "Admin" },
-        // in future: pharmacist, therapist, etc.
     },
     profilePic: {
         type: String,
-        default: "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png",
+        default: "",
     },
     prefix: {
         type: String,
@@ -126,12 +125,6 @@ const userSchema = new Schema({
     ],
     isDocumentVerified: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
-});
-userSchema.virtual("profilePicUrl").get(function () {
-    if (this.profilePic)
-        return this.profilePic;
-    const name = encodeURIComponent(this.firstName + " " + this.lastName);
-    return `https://ui-avatars.com/api/?name=${name}&background=random&size=128`;
 });
 // Instance method to get available wallet balance (excluding frozen amount)
 userSchema.methods.getAvailableBalance = function () {

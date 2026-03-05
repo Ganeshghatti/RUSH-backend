@@ -7,19 +7,18 @@ import { getCoupons, createCoupon, updateCoupon, deleteCoupon } from '../../cont
 
 const router = Router();
 
-router.route("/admin/doctors").get(verifyToken, checkRole("admin"), getAllDoctors);
-router.route("/admin/patients").get(verifyToken, checkRole("admin"), getAllPatients);
-router.route("/admin/doctor/verification/:doctorId").put(verifyToken, checkRole("admin"), updateDoctorStatus);
-router.route("/admin/user/verification/:userId").put(verifyToken, checkRole("admin"), updateDocumentVerificationStatus);
-router.route("/admin/addpatient").post(verifyToken, checkRole("admin"), addUnregisteredPatient)
-/***router.post("/admin/addpatient", verifyToken, checkRole("admin"), addUnregisteredPatient)***/
-router.route("/admin/getpatient").get(verifyToken, checkRole("admin"), getUnregisteredPatient)
+router.route("/doctors").get(verifyToken, checkRole("admin"), getAllDoctors);
+router.route("/patients").get(verifyToken, checkRole("admin"), getAllPatients);
+router.route("/doctor/verification/:doctorId").put(verifyToken, checkRole("admin"), updateDoctorStatus);
+router.route("/user/verification/:userId").put(verifyToken, checkRole("admin"), updateDocumentVerificationStatus);
+router.route("/addpatient").post(verifyToken, checkRole("admin"), addUnregisteredPatient);
+router.route("/getpatient").get(verifyToken, checkRole("admin"), getUnregisteredPatient);
 
-router.route("/admin/debit/requests").get(verifyToken, checkRole("admin"), getPendingDebitRequests);
-router.route("/admin/debit/process").put(verifyToken, checkRole("admin"), processDebitRequest);
-router.route("/admin/transactions").get(verifyToken, checkRole("admin"), getTransactionsByDate);
+router.route("/debit/requests").get(verifyToken, checkRole("admin"), getPendingDebitRequests);
+router.route("/debit/process").put(verifyToken, checkRole("admin"), processDebitRequest);
+router.route("/transactions").get(verifyToken, checkRole("admin"), getTransactionsByDate);
 
-router.route("/admin/coupons").get(verifyToken, checkRole("admin"), getCoupons).post(verifyToken, checkRole("admin"), createCoupon);
-router.route("/admin/coupons/:id").put(verifyToken, checkRole("admin"), updateCoupon).delete(verifyToken, checkRole("admin"), deleteCoupon);
+router.route("/coupons").get(verifyToken, checkRole("admin"), getCoupons).post(verifyToken, checkRole("admin"), createCoupon);
+router.route("/coupons/:id").put(verifyToken, checkRole("admin"), updateCoupon).delete(verifyToken, checkRole("admin"), deleteCoupon);
 
 export default router;

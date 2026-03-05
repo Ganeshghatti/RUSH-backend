@@ -552,13 +552,29 @@ const getDoctorById = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
             return;
         }
+        const doctorDoc = user.roleRefs.doctor;
+        const doctorId = doctorDoc._id;
+        const ratings = yield rating_model_1.RatingModel.find({
+            doctorId,
+            isEnable: true,
+        })
+            .populate({
+            path: "patientId",
+            populate: {
+                path: "userId",
+                select: "firstName lastName profilePic",
+            },
+        })
+            .sort({ createdAt: -1 })
+            .lean();
         // Generate signed URLs for both user and doctor data
         const userWithUrls = yield (0, signed_url_1.generateSignedUrlsForUser)(user);
+        const dataWithRatings = Object.assign(Object.assign({}, userWithUrls), { ratings: ratings || [] });
         res.status(200).json({
             success: true,
             message: "Doctor details fetched successfully.",
             action: "getDoctorById:success",
-            data: userWithUrls,
+            data: dataWithRatings,
         });
     }
     catch (error) {

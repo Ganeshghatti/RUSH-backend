@@ -2,10 +2,8 @@ import { Router, RequestHandler } from "express";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import {
   getMyRatings,
-  getRatingsByDoctorId,
   addRating,
   toggleRatingVisibility,
-  getRatingById,
 } from "../../controller/appointment/ratings";
 
 const router = Router();
@@ -18,11 +16,6 @@ router
     checkRole("doctor") as RequestHandler,
     getMyRatings as RequestHandler
   );
-
-// get all rating of doctor on patient side(exclude inactive ratings)
-router
-  .route("/doctor/ratings/:userId")
-  .get(verifyToken as RequestHandler, getRatingsByDoctorId as RequestHandler);
 
 // patient can add rating to a particular appointment
 router
@@ -41,10 +34,5 @@ router
     checkRole("doctor") as RequestHandler,
     toggleRatingVisibility as RequestHandler
   );
-
-// get a rating by rating id
-router
-  .route("/ratings/:ratingId")
-  .get(verifyToken as RequestHandler, getRatingById as RequestHandler);
 
 export default router;

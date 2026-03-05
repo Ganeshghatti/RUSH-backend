@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ratingSchemaZod = exports.prescriptionSchemaZod = exports.medicineSchemaZod = exports.homeVisitAppointmentCompleteSchema = exports.homeVisitAppointmentCancelSchema = exports.homeVisitAppointmentAcceptSchema = exports.homeVisitConfigUpdateSchema = exports.onlineAppointmentConfigUpdateSchema = exports.homeVisitAppointmentBookSchema = exports.otpValidationSchema = exports.clinicAppointmentBookSchema = exports.clinicPatchRequestSchema = exports.clinicUpdateRequestSchema = exports.clinicSchema = exports.updateHealthMetricsSchema = exports.updateFamilySchema = exports.addFamilySchema = exports.healthMetricsSchemaZod = exports.addHealthMetricsSchema = exports.createEmergencyAppointmentSchema = exports.updateProfileSchema = exports.doctorUpdateSchema = exports.userUpdateSchema = void 0;
+exports.ratingSchemaZod = exports.prescriptionSchemaZod = exports.medicineSchemaZod = exports.homeVisitAppointmentCompleteSchema = exports.homeVisitAppointmentCancelSchema = exports.homeVisitAppointmentAcceptSchema = exports.homeVisitConfigUpdateSchema = exports.onlineAppointmentConfigUpdateSchema = exports.homeVisitAppointmentBookSchema = exports.otpValidationSchema = exports.clinicAppointmentBookSchema = exports.onlineAppointmentBookSchema = exports.clinicPatchRequestSchema = exports.clinicUpdateRequestSchema = exports.clinicSchema = exports.updateHealthMetricsSchema = exports.updateFamilySchema = exports.addFamilySchema = exports.healthMetricsSchemaZod = exports.addHealthMetricsSchema = exports.createEmergencyAppointmentSchema = exports.updateProfileSchema = exports.doctorUpdateSchema = exports.userUpdateSchema = void 0;
 const zod_1 = require("zod");
 const health_metrics_model_1 = require("../models/health-metrics-model");
 // User update validation schema with custom messages
@@ -509,6 +509,28 @@ exports.clinicUpdateRequestSchema = zod_1.z.object({
     isActive: zod_1.z.boolean(),
 });
 exports.clinicPatchRequestSchema = exports.clinicUpdateRequestSchema.partial();
+// online appointment book schema
+exports.onlineAppointmentBookSchema = zod_1.z.object({
+    doctorId: zod_1.z.string().min(1, "Doctor ID is required"),
+    slot: zod_1.z.object({
+        day: zod_1.z.string().min(1, "Slot day is required"),
+        duration: zod_1.z.union([
+            zod_1.z.literal(15),
+            zod_1.z.literal(30),
+            zod_1.z.literal(45),
+            zod_1.z.literal(60),
+        ]),
+        time: zod_1.z.object({
+            start: zod_1.z.string().min(1, "Slot start time is required"),
+            end: zod_1.z.string().min(1, "Slot end time is required"),
+        }),
+        history: zod_1.z
+            .object({
+            title: zod_1.z.string().optional(),
+        })
+            .optional(),
+    }),
+});
 // clinic appointment book schema
 exports.clinicAppointmentBookSchema = zod_1.z.object({
     doctorId: zod_1.z.string(),

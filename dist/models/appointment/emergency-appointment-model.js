@@ -44,9 +44,13 @@ const emergencyAppointmentSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ["pending", "in-progress", "completed", "expired", "unattended"],
+        enum: ["pending", "in-progress", "rejected", "completed", "expired", "unattended"],
         default: "pending",
     },
+    /** User ID of who cancelled (ref User) */
+    cancelledBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    /** Role of who cancelled */
+    cancelledByRole: { type: String, enum: ["patient", "doctor"], default: null },
     roomName: {
         type: String,
         trim: true,
