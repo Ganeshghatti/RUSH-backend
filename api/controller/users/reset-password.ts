@@ -136,11 +136,11 @@ export const resetPassword = async (req: Request, res: Response) => {
       return;
     }
 
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword) {
       res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters long.",
-        action: "resetPassword:validate-password-length",
+        message: "Password is required.",
+        action: "resetPassword:validate-password-missing",
       });
       return;
     }

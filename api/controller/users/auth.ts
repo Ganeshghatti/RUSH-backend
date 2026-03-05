@@ -10,7 +10,10 @@ import Patient from "../../models/user/patient-model";
 import { generateSignedUrlsForUser } from "../../utils/signed-url";
 import Admin from "../../models/user/admin-model";
 import * as dotenv from "dotenv";
-import { sendNewUserMail, UserMailData } from "../../utils/mail/user_notifications";
+import {
+  sendNewUserMail,
+  UserMailData,
+} from "../../utils/mail/user_notifications";
 
 dotenv.config();
 
@@ -22,14 +25,16 @@ export const sendSMSV3 = async (phoneNumber: string, otp: string) => {
     const clientId = process.env.OTP_CLIENT_ID;
 
     if (!apiKey || !clientId) {
-      throw new Error("API key or Client ID not defined in environment variables.");
+      throw new Error(
+        "API key or Client ID not defined in environment variables.",
+      );
     }
 
     // Remove '+' from phone number for SMS API
     const formattedPhoneNumber = phoneNumber.replace("+91", "");
 
     const message = encodeURIComponent(
-      `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`
+      `Dear User, Your Registration OTP with RUSHDR is ${otp} please do not share this OTP with anyone to keep your account secure - RUSHDR Sadguna Ventures`,
     );
 
     const url = `https://api.mylogin.co.in/api/v2/SendSMS?SenderId=RUSHDR&Message=${message}&MobileNumbers=${formattedPhoneNumber}&TemplateId=1707175033225166571&ApiKey=${apiKey}&ClientId=${clientId}`;
@@ -145,7 +150,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     await OTP.findOneAndUpdate(
       { phone },
       { phone, otp: newOTP },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
     await sendSMSV3(phone, newOTP);
 
@@ -212,15 +217,6 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         success: false,
         message: "Invalid email format.",
         action: "verifyOtp:validate-invalid-email",
-      });
-      return;
-    }
-
-    if (password.length < 6) {
-      res.status(400).json({
-        success: false,
-        message: "Password must be at least 6 characters.",
-        action: "verifyOtp:validate-weak-password",
       });
       return;
     }
@@ -357,8 +353,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       phone: user.phone,
     };
 
-    if (role === 'doctor') {
-      mailData.status = 'pending';
+    if (role === "doctor") {
+      mailData.status = "pending";
       await sendNewUserMail(mailData);
     }
 
@@ -377,7 +373,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         role: role,
       },
       JWT_SECRET,
-      { expiresIn: "24h" }
+      { expiresIn: "24h" },
     );
 
     res.cookie("token", token, {
@@ -416,11 +412,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, role } = req.body;
-    const normalizedEmail = typeof email === "string" ? email.toLowerCase() : email;
+    const normalizedEmail =
+      typeof email === "string" ? email.toLowerCase() : email;
 
     if (role === "admin") {
-      if (normalizedEmail === "urushdr@gmail.com" && password === "BulletBike$$$") {
-
+      if (
+        normalizedEmail === "urushdr@gmail.com" &&
+        password === "BulletBike$$$"
+      ) {
         const user = await User.findOne({ email: normalizedEmail });
 
         if (!user) {
@@ -433,9 +432,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         const token = jwt.sign(
-          { id: user._id, email: user.email, role }, 
+          { id: user._id, email: user.email, role },
           JWT_SECRET,
-          { expiresIn: "24h" }
+          { expiresIn: "24h" },
         );
 
         res.cookie("token", token, {
@@ -549,7 +548,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const token = jwt.sign(
       { id: user._id, email: user.email, role: role },
       JWT_SECRET,
-      { expiresIn: "24h" }
+      { expiresIn: "24h" },
     );
 
     res.cookie("token", token, {
@@ -577,7 +576,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const findCurrentUser = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { id, role } = req.user;

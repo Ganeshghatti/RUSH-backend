@@ -80,7 +80,7 @@ export const doctorUpdateSchema = z
           year: z.number().nullable(),
           degreePost: z.string().optional(),
           degreeImage: z.string().optional(),
-        })
+        }),
       )
       .optional(),
     registration: z
@@ -91,7 +91,7 @@ export const doctorUpdateSchema = z
           isVerified: z.boolean().optional(),
           licenseImage: z.string().optional(),
           specialization: z.string().optional(),
-        })
+        }),
       )
       .optional(),
     specialization: z.array(z.string()).optional(),
@@ -104,7 +104,7 @@ export const doctorUpdateSchema = z
           fromYear: z.number().nullable(),
           toYear: z.number().nullable(),
           isCurrent: z.boolean().optional(),
-        })
+        }),
       )
       .optional(),
     awards: z
@@ -112,7 +112,7 @@ export const doctorUpdateSchema = z
         z.object({
           name: z.string().optional(),
           year: z.number().optional(),
-        })
+        }),
       )
       .optional(),
     emergencyCall: z
@@ -123,7 +123,7 @@ export const doctorUpdateSchema = z
             z.object({
               minute: z.number(),
               price: z.number(),
-            })
+            }),
           )
           .optional(),
         phoneNumber: z.string().optional(),
@@ -204,7 +204,7 @@ export const healthMetricsSchemaZod = z
             .nullable()
             .optional(),
           reports: z.string().nullable().optional(),
-        })
+        }),
       )
       .nullable()
       .optional(),
@@ -303,7 +303,7 @@ export const addFamilySchema = z
         "Mother-in-law",
         "Other",
       ],
-      { required_error: "Relationship is required" }
+      { required_error: "Relationship is required" },
     ),
     basicDetails: z.object({
       name: z.string({ required_error: "Name is required" }),
@@ -339,7 +339,7 @@ export const addFamilySchema = z
           policyNumber: z.string().optional(),
           provider: z.string().optional(),
           image: z.string().optional(),
-        })
+        }),
       )
       .optional(),
   })
@@ -393,7 +393,7 @@ export const updateFamilySchema = z
           policyNumber: z.string().optional(),
           provider: z.string().optional(),
           image: z.string().optional(),
-        })
+        }),
       )
       .optional(),
     healthMetricsId: z.string().optional(),
@@ -445,7 +445,7 @@ export const updateHealthMetricsSchema = z
             .enum(["Ongoing", "Controlled", "Not Treated"])
             .optional(),
           reports: z.array(z.string()).optional(),
-        })
+        }),
       )
       .optional(),
     vitals: z
@@ -462,7 +462,7 @@ export const updateHealthMetricsSchema = z
           height: z.number().positive().optional(),
           weight: z.number().positive().optional(),
           bmi: z.number().optional(),
-        })
+        }),
       )
       .optional(),
     femaleHealth: z
@@ -541,9 +541,9 @@ export const clinicSchema = z.object({
         z.object({
           startTime: z.string(),
           endTime: z.string(),
-        })
+        }),
       ),
-    })
+    }),
   ),
   isActive: z.boolean().default(true),
 });
@@ -624,7 +624,7 @@ export const onlineAppointmentConfigUpdateSchema = z.object({
       z.object({
         minute: z.union([z.literal(15), z.literal(30)]),
         price: z.number().positive("Price must be a positive number"),
-      })
+      }),
     )
     .optional(),
   availability: z
@@ -643,9 +643,9 @@ export const onlineAppointmentConfigUpdateSchema = z.object({
           z.object({
             start: z.string().min(1, "Start time is required"),
             end: z.string().min(1, "End time is required"),
-          })
+          }),
         ),
-      })
+      }),
     )
     .optional(),
 });
@@ -669,9 +669,9 @@ export const homeVisitConfigUpdateSchema = z.object({
           z.object({
             start: z.string(),
             end: z.string(),
-          })
+          }),
         ),
-      })
+      }),
     )
     .optional(),
   // location: z
@@ -715,7 +715,7 @@ export const prescriptionSchemaZod = z.object({
       "HomeVisitAppointment",
       "EmergencyAppointment",
     ],
-    { required_error: "Appointment type reference is required" }
+    { required_error: "Appointment type reference is required" },
   ),
   patientId: z.string({ required_error: "Patient ID is required" }),
   symptoms: z.string().optional(),
