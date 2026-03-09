@@ -178,6 +178,7 @@ export const bookHomeVisitAppointment = async (
           totalWallet: patientUserDetail.wallet,
         },
       });
+      return;
     }
     await patientUserDetail.save();
 
@@ -256,44 +257,30 @@ export const bookHomeVisitAppointment = async (
     console.error("Error booking home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't create the home visit request.",
-      action: error.message,
+      message: "We couldn't create the home visit request. Please try again.",
+      action: "bookHomeVisitAppointment:error",
     });
   }
 };
 
 /* Step 2: Doctor accepts request and adds travel cost */
-export const acceptHomeVisitRequest = async (
+/** Doctor confirms (accept + travel cost) or cancels (reject) home visit request. Body: { travelCost } to accept, or { status: "doctor_rejected" } to cancel. */
+export const confirmHomeVisitRequest = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { appointmentId } = req.params;
-    const parsed = homeVisitAppointmentAcceptSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        success: false,
-        message: "Please review the request details and try again.",
-        action: "acceptHomeVisitRequest:validation-error",
-        data: {
-          errors: parsed.error.errors,
-        },
-      });
-      return;
-    }
-    const { travelCost } = parsed.data;
-
+    const bodyStatus = (req.body as any)?.status;
     const doctorUserId = (req as any).user?.id;
     if (!doctorUserId) {
       res.status(401).json({
         success: false,
-        message: "You must be signed in to accept requests.",
-        action: "acceptHomeVisitRequest:not-authenticated",
+        message: "You must be signed in to confirm requests.",
+        action: "confirmHomeVisitRequest:not-authenticated",
       });
       return;
     }
-
-    // (travelCost validated by schema)
 
     const doctor = await Doctor.findOne({ userId: doctorUserId }).populate(
       "userId"
@@ -302,11 +289,67 @@ export const acceptHomeVisitRequest = async (
       res.status(404).json({
         success: false,
         message: "We couldn't find your doctor profile.",
-        action: "acceptHomeVisitRequest:doctor-not-found",
+        action: "confirmHomeVisitRequest:doctor-not-found",
       });
       return;
     }
     const doctorId = doctor._id;
+
+    // Doctor reject (cancel): same route, body { status: "doctor_rejected" }
+    if (bodyStatus === "doctor_rejected") {
+      const appointment = await HomeVisitAppointment.findOne({
+        _id: appointmentId,
+        doctorId,
+        status: "pending",
+      });
+      if (!appointment) {
+        res.status(404).json({
+          success: false,
+          message: "We couldn't find a pending appointment to reject.",
+          action: "confirmHomeVisitRequest:appointment-not-found",
+        });
+        return;
+      }
+      const patient = await Patient.findById(appointment.patientId).select("userId").lean();
+      const patientUserId = patient?.userId?.toString();
+      appointment.status = "doctor_rejected";
+      appointment.cancelledBy = new mongoose.Types.ObjectId(doctorUserId);
+      appointment.cancelledByRole = "doctor";
+      const frozen = appointment.paymentDetails?.patientWalletFrozen ?? 0;
+      if (frozen > 0 && patientUserId) {
+        const patientUser = await User.findById(patientUserId);
+        if (patientUser) {
+          (patientUser as any).unfreezeAmount(frozen);
+          await patientUser.save();
+        }
+        if (appointment.paymentDetails) {
+          appointment.paymentDetails.patientWalletFrozen = 0;
+        }
+      }
+      await appointment.save();
+      res.status(200).json({
+        success: true,
+        message: "Home visit request rejected.",
+        action: "confirmHomeVisitRequest:rejected",
+        data: await populateAppointment(appointmentId),
+      });
+      return;
+    }
+
+    // Accept: require travelCost
+    const parsed = homeVisitAppointmentAcceptSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: "Please review the request details and try again.",
+        action: "confirmHomeVisitRequest:validation-error",
+        data: {
+          errors: parsed.error.errors,
+        },
+      });
+      return;
+    }
+    const { travelCost } = parsed.data;
 
     // Find the appointment
     const appointment = await HomeVisitAppointment.findOne({
@@ -321,7 +364,7 @@ export const acceptHomeVisitRequest = async (
       res.status(404).json({
         success: false,
         message: "We couldn't find a pending appointment to accept.",
-        action: "acceptHomeVisitRequest:appointment-not-found",
+        action: "confirmHomeVisitRequest:appointment-not-found",
       });
       return;
     }
@@ -330,7 +373,7 @@ export const acceptHomeVisitRequest = async (
       res.status(500).json({
         success: false,
         message: "Appointment pricing or payment details are missing.",
-        action: "acceptHomeVisitRequest:pricing-missing",
+        action: "confirmHomeVisitRequest:pricing-missing",
       });
       return;
     }
@@ -372,27 +415,27 @@ export const acceptHomeVisitRequest = async (
     res.status(200).json({
       success: true,
       message: "Home visit request accepted and travel cost added.",
-      action: "acceptHomeVisitRequest:success",
+      action: "confirmHomeVisitRequest:success",
       data: updatedAppointment,
     });
   } catch (error: any) {
     console.error("Error accepting home visit request:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't accept the home visit request.",
-      action: error.message,
+      message: "We couldn't confirm the home visit request. Please try again.",
+      action: "confirmHomeVisitRequest:error",
     });
   }
 };
 
-/* Step 3: Patient confirms the appointment and totalCost=fixedCost+travelCost frozen in wallet */
+/* Step 3: Patient confirms (or cancels) the appointment. Body: { status?: "patient_confirmed" | "patient_cancelled" } (default confirm). */
 export const confirmHomeVisitAppointment = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { appointmentId } = req.params;
-    // No body fields to validate here besides param; schema for confirm not needed (retained symmetry)
+    const bodyStatus = (req.body as any)?.status ?? "patient_confirmed";
     const patientUserId = (req as any).user?.id;
     if (!patientUserId) {
       res.status(401).json({
@@ -414,7 +457,7 @@ export const confirmHomeVisitAppointment = async (
     const patientId = patient._id;
 
     // Find the appointment
-    const appointment = await HomeVisitAppointment.findOne({
+    let appointment = await HomeVisitAppointment.findOne({
       _id: appointmentId,
       patientId,
       status: "doctor_accepted",
@@ -427,6 +470,34 @@ export const confirmHomeVisitAppointment = async (
       });
       return;
     }
+
+    // Patient cancel: same route, body { status: "patient_cancelled" }
+    if (bodyStatus === "patient_cancelled") {
+      appointment.status = "patient_cancelled";
+      appointment.cancelledBy = new mongoose.Types.ObjectId(patientUserId);
+      appointment.cancelledByRole = "patient";
+      const frozen = appointment.paymentDetails?.patientWalletFrozen ?? 0;
+      if (frozen > 0) {
+        const patientUser = await User.findById(patientUserId);
+        if (patientUser) {
+          (patientUser as any).unfreezeAmount(frozen);
+          await patientUser.save();
+        }
+        if (appointment.paymentDetails) {
+          appointment.paymentDetails.patientWalletFrozen = 0;
+        }
+      }
+      await appointment.save();
+      res.status(200).json({
+        success: true,
+        message: "Appointment cancelled successfully.",
+        action: "confirmHomeVisitAppointment:cancelled",
+        data: await populateAppointment(appointmentId),
+      });
+      return;
+    }
+
+    // Confirm: freeze total and set patient_confirmed
     // Check pricing and payment details exist
     if (!appointment.pricing || !appointment.paymentDetails) {
       res.status(500).json({
@@ -515,8 +586,8 @@ export const confirmHomeVisitAppointment = async (
     console.error("Error confirming home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't confirm the home visit appointment.",
-      action: error.message,
+      message: "We couldn't confirm the home visit appointment. Please try again.",
+      action: "confirmHomeVisitAppointment:error",
     });
   }
 };
@@ -730,8 +801,8 @@ export const completeHomeVisitAppointment = async (
     console.error("Error completing home visit appointment:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't complete the home visit appointment.",
-      action: error.message,
+      message: "We couldn't complete the home visit appointment. Please try again.",
+      action: "completeHomeVisitAppointment:error",
     });
   }
 };
@@ -837,90 +908,6 @@ export const completeHomeVisitAppointment = async (
 //     });
 //   }
 // };
-
-// Get doctor appointments by date
-export const getDoctorHomeVisitAppointmentByDate = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const { date } = req.body;
-    const doctorId = (req as any).user?.id;
-
-    if (!doctorId) {
-      res.status(401).json({
-        success: false,
-        message: "You must be signed in to view these appointments.",
-        action: "getDoctorHomeVisitAppointmentByDate:not-authenticated",
-      });
-      return;
-    }
-
-    if (!date) {
-      res.status(400).json({
-        success: false,
-        message: "Date is required.",
-        action: "getDoctorHomeVisitAppointmentByDate:missing-date",
-      });
-      return;
-    }
-
-    const doctor = await Doctor.findOne({ userId: doctorId });
-    if (!doctor) {
-      res.status(404).json({
-        success: false,
-        message: "We couldn't find your doctor profile.",
-        action: "getDoctorHomeVisitAppointmentByDate:doctor-not-found",
-      });
-      return;
-    }
-
-    const startDate = new Date(date);
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(date);
-    endDate.setHours(23, 59, 59, 999);
-
-    const appointments = await HomeVisitAppointment.find({
-      doctorId: doctor._id,
-      "slot.day": {
-        $gte: startDate,
-        $lte: endDate,
-      },
-    })
-      .populate({
-        path: "patientId",
-        select: "firstName lastName countryCode gender email profilePic",
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId homeVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ "slot.time.start": 1 });
-
-    res.status(200).json({
-      success: true,
-      message:
-        "Doctor home visit appointments for the date retrieved successfully.",
-      action: "getDoctorHomeVisitAppointmentByDate:success",
-      data: appointments,
-    });
-  } catch (error: any) {
-    console.error(
-      "Error getting doctor home visit appointments by date:",
-      error
-    );
-    res.status(500).json({
-      success: false,
-      message: "We couldn't load home visit appointments for that date.",
-      action: error.message,
-    });
-  }
-};
 
 //***** script for cron job
 export const updateHomeStatusCron = async () => {

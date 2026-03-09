@@ -722,14 +722,35 @@ export const getDoctorById = async (
       return;
     }
 
+    const doctorDoc = user.roleRefs.doctor as any;
+    const doctorId = doctorDoc._id;
+
+    const ratings = await RatingModel.find({
+      doctorId,
+      isEnable: true,
+    })
+      .populate({
+        path: "patientId",
+        populate: {
+          path: "userId",
+          select: "firstName lastName profilePic",
+        },
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
     // Generate signed URLs for both user and doctor data
     const userWithUrls = await generateSignedUrlsForUser(user);
+    const dataWithRatings = {
+      ...userWithUrls,
+      ratings: ratings || [],
+    };
 
     res.status(200).json({
       success: true,
       message: "Doctor details fetched successfully.",
       action: "getDoctorById:success",
-      data: userWithUrls,
+      data: dataWithRatings,
     });
   } catch (error) {
     console.error("Error fetching doctor:", error);

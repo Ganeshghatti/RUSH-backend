@@ -1,15 +1,14 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import twilio from "twilio";
 import { jwt } from "twilio";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
-import HomeVisitAppointment from "../../models/appointment/homevisit-appointment-model";
-import EmergencyAppointment from "../../models/appointment/emergency-appointment-model";
-import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
 import Doctor from "../../models/user/doctor-model";
 import Patient from "../../models/user/patient-model";
 import User from "../../models/user/user-model";
 import DoctorSubscription from "../../models/doctor-subscription";
 import { sendNewAppointmentNotification, sendAppointmentStatusNotification } from "../../utils/mail/appointment-notifications";
+import { onlineAppointmentBookSchema } from "../../validation/validation";
 
 /* step 1 - Book appointment by patient + Amount freeze*/
 export const bookOnlineAppointment = async (
@@ -17,34 +16,18 @@ export const bookOnlineAppointment = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { doctorId, slot } = req.body;
+    const validationResult = onlineAppointmentBookSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Please review the booking details and try again.",
+        action: "bookOnlineAppointment:validation-error",
+        data: { errors: validationResult.error.errors },
+      });
+      return;
+    }
+    const { doctorId, slot } = validationResult.data;
     const patientUserId = req.user.id;
-
-    // Validate required fields
-    if (!doctorId || !slot) {
-      res.status(400).json({
-        success: false,
-        message: "Doctor ID and slot information are required.",
-        action: "bookOnlineAppointment:missing-fields",
-      });
-      return;
-    }
-    if (!slot.day || !slot.duration || !slot.time) {
-      res.status(400).json({
-        success: false,
-        message: "Slot day, duration, and time are required.",
-        action: "bookOnlineAppointment:missing-slot-fields",
-      });
-      return;
-    }
-    if (!slot.time.start || !slot.time.end) {
-      res.status(400).json({
-        success: false,
-        message: "Slot start time and end time are required.",
-        action: "bookOnlineAppointment:missing-slot-times",
-      });
-      return;
-    }
 
     // Check if doctor exists
     const doctor = await Doctor.findById(doctorId).populate({
@@ -201,360 +184,99 @@ export const bookOnlineAppointment = async (
       action: "bookOnlineAppointment:success",
       data: populatedAppointment,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error booking online appointment:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't book the appointment right now.",
-      action: error.message,
+      message: "We couldn't book the appointment right now. Please try again.",
+      action: "bookOnlineAppointment:error",
     });
   }
 };
 
-// Get all appointments for doctor
-export const getDoctorAppointments = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const doctorUserId = req.user.id;
-
-    const doctor = await Doctor.findOne({ userId: doctorUserId });
-    if (!doctor) {
-      res.status(404).json({
-        success: false,
-        message: "We couldn't find your doctor profile.",
-        action: "getDoctorAppointments:doctor-not-found",
-      });
-      return;
-    }
-    const doctorId = doctor._id;
-
-    /***** Find all online appointments for this doctor ******/
-    let onlineAppointments = await OnlineAppointment.find({
-      doctorId,
-    })
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ "slot.day": 1, "slot.time.start": 1 });
-
-    // Find all emergency appointments for this doctor
-    let emergencyAppointments = await EmergencyAppointment.find({
-      doctorId,
-    })
-      .populate({
-        path: "patientId",
-        select: "userId healthMetrics insurance mapLocation",
-        populate: {
-          path: "userId",
-          select:
-            "firstName lastName countryCode gender email profilePic phone dob address wallet",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ createdAt: -1 });
-
-    // Find all clinic appointments for this doctor
-    let clinicAppointments = await ClinicAppointment.find({
-      doctorId,
-    })
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "userId specialization clinicVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName profilePic",
-        },
-      })
-      .sort({ "slot.day": -1, "slot.time.start": -1 });
-
-    // Find all home visit appointments for this doctor
-    let homeVisitAppointments = await HomeVisitAppointment.find({
-      doctorId,
-    })
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId homeVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ "slot.day": -1, "slot.time.start": -1 });
-
-    res.status(200).json({
-      success: true,
-      message: "Doctor appointments retrieved successfully.",
-      action: "getDoctorAppointments:success",
-      data: {
-        onlineAppointments,
-        emergencyAppointments,
-        clinicAppointments,
-        homeVisitAppointments,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error getting doctor appointments:", error);
-    res.status(500).json({
-      success: false,
-      message: "We couldn't load the doctor appointments.",
-      action: error.message,
-    });
-  }
-};
-
-// Get all appointments for patient
-export const getPatientAppointments = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const userId = req.user.id;
-
-    // Find the patient record
-    const patient = await Patient.findOne({ userId });
-    if (!patient) {
-      res.status(404).json({
-        success: false,
-        message: "We couldn't find your patient profile.",
-        action: "getPatientAppointments:patient-not-found",
-      });
-      return;
-    }
-    const patientId = patient._id;
-
-    // Find all online appointments for this patient (patientId references User)
-    let onlineAppointments = await OnlineAppointment.find({ patientId })
-      .select(
-        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
-      )
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ "slot.day": 1, "slot.time.start": 1 });
-
-    // Find all emergency appointments for this patient (patientId references Patient)
-    let emergencyAppointments = await EmergencyAppointment.find({ patientId })
-      .select(
-        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
-      )
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ createdAt: -1 });
-
-    // Find all clinic appointments for this patient
-    let clinicAppointments = await ClinicAppointment.find({ patientId })
-      .select(
-        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
-      )
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId clinicVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ "slot.day": 1, "slot.time.start": 1 });
-
-    // Find all home visit appointments for this patient
-    let homeVisitAppointments = await HomeVisitAppointment.find({ patientId })
-      .select(
-        "-paymentDetails.doctorPlatformFee -paymentDetails.doctorOpsExpense -paymentDetails.doctorEarning"
-      )
-      .populate({
-        path: "patientId",
-        select: "userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId homeVisit",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ "slot.day": -1, "slot.time.start": -1 });
-
-    res.status(200).json({
-      success: true,
-      message: "Patient appointments retrieved successfully.",
-      action: "getPatientAppointments:success",
-      data: {
-        onlineAppointments,
-        emergencyAppointments,
-        clinicAppointments,
-        homeVisitAppointments,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error getting patient appointments:", error);
-    res.status(500).json({
-      success: false,
-      message: "We couldn't load the patient appointments.",
-      action: error.message,
-    });
-  }
-};
-
-/* step 2 - Update appointment status by doctor (if accept -> create twilio room, if reject -> unfreeze amount) */
-export const updateAppointmentStatus = async (
+/* step 2 - Confirm online appointment: doctor can accept/reject, patient can reject (cancel). On reject: unfreeze amount, set cancelledBy. */
+export const confirmOnlineAppointment = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const { appointmentId } = req.params;
     const { status } = req.body;
-    const doctorUserId = req.user.id;
+    const userId = req.user.id;
 
-    // Validate status
     if (!status || !["pending", "accepted", "rejected"].includes(status)) {
       res.status(400).json({
         success: false,
         message: "Status must be one of pending, accepted, or rejected.",
-        action: "updateAppointmentStatus:invalid-status",
+        action: "confirmOnlineAppointment:invalid-status",
       });
       return;
     }
 
-    const doctor = await Doctor.findOne({ userId: doctorUserId });
-    if (!doctor) {
-      res.status(404).json({
-        success: false,
-        message: "We couldn't find your doctor profile.",
-        action: "updateAppointmentStatus:doctor-not-found",
-      });
-      return;
-    }
-
-    // Find the appointment and verify it belongs to this doctor
-    const appointment = await OnlineAppointment.findOne({
-      _id: appointmentId,
-      doctorId: doctor._id,
-    })
-      .populate({ path: 'patientId', select: 'firstName lastName email' })
-      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'firstName lastName email' } });
-
+    const appointment = await OnlineAppointment.findById(appointmentId);
     if (!appointment) {
       res.status(404).json({
         success: false,
-        message:
-          "We couldn't find that appointment or you don't have permission to modify it.",
-        action: "updateAppointmentStatus:appointment-not-found",
+        message: "Appointment not found.",
+        action: "confirmOnlineAppointment:appointment-not-found",
       });
       return;
     }
 
-    // if status is reject unfreeze the amount from patient's user wallet.
-    // if (status === "rejected" || status === "cancel") {
-    //   const patientUserId = appointment.patientId;
-    //   const patientUserDetail = await User.findById(patientUserId);
-    //   if (!patientUserDetail) {
-    //     res.status(400).json({
-    //       success: false,
-    //       message: "We couldn't find the patient profile.",
-    //       action: "updateAppointmentStatus:patient-not-found",
-    //     });
-    //     return;
-    //   }
+    const doctor = await Doctor.findById(appointment.doctorId).select("userId").lean();
+    const patient = await Patient.findById(appointment.patientId).select("userId").lean();
+    const doctorUserId = doctor?.userId?.toString();
+    const patientUserId = patient?.userId?.toString();
 
-    //   const amount = appointment.paymentDetails?.patientWalletFrozen;
+    const isDoctor = userId === doctorUserId;
+    const isPatient = userId === patientUserId;
 
-    //   const unfreezeSuccess = (patientUserDetail as any).unfreezeAmount(amount);
-    //   if (unfreezeSuccess) {
-    //     await patientUserDetail.save();
-    //   } else {
-    //     res.status(400).json({
-    //       success: false,
-    //       message: "We couldn't restore the reserved wallet amount.",
-    //       action: "updateAppointmentStatus:unfreeze-failed",
-    //     });
-    //     return;
-    //   }
-    // }
-
-    // if status is accepted create room
-    const client = twilio(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
     if (status === "accepted") {
+      if (!isDoctor) {
+        res.status(403).json({
+          success: false,
+          message: "Only the doctor can accept this appointment.",
+          action: "confirmOnlineAppointment:forbidden",
+        });
+        return;
+      }
+    } else if (status === "rejected") {
+      if (!isDoctor && !isPatient) {
+        res.status(403).json({
+          success: false,
+          message: "You are not authorized to update this appointment.",
+          action: "confirmOnlineAppointment:forbidden",
+        });
+        return;
+      }
+      if (["completed", "expired", "unattended"].includes(appointment.status)) {
+        res.status(400).json({
+          success: false,
+          message: `Cannot cancel an appointment that is already ${appointment.status}.`,
+          action: "confirmOnlineAppointment:invalid-status",
+        });
+        return;
+      }
+      appointment.cancelledBy = new mongoose.Types.ObjectId(userId);
+      appointment.cancelledByRole = isDoctor ? "doctor" : "patient";
+      const frozen = appointment.paymentDetails?.patientWalletFrozen ?? 0;
+      if (frozen > 0 && patientUserId) {
+        const patientUser = await User.findById(patientUserId);
+        if (patientUser) {
+          (patientUser as any).unfreezeAmount(frozen);
+          await patientUser.save();
+        }
+        if (appointment.paymentDetails) {
+          appointment.paymentDetails.patientWalletFrozen = 0;
+        }
+      }
+    }
+
+    if (status === "accepted") {
+      const client = twilio(
+        process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN
+      );
       const roomName = `online_${appointment._id}`;
       const room = await client.video.v1.rooms.create({
         uniqueName: roomName,
@@ -564,31 +286,9 @@ export const updateAppointmentStatus = async (
       appointment.roomName = room.uniqueName;
     }
 
-    // Update status of the appointment
     appointment.status = status;
     await appointment.save();
 
-    // Send status update notification
-    if (status === 'accepted' || status === 'rejected') {
-      try {
-        const patientInfo = appointment.patientId as any;
-        const doctorInfo = (appointment.doctorId as any)?.userId;
-
-        await sendAppointmentStatusNotification({
-          appointmentId: appointment._id.toString(),
-          status: appointment.status,
-          patientName: `${patientInfo.firstName} ${patientInfo.lastName}`,
-          patientEmail: patientInfo.email,
-          doctorName: `${doctorInfo.firstName} ${doctorInfo.lastName}`,
-          doctorEmail: doctorInfo.email,
-          type: 'Online',
-        });
-      } catch (mailError) {
-        console.error("🚨 Failed to send appointment status notification:", mailError);
-      }
-    }
-
-    // Populate the response with detailed patient and doctor information
     const updatedAppointment = await OnlineAppointment.findById(appointment._id)
       .populate({
         path: "patientId",
@@ -607,87 +307,38 @@ export const updateAppointmentStatus = async (
         },
       });
 
-    res.status(200).json({
-      success: true,
-      message: `Appointment status updated to ${status} successfully.`,
-      action: "updateAppointmentStatus:success",
-      data: updatedAppointment,
-    });
-  } catch (error: any) {
-    console.error("Error updating appointment status:", error);
-    res.status(500).json({
-      success: false,
-      message: "We couldn't update the appointment status.",
-      action: error.message,
-    });
-  }
-};
-
-/* cancel appointment by patient */
-export const cancelAppointment = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const { appointmentId } = req.params;
-    const userId = req.user.id;
-
-    const appointment = await OnlineAppointment.findById(appointmentId)
-      .populate({ path: 'patientId', select: 'firstName lastName email' })
-      .populate({ path: 'doctorId', populate: { path: 'userId', select: 'firstName lastName email' } });
-
-    if (!appointment) {
-      res.status(404).json({
-        success: false,
-        message: "Appointment not found.",
-      });
-      return;
-    }
-
-    // Check if user is authorized to cancel
-    const doctorUserId = (appointment.doctorId as any)?.userId?._id.toString();
-    const patientUserId = (appointment.patientId as any)?._id.toString();
-
-    if (userId !== doctorUserId && userId !== patientUserId) {
-      res.status(403).json({
-        success: false,
-        message: "You are not authorized to cancel this appointment.",
-      });
-      return;
-    }
-
-    if (appointment.status === 'completed') {
-      res.status(400).json({
-        success: false,
-        message: `Cannot cancel an appointment that is already ${appointment.status}.`,
-      });
-      return;
-    }
-
-    // Unfreeze amount if it was frozen
-    if (appointment.paymentDetails?.paymentStatus === 'pending' && appointment.paymentDetails.patientWalletFrozen > 0) {
-      const patientUser = await User.findById(appointment.patientId);
-      if (patientUser) {
-        (patientUser as any).unfreezeAmount(appointment.paymentDetails.patientWalletFrozen);
-        await patientUser.save();
+    if (status === "accepted" || status === "rejected") {
+      try {
+        const patientInfo = (updatedAppointment?.patientId as any)?.userId;
+        const doctorInfo = (updatedAppointment?.doctorId as any)?.userId;
+        if (patientInfo && doctorInfo) {
+          await sendAppointmentStatusNotification({
+            appointmentId: appointment._id.toString(),
+            status: updatedAppointment!.status,
+            patientName: `${patientInfo.firstName} ${patientInfo.lastName}`,
+            patientEmail: patientInfo.email,
+            doctorName: `${doctorInfo.firstName} ${doctorInfo.lastName}`,
+            doctorEmail: doctorInfo.email,
+            type: "Online",
+          });
+        }
+      } catch (mailError) {
+        console.error("🚨 Failed to send appointment status notification:", mailError);
       }
     }
 
-    await appointment.save();
-
-
-
     res.status(200).json({
       success: true,
-      data: appointment,
-      message: `Appointment cancelled successfully`,
+      message: `Appointment ${status === "accepted" ? "accepted" : status === "rejected" ? "cancelled" : "updated"} successfully.`,
+      action: "confirmOnlineAppointment:success",
+      data: updatedAppointment,
     });
-  } catch (err: any) {
-    console.error("Error cancelling appointment: ", err);
+  } catch (error: unknown) {
+    console.error("Error confirming online appointment:", error);
     res.status(500).json({
       success: false,
-      message: "Error cancelling appointment",
-      error: err.message,
+      message: "We couldn't confirm the online appointment. Please try again.",
+      action: "confirmOnlineAppointment:error",
     });
   }
 };
@@ -712,7 +363,7 @@ export const createRoomAccessToken = async (
 
     const identity = req.user.id; //user id of user who joined
 
-    // finding the appointment using rommName
+    // Find the appointment by room name
     const appointment: any = await OnlineAppointment.findOne({ roomName });
     if (!appointment || appointment?.status !== "accepted") {
       res.status(400).json({
@@ -784,12 +435,12 @@ export const createRoomAccessToken = async (
       identity: `${whoJoined}_${identity}`,
       roomName,
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("Failed to generate Twilio access token:", err);
     res.status(500).json({
       success: false,
-      message: "We couldn't generate the room access token.",
-      action: err instanceof Error ? err.message : String(err),
+      message: "We couldn't generate the room access token. Please try again.",
+      action: "createRoomAccessToken:error",
     });
   }
 };
@@ -831,7 +482,7 @@ export const finalPayment = async (
       });
       if (!patientUserDetail || !patient) {
         res.status(400).json({
-          sucess: false,
+          success: false,
           message: "We couldn't find the patient profile.",
           action: "onlineFinalPayment:patient-not-found",
         });
@@ -843,7 +494,7 @@ export const finalPayment = async (
       });
       if (!doctorUserDetail || !doctor) {
         res.status(400).json({
-          sucess: false,
+          success: false,
           message: "We couldn't find the doctor profile.",
           action: "onlineFinalPayment:doctor-not-found",
         });
@@ -942,89 +593,12 @@ export const finalPayment = async (
       });
       return;
     }
-  } catch (err: any) {
-    console.error("Error processing final payment: ", err);
+  } catch (err: unknown) {
+    console.error("Error processing final payment:", err);
     res.status(500).json({
       success: false,
-      message: "We couldn't process the final payment.",
-      action: err.message,
-    });
-  }
-};
-
-export const getDoctorAppointmentByDate = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const { date } = req.body; // Expected format: YYYY-MM-DD
-    const doctorId = req.user.id; // Assuming the logged-in user is a doctor
-
-    // Validate date parameter
-    if (!date) {
-      res.status(400).json({
-        success: false,
-        message: "Date is required in request body.",
-        action: "getDoctorAppointmentByDate:missing-date",
-      });
-      return;
-    }
-
-    // Find the doctor
-    const doctor = await Doctor.findOne({ userId: doctorId });
-
-    if (!doctor) {
-      res.status(404).json({
-        success: false,
-        message: "We couldn't find your doctor profile.",
-        action: "getDoctorAppointmentByDate:doctor-not-found",
-      });
-      return;
-    }
-
-    // Create date range for the specified date
-    const startDate = new Date(date as string);
-    const endDate = new Date(date as string);
-    endDate.setDate(endDate.getDate() + 1); // Next day
-
-    // Find all appointments for this doctor on the specified date
-    const appointments = await OnlineAppointment.find({
-      doctorId: doctor._id,
-      "slot.day": {
-        $gte: startDate,
-        $lt: endDate,
-      },
-    })
-      .populate({
-        path: "patientId",
-        select:
-          "firstName lastName email phone countryCode gender profilePic dob address wallet",
-      })
-      .populate({
-        path: "doctorId",
-        select: "qualifications specialization userId",
-        populate: {
-          path: "userId",
-          select: "firstName lastName countryCode gender email profilePic",
-        },
-      })
-      .sort({ "slot.time.start": 1 }); // Sort by appointment start time
-
-    res.status(200).json({
-      success: true,
-      message: `Appointments for ${date} retrieved successfully.`,
-      action: "getDoctorAppointmentByDate:success",
-      data: {
-        appointments,
-        count: appointments.length,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error getting doctor appointments by date:", error);
-    res.status(500).json({
-      success: false,
-      message: "We couldn't retrieve appointments for that date.",
-      action: error.message,
+      message: "We couldn't process the final payment. Please try again.",
+      action: "onlineFinalPayment:error",
     });
   }
 };
@@ -1053,12 +627,12 @@ export const getAllPatients = async (
         count: patients.length,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error getting all patients:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't load patients right now.",
-      action: error.message,
+      message: "We couldn't load patients right now. Please try again.",
+      action: "getAllPatients:error",
     });
   }
 };

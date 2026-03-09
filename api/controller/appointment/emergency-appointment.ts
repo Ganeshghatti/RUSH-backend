@@ -209,12 +209,12 @@ export const createEmergencyAppointment = async (
       action: "createEmergencyAppointment:success",
       data: appointmentsWithUrls[0],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating emergency appointment:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't create the emergency appointment.",
-      action: error.message,
+      message: "We couldn't create the emergency appointment. Please try again.",
+      action: "createEmergencyAppointment:error",
     });
   }
 };
@@ -248,12 +248,12 @@ export const getAllEmergencyAppointments = async (
         count: appointmentsWithUrls.length,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error getting emergency appointments:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't load emergency appointments right now.",
-      action: error.message,
+      message: "We couldn't load emergency appointments right now. Please try again.",
+      action: "getAllEmergencyAppointments:error",
     });
   }
 };
@@ -302,12 +302,12 @@ export const getPatientEmergencyAppointments = async (
         count: appointmentsWithUrls.length,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error getting patient emergency appointments:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't load the patient's emergency appointments.",
-      action: error.message,
+      message: "We couldn't load the patient's emergency appointments. Please try again.",
+      action: "getPatientEmergencyAppointments:error",
     });
   }
 };
@@ -317,7 +317,7 @@ export const acceptEmergencyAppointment = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.appointmentId ?? req.params.id;
     const doctorUserId = req.user.id;
 
     // Find doctor by userId
@@ -423,23 +423,23 @@ export const acceptEmergencyAppointment = async (
         roomName: room.uniqueName,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error accepting emergency appointment:", error);
     res.status(500).json({
       success: false,
-      message: "We couldn't accept the emergency appointment.",
-      action: error.message,
+      message: "We couldn't accept the emergency appointment. Please try again.",
+      action: "acceptEmergencyAppointment:error",
     });
   }
 };
 
 /* create room access token */
-const AccessToken = jwt.AccessToken;
-const VideoGrant = AccessToken.VideoGrant;
 export const createEmergencyRoomAccessToken = async (
   req: Request,
   res: Response
 ): Promise<void> => {
+  const AccessToken = jwt.AccessToken;
+  const VideoGrant = AccessToken.VideoGrant;
   try {
     const { roomName } = req.body;
     if (!roomName) {
@@ -573,7 +573,7 @@ export const finalPayment = async (
       });
       if (!patientUserDetail || !patient) {
         res.status(400).json({
-          sucess: false,
+          success: false,
           message: "We couldn't find the patient profile.",
           action: "emergencyFinalPayment:patient-not-found",
         });
@@ -585,7 +585,7 @@ export const finalPayment = async (
       });
       if (!doctorUserDetail || !doctor) {
         res.status(400).json({
-          sucess: false,
+          success: false,
           message: "We couldn't find the doctor profile.",
           action: "emergencyFinalPayment:doctor-not-found",
         });
@@ -666,7 +666,7 @@ export const finalPayment = async (
       return;
     } else if (paymentStatus === "completed") {
       res.status(200).json({
-        sucess: true,
+        success: true,
         message: "Final payment is already processed.",
         action: "emergencyFinalPayment:already-processed",
       });

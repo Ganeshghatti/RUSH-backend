@@ -49,6 +49,10 @@ const onlineAppointmentSchema = new Schema({
     ],
     default: "pending",
   },
+  /** User ID of who cancelled (ref User) */
+  cancelledBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+  /** Role of who cancelled */
+  cancelledByRole: { type: String, enum: ["patient", "doctor"], default: null },
   roomName: { type: String },
   paymentDetails: {
     amount: { type: Number, required: true },

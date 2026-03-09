@@ -6,7 +6,7 @@ const prescription_1 = require("../../controller/appointment/prescription");
 const router = (0, express_1.Router)();
 // get prescription by it's id
 router
-    .route("/appointment/prescription/:prescriptionId")
+    .route("/:prescriptionId")
     .get(auth_middleware_1.verifyToken, prescription_1.getPrescriptionById);
 // doctor can add prescription
 router
