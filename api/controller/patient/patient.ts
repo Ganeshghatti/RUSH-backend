@@ -6,6 +6,7 @@ import Doctor from "../../models/user/doctor-model";
 import OnlineAppointment from "../../models/appointment/online-appointment-model";
 import ClinicAppointment from "../../models/appointment/clinic-appointment-model";
 import PatientSubscription from "../../models/patient-subscription";
+import PatientSubscriptionCoupon from "../../models/patient-subscription-coupon";
 import { razorpayConfig } from "../../config/razorpay";
 import {
   generateSignedUrlsForDoctor,
@@ -21,10 +22,124 @@ import { HealthMetrics } from "../../models/health-metrics-model";
 import { updateProfileSchema } from "../../validation/validation";
 import crypto from "crypto";
 
+/** Validates a coupon for a patient subscription; returns discount info or error message. */
+async function validateCouponForSubscription(
+  code: string,
+  subscriptionId: string,
+): Promise<
+  | {
+      valid: true;
+      discountPercent: number;
+      maxUses: number | null;
+      usedCount: number;
+      validUntil: Date | null;
+    }
+  | { valid: false; message: string }
+> {
+  const normalizedCode = String(code).trim().toUpperCase();
+  if (!normalizedCode) {
+    return { valid: false, message: "Coupon code is required." };
+  }
+
+  const subscription = await PatientSubscription.findById(subscriptionId);
+  if (!subscription) {
+    return { valid: false, message: "Subscription plan not found." };
+  }
+
+  const coupon = await PatientSubscriptionCoupon.findOne({
+    code: normalizedCode,
+  });
+  if (!coupon) {
+    return { valid: false, message: "Invalid coupon code." };
+  }
+  if (!coupon.isActive) {
+    return { valid: false, message: "This coupon is no longer active." };
+  }
+
+  const now = new Date();
+  if (coupon.validFrom && now < new Date(coupon.validFrom)) {
+    return { valid: false, message: "This coupon is not yet valid." };
+  }
+  if (coupon.validUntil && now > new Date(coupon.validUntil)) {
+    return { valid: false, message: "This coupon has expired." };
+  }
+  if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
+    return {
+      valid: false,
+      message: "This coupon has reached its usage limit.",
+    };
+  }
+
+  const applicableIds = coupon.applicableSubscriptionIds || [];
+  const appliesToAll = applicableIds.length === 0;
+  const appliesToThis = applicableIds.some(
+    (id: any) => id && id.toString() === subscriptionId,
+  );
+  if (!appliesToAll && !appliesToThis) {
+    return {
+      valid: false,
+      message: "This coupon does not apply to the selected plan.",
+    };
+  }
+
+  return {
+    valid: true,
+    discountPercent: coupon.discountPercent,
+    maxUses: coupon.maxUses ?? null,
+    usedCount: coupon.usedCount,
+    validUntil: (coupon as any).validUntil ?? null,
+  };
+}
+
+export const validateCoupon = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { code, subscriptionId } = req.body;
+    if (!code || !subscriptionId) {
+      res.status(400).json({
+        success: false,
+        message: "Code and subscriptionId are required.",
+        action: "validateCoupon:missing-fields",
+      });
+      return;
+    }
+    const result = await validateCouponForSubscription(code, subscriptionId);
+    if (!result.valid) {
+      res.status(200).json({
+        success: true,
+        valid: false,
+        message: result.message,
+        data: { valid: false, message: result.message },
+      });
+      return;
+    }
+    res.status(200).json({
+      success: true,
+      valid: true,
+      message: "Coupon applied.",
+      data: {
+        valid: true,
+        discountPercent: result.discountPercent,
+        maxUses: result.maxUses,
+        usedCount: result.usedCount,
+        validUntil: result.validUntil,
+      },
+    });
+  } catch (error) {
+    console.error("Error validating patient coupon:", error);
+    res.status(500).json({
+      success: false,
+      message: "We couldn't validate the coupon.",
+      action: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
 
 export const subscribePatient = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     // Check for required form data
@@ -50,7 +165,7 @@ export const subscribePatient = async (
       return;
     }
 
-    const { subscriptionId } = formData;
+    const { subscriptionId, couponCode } = formData;
     const { patientId } = req.params;
 
     if (!patientId || !subscriptionId) {
@@ -102,9 +217,100 @@ export const subscribePatient = async (
 
     console.log("subscription active:", subscription);
 
+    let discountPercent = 0;
+    let finalAmount = subscription.price;
+    if (couponCode && String(couponCode).trim()) {
+      const couponResult = await validateCouponForSubscription(
+        String(couponCode).trim(),
+        String(subscriptionId),
+      );
+      if (couponResult.valid) {
+        discountPercent = couponResult.discountPercent;
+        finalAmount = Math.max(
+          0,
+          subscription.price * (1 - discountPercent / 100),
+        );
+      }
+    }
+
+    // --- Free activation (100% coupon) — skip Razorpay entirely ---
+    if (finalAmount === 0) {
+      const startDate = new Date();
+      let endDate: Date | undefined;
+      switch (subscription.duration) {
+        case "1 month":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 1);
+          break;
+        case "3 months":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 3);
+          break;
+        case "1 year":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 1);
+          break;
+        case "2 years":
+          endDate = new Date(startDate);
+          endDate.setMonth(startDate.getMonth() + 24);
+          break;
+        case "20 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 20);
+          break;
+        case "15 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 15);
+          break;
+        case "10 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 10);
+          break;
+        case "5 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 5);
+          break;
+        case "40 years":
+          endDate = new Date(startDate);
+          endDate.setFullYear(startDate.getFullYear() + 40);
+          break;
+        case "lifetime":
+          endDate = undefined;
+          break;
+        default:
+          break;
+      }
+
+      const freeRecord: any = {
+        startDate,
+        endDate,
+        SubscriptionId: subscription._id,
+        amount_paid: 0,
+        couponCode: String(couponCode).trim().toUpperCase(),
+        discountPercent,
+        amountBeforeDiscount: subscription.price,
+      };
+      patient.subscriptions.push(freeRecord);
+      await patient.save();
+
+      await PatientSubscriptionCoupon.findOneAndUpdate(
+        { code: freeRecord.couponCode },
+        { $inc: { usedCount: 1 } },
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Subscription activated for free with coupon.",
+        action: "subscribePatient:free-activation",
+        data: { freeActivation: true },
+      });
+      return;
+    }
+
     // convert to amount to integer
+    const amountPaise = Math.round(finalAmount * 100);
     const options = {
-      amount: Math.round(subscription.price * 100),
+      amount: amountPaise,
       currency: "INR",
       receipt: "receipt_" + Math.random().toString(36).substring(7),
     };
@@ -125,6 +331,13 @@ export const subscribePatient = async (
           contact: patient.userId.phone,
           countryCode: patient.userId.countryCode || "+91",
         },
+        originalAmount: subscription.price,
+        discountPercent,
+        finalAmount,
+        couponCode:
+          discountPercent > 0
+            ? String(couponCode).trim().toUpperCase()
+            : undefined,
       },
     });
   } catch (error) {
@@ -139,7 +352,7 @@ export const subscribePatient = async (
 
 export const verifyPaymentSubscription = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const {
@@ -147,6 +360,9 @@ export const verifyPaymentSubscription = async (
       razorpay_payment_id,
       razorpay_signature,
       subscriptionId,
+      couponCode,
+      discountPercent,
+      amountBeforeDiscount,
     } = req.body;
 
     const userId = req.user.id;
@@ -160,8 +376,7 @@ export const verifyPaymentSubscription = async (
     ) {
       res.status(400).json({
         success: false,
-        message:
-          "Please provide all payment verification details.",
+        message: "Please provide all payment verification details.",
         action: "verifyPaymentSubscription:validate-input",
       });
       return;
@@ -255,7 +470,11 @@ export const verifyPaymentSubscription = async (
           return;
       }
 
-      const newSubscription = {
+      const amountBefore =
+        amountBeforeDiscount != null
+          ? Number(amountBeforeDiscount)
+          : subscription.price;
+      const newSubscription: any = {
         startDate: new Date(),
         endDate,
         razorpay_order_id,
@@ -263,10 +482,26 @@ export const verifyPaymentSubscription = async (
         SubscriptionId: subscription._id,
         amount_paid: subscription.price,
       };
+      if (couponCode && discountPercent != null) {
+        newSubscription.couponCode = String(couponCode).trim().toUpperCase();
+        newSubscription.discountPercent = Number(discountPercent);
+        newSubscription.amountBeforeDiscount = amountBefore;
+        newSubscription.amount_paid = Math.max(
+          0,
+          amountBefore * (1 - Number(discountPercent) / 100),
+        );
+      }
 
       patient.subscriptions.push(newSubscription);
 
       await patient.save();
+
+      if (newSubscription.couponCode) {
+        await PatientSubscriptionCoupon.findOneAndUpdate(
+          { code: newSubscription.couponCode },
+          { $inc: { usedCount: 1 } },
+        );
+      }
 
       res.status(200).json({
         success: true,
@@ -292,7 +527,7 @@ export const verifyPaymentSubscription = async (
 
 export const getPatientById = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { id } = req.params;
@@ -345,7 +580,7 @@ export const getPatientById = async (
 
 export const patientOnboard = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { userId } = req.params;
@@ -417,7 +652,7 @@ export const patientOnboard = async (
         new: true,
         runValidators: true,
         select: "-password",
-      }
+      },
     );
 
     if (!updatedPatient) {
@@ -430,8 +665,6 @@ export const patientOnboard = async (
     }
 
     //profile change Email
-
-
 
     res.status(200).json({
       success: true,
@@ -451,13 +684,13 @@ export const patientOnboard = async (
 
 export const getPatientDashboard = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const userId = req.user.id;
     const patient = await Patient.findOne({ userId }).populate(
       "userId",
-      "firstName lastName profilePic"
+      "firstName lastName profilePic",
     );
 
     if (!patient) {
@@ -486,9 +719,8 @@ export const getPatientDashboard = async (
       .sort({ createdAt: -1 }); // Sort by newest first
 
     // Convert media keys to signed URLs
-    const emergencyAppointmentsWithUrls = await convertMediaKeysToUrls(
-      appointments
-    );
+    const emergencyAppointmentsWithUrls =
+      await convertMediaKeysToUrls(appointments);
 
     const currentDate = new Date();
 
@@ -588,8 +820,8 @@ export const getPatientDashboard = async (
         status: "approved",
         subscriptions: {
           $elemMatch: {
-            endDate: { $gt: now }
-          }
+            endDate: { $gt: now },
+          },
         },
         userId: { $ne: userId },
       })
@@ -597,15 +829,19 @@ export const getPatientDashboard = async (
           path: "userId",
           select: "firstName lastName profilePic isDocumentVerified",
         })
-        .select("userId specialization experience onlineAppointment homeVisit clinicVisit")
+        .select(
+          "userId specialization experience onlineAppointment homeVisit clinicVisit",
+        )
         .limit(10);
 
-      recommendedDoctors = recommendedDoctors.filter(doctor => doctor.userId && doctor.userId.isDocumentVerified);
+      recommendedDoctors = recommendedDoctors.filter(
+        (doctor) => doctor.userId && doctor.userId.isDocumentVerified,
+      );
     }
 
     // Process recommended doctors to add signed URLs
     const processedDoctors = await Promise.all(
-      recommendedDoctors.map((doctor) => generateSignedUrlsForDoctor(doctor))
+      recommendedDoctors.map((doctor) => generateSignedUrlsForDoctor(doctor)),
     );
 
     res.status(200).json({
@@ -630,7 +866,7 @@ export const getPatientDashboard = async (
 
 export const getAppointmentsDoctorForPatient = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const userId = req.user.id;
@@ -664,7 +900,7 @@ export const getAppointmentsDoctorForPatient = async (
       (appointment) => ({
         ...appointment.toObject(),
         appointmentType: "online",
-      })
+      }),
     );
 
     // Add clinic details and appointment type to clinic appointments
@@ -673,7 +909,7 @@ export const getAppointmentsDoctorForPatient = async (
       const doctor = appointmentObj.doctorId as any;
       const clinicVisit = doctor?.clinicVisit as any;
       const clinic = (clinicVisit?.clinics || []).find(
-        (c: any) => c._id.toString() === appointment.clinicId
+        (c: any) => c._id.toString() === appointment.clinicId,
       );
 
       return {
@@ -681,14 +917,14 @@ export const getAppointmentsDoctorForPatient = async (
         appointmentType: "clinic",
         clinicDetails: clinic
           ? {
-            clinicName: clinic.clinicName,
-            address: clinic.address,
-            consultationFee: clinic.consultationFee,
-            frontDeskNumber: clinic.frontDeskNumber,
-            operationalDays: clinic.operationalDays,
-            timeSlots: clinic.timeSlots,
-            isActive: clinic.isActive,
-          }
+              clinicName: clinic.clinicName,
+              address: clinic.address,
+              consultationFee: clinic.consultationFee,
+              frontDeskNumber: clinic.frontDeskNumber,
+              operationalDays: clinic.operationalDays,
+              timeSlots: clinic.timeSlots,
+              isActive: clinic.isActive,
+            }
           : null,
       };
     });
@@ -704,18 +940,18 @@ export const getAppointmentsDoctorForPatient = async (
       allAppointments.map(async (appointment) => {
         if (appointment.doctorId) {
           appointment.doctorId = await generateSignedUrlsForDoctor(
-            appointment.doctorId
+            appointment.doctorId,
           );
         }
         return appointment;
-      })
+      }),
     );
 
     // Sort by creation date (most recent first)
     appointmentsWithSignedUrls.sort(
       (a: any, b: any) =>
         new Date(b.createdAt || 0).getTime() -
-        new Date(a.createdAt || 0).getTime()
+        new Date(a.createdAt || 0).getTime(),
     );
 
     res.status(200).json({

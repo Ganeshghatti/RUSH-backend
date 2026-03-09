@@ -5,13 +5,13 @@ import {
   getActiveSubscriptions,
 } from "../../controller/subscription/patient-subscription";
 import { verifyToken, checkRole } from "../../middleware/auth-middleware";
-// import {
-//   subscribePatient,
-//   verifyPaymentSubscription,
-// } from "../../controller/patient/patient";
 import { Router } from "express";
 import { upload } from "../media/media-routes";
-import { subscribePatient, verifyPaymentSubscription } from "../../controller/patient/patient";
+import {
+  subscribePatient,
+  verifyPaymentSubscription,
+  validateCoupon,
+} from "../../controller/patient/patient";
 
 const router = Router();
 
@@ -26,6 +26,8 @@ router
 router
   .route("/subscription")
   .get(verifyToken, checkRole("admin"), getSubscriptions);
+
+router.route("/subscription/validate-coupon").post(verifyToken, validateCoupon);
 
 router
   .route("/subscription/purchase/:patientId")

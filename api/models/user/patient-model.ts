@@ -10,7 +10,7 @@ const patientSchema = new Schema({
     provider: { type: String },
     image: { type: String },
   },
-    subscriptions: [
+  subscriptions: [
     {
       startDate: { type: Date, required: true, default: Date.now },
       endDate: { type: Date },
@@ -25,6 +25,10 @@ const patientSchema = new Schema({
       },
       razorpay_order_id: { type: String },
       razorpay_payment_id: { type: String },
+      amount_paid: { type: Number },
+      couponCode: { type: String },
+      discountPercent: { type: Number },
+      amountBeforeDiscount: { type: Number },
     },
   ],
   healthMetricsId: { type: Schema.Types.ObjectId, ref: "HealthMetrics" },

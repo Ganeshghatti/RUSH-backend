@@ -21,7 +21,7 @@ const doctorTimeouts = new Map<string, NodeJS.Timeout>();
 
 export const doctorOnboardV2 = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { userId } = req.params;
@@ -60,25 +60,27 @@ export const doctorOnboardV2 = async (
     const parsedQualifications =
       typeof qualifications === "string"
         ? JSON.parse(qualifications)
-        : qualifications ?? [];
+        : (qualifications ?? []);
     const parsedRegistration =
       typeof registration === "string"
         ? JSON.parse(registration)
-        : registration ?? [];
+        : (registration ?? []);
     const parsedExperience =
-      typeof experience === "string" ? JSON.parse(experience) : experience ?? [];
+      typeof experience === "string"
+        ? JSON.parse(experience)
+        : (experience ?? []);
     const parsedPersonalIdProof =
       typeof personalIdProof === "string"
         ? JSON.parse(personalIdProof)
-        : personalIdProof ?? {};
+        : (personalIdProof ?? {});
     const parsedAddressProof =
       typeof addressProof === "string"
         ? JSON.parse(addressProof)
-        : addressProof ?? {};
+        : (addressProof ?? {});
     const parsedBankDetails =
       typeof bankDetails === "string"
         ? JSON.parse(bankDetails)
-        : bankDetails ?? {};
+        : (bankDetails ?? {});
     const parsedTaxProof =
       typeof taxProof === "string" ? JSON.parse(taxProof) : taxProof;
 
@@ -212,12 +214,12 @@ export const doctorOnboardV2 = async (
       User.findByIdAndUpdate(
         userId,
         { $set: userUpdateData },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       ),
       Doctor.findOneAndUpdate(
         { userId },
         { $set: doctorUpdateData },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       ),
     ]);
     if (!updatedDoctor || !updatedUser) {
@@ -252,8 +254,17 @@ interface MulterRequest extends Request {
 /** Validates coupon for a subscription; returns discount info or error message. */
 async function validateCouponForSubscription(
   code: string,
-  subscriptionId: string
-): Promise<{ valid: true; discountPercent: number } | { valid: false; message: string }> {
+  subscriptionId: string,
+): Promise<
+  | {
+      valid: true;
+      discountPercent: number;
+      maxUses: number | null;
+      usedCount: number;
+      validUntil: Date | null;
+    }
+  | { valid: false; message: string }
+> {
   const normalizedCode = String(code).trim().toUpperCase();
   if (!normalizedCode) {
     return { valid: false, message: "Coupon code is required." };
@@ -264,7 +275,9 @@ async function validateCouponForSubscription(
     return { valid: false, message: "Subscription plan not found." };
   }
 
-  const coupon = await DoctorSubscriptionCoupon.findOne({ code: normalizedCode });
+  const coupon = await DoctorSubscriptionCoupon.findOne({
+    code: normalizedCode,
+  });
   if (!coupon) {
     return { valid: false, message: "Invalid coupon code." };
   }
@@ -280,22 +293,37 @@ async function validateCouponForSubscription(
     return { valid: false, message: "This coupon has expired." };
   }
   if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
-    return { valid: false, message: "This coupon has reached its usage limit." };
+    return {
+      valid: false,
+      message: "This coupon has reached its usage limit.",
+    };
   }
 
   const applicableIds = coupon.applicableSubscriptionIds || [];
   const appliesToAll = applicableIds.length === 0;
   const appliesToThis = applicableIds.some(
-    (id: any) => id && id.toString() === subscriptionId
+    (id: any) => id && id.toString() === subscriptionId,
   );
   if (!appliesToAll && !appliesToThis) {
-    return { valid: false, message: "This coupon does not apply to the selected plan." };
+    return {
+      valid: false,
+      message: "This coupon does not apply to the selected plan.",
+    };
   }
 
-  return { valid: true, discountPercent: coupon.discountPercent };
+  return {
+    valid: true,
+    discountPercent: coupon.discountPercent,
+    maxUses: coupon.maxUses ?? null,
+    usedCount: coupon.usedCount,
+    validUntil: (coupon as any).validUntil ?? null,
+  };
 }
 
-export const validateCoupon = async (req: Request, res: Response): Promise<void> => {
+export const validateCoupon = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const { code, subscriptionId } = req.body;
     if (!code || !subscriptionId) {
@@ -320,7 +348,13 @@ export const validateCoupon = async (req: Request, res: Response): Promise<void>
       success: true,
       valid: true,
       message: "Coupon applied.",
-      data: { valid: true, discountPercent: result.discountPercent },
+      data: {
+        valid: true,
+        discountPercent: result.discountPercent,
+        maxUses: result.maxUses,
+        usedCount: result.usedCount,
+        validUntil: result.validUntil,
+      },
     });
   } catch (error) {
     console.error("Error validating coupon:", error);
@@ -334,7 +368,7 @@ export const validateCoupon = async (req: Request, res: Response): Promise<void>
 
 export const subscribeDoctor = async (
   req: MulterRequest,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     if (!req.body.data) {
@@ -409,13 +443,13 @@ export const subscribeDoctor = async (
     if (couponCode && String(couponCode).trim()) {
       const couponResult = await validateCouponForSubscription(
         String(couponCode).trim(),
-        subscriptionId
+        subscriptionId,
       );
       if (couponResult.valid) {
         discountPercent = couponResult.discountPercent;
         finalAmount = Math.max(
           0,
-          subscription.price * (1 - discountPercent / 100)
+          subscription.price * (1 - discountPercent / 100),
         );
       }
     }
@@ -444,7 +478,10 @@ export const subscribeDoctor = async (
         originalAmount: subscription.price,
         discountPercent,
         finalAmount,
-        couponCode: discountPercent > 0 ? String(couponCode).trim().toUpperCase() : undefined,
+        couponCode:
+          discountPercent > 0
+            ? String(couponCode).trim().toUpperCase()
+            : undefined,
       },
     });
   } catch (error) {
@@ -459,7 +496,7 @@ export const subscribeDoctor = async (
 
 export const verifyPaymentSubscription = async (
   req: Request,
-  res: Response
+  res: Response,
 ) => {
   try {
     const {
@@ -581,7 +618,10 @@ export const verifyPaymentSubscription = async (
           return;
       }
 
-      const amountBefore = amountBeforeDiscount != null ? Number(amountBeforeDiscount) : subscription.price;
+      const amountBefore =
+        amountBeforeDiscount != null
+          ? Number(amountBeforeDiscount)
+          : subscription.price;
       const newSubscription: any = {
         startDate: new Date(),
         endDate,
@@ -594,7 +634,10 @@ export const verifyPaymentSubscription = async (
         newSubscription.couponCode = String(couponCode).trim().toUpperCase();
         newSubscription.discountPercent = Number(discountPercent);
         newSubscription.amountBeforeDiscount = amountBefore;
-        newSubscription.amount_paid = Math.max(0, amountBefore * (1 - Number(discountPercent) / 100));
+        newSubscription.amount_paid = Math.max(
+          0,
+          amountBefore * (1 - Number(discountPercent) / 100),
+        );
       }
 
       doctor.subscriptions.push(newSubscription);
@@ -603,7 +646,7 @@ export const verifyPaymentSubscription = async (
       if (newSubscription.couponCode) {
         await DoctorSubscriptionCoupon.findOneAndUpdate(
           { code: newSubscription.couponCode },
-          { $inc: { usedCount: 1 } }
+          { $inc: { usedCount: 1 } },
         );
       }
 
@@ -631,7 +674,7 @@ export const verifyPaymentSubscription = async (
 
 export const getDoctorById = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { userId } = req.params;
@@ -721,7 +764,7 @@ export const getDoctorById = async (
 
 export const getAllPatientsForDoctor = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const doctorUserId = req.user.id;
@@ -781,7 +824,7 @@ export const getAllPatientsForDoctor = async (
       ) {
         // Update appointment count for existing patient
         const existingPatient = uniquePatients.get(
-          appointment.patientId._id.toString()
+          appointment.patientId._id.toString(),
         );
         existingPatient.totalAppointments += 1;
 
@@ -810,13 +853,13 @@ export const getAllPatientsForDoctor = async (
           } catch (error) {
             console.warn(
               "Failed to generate signed URL for patient profile pic:",
-              error
+              error,
             );
             return patient;
           }
         }
         return patient;
-      })
+      }),
     );
 
     res.status(200).json({
@@ -840,7 +883,7 @@ export const getAllPatientsForDoctor = async (
 
 export const getDoctorAppointmentStats = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const doctorId = req.user.id; // Get doctor's user ID from auth middleware
@@ -884,7 +927,7 @@ export const getDoctorAppointmentStats = async (
       (appointment) => ({
         ...appointment.toObject(),
         appointmentType: "online",
-      })
+      }),
     );
 
     // Add clinic details and appointment type to clinic appointments
@@ -892,7 +935,7 @@ export const getDoctorAppointmentStats = async (
       const appointmentObj = appointment.toObject();
       const clinicVisit = doctor.clinicVisit as any;
       const clinic = (clinicVisit?.clinics || []).find(
-        (c: any) => c._id.toString() === appointment.clinicId
+        (c: any) => c._id.toString() === appointment.clinicId,
       );
 
       return {
@@ -920,16 +963,16 @@ export const getDoctorAppointmentStats = async (
 
     // Calculate counts by status for all appointments
     const pendingCount = allAppointments.filter(
-      (app) => app.status === "pending"
+      (app) => app.status === "pending",
     ).length;
     const acceptedConfirmedCount = allAppointments.filter(
-      (app) => app.status === "accepted"
+      (app) => app.status === "accepted",
     ).length;
     const rejectedCancelledCount = allAppointments.filter(
-      (app) => app.status === "rejected"
+      (app) => app.status === "rejected",
     ).length;
     const completedCount = allAppointments.filter(
-      (app) => app.status === "completed"
+      (app) => app.status === "completed",
     ).length;
     const totalCount = allAppointments.length;
 
@@ -941,12 +984,12 @@ export const getDoctorAppointmentStats = async (
         if (appointment.patientId && appointment.patientId.profilePic) {
           try {
             patientWithUrls = await generateSignedUrlsForUser(
-              appointment.patientId
+              appointment.patientId,
             );
           } catch (error) {
             console.warn(
               "Failed to generate signed URL for patient profile pic:",
-              error
+              error,
             );
           }
         }
@@ -963,13 +1006,13 @@ export const getDoctorAppointmentStats = async (
           createdAt: appointment.createdAt,
           updatedAt: appointment.updatedAt,
         };
-      })
+      }),
     );
 
     // Sort by creation date (most recent first)
     appointmentsWithSignedUrls.sort(
       (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
     // Prepare the response data
@@ -1002,13 +1045,13 @@ export const getDoctorAppointmentStats = async (
 
 export const getDoctorDashboard = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const doctorId = req.user.id;
 
     // Find the doctor document using userId
-    const doctor = await Doctor.findOne({ userId: doctorId }).select('_id');
+    const doctor = await Doctor.findOne({ userId: doctorId }).select("_id");
 
     if (!doctor) {
       res.status(404).json({
@@ -1099,12 +1142,18 @@ export const getDoctorDashboard = async (
 
     // Helper function to process aggregation results
     const processStats = (stats: any[]) => {
-      const result = { pending: 0, accepted: 0, completed: 0, inProgress: 0, total: 0 };
+      const result = {
+        pending: 0,
+        accepted: 0,
+        completed: 0,
+        inProgress: 0,
+        total: 0,
+      };
       stats.forEach((stat) => {
         const status = stat._id;
         const count = stat.count;
         result.total += count;
-        
+
         if (status === "pending") result.pending = count;
         else if (status === "accepted") result.accepted = count;
         else if (status === "completed") result.completed = count;
@@ -1124,9 +1173,18 @@ export const getDoctorDashboard = async (
     // Calculate total appointments across all types
     const totalStats = {
       total: online.total + emergency.total + clinic.total + homeVisit.total,
-      pending: online.pending + emergency.pending + clinic.pending + homeVisit.pending,
-      active: online.accepted + emergency.inProgress + clinic.accepted + homeVisit.accepted,
-      completed: online.completed + emergency.completed + clinic.completed + homeVisit.completed,
+      pending:
+        online.pending + emergency.pending + clinic.pending + homeVisit.pending,
+      active:
+        online.accepted +
+        emergency.inProgress +
+        clinic.accepted +
+        homeVisit.accepted,
+      completed:
+        online.completed +
+        emergency.completed +
+        clinic.completed +
+        homeVisit.completed,
     };
 
     // Process emergency appointments to add presigned URLs
@@ -1136,25 +1194,40 @@ export const getDoctorDashboard = async (
 
         try {
           // Generate presigned URLs for media array if it exists
-          if (Array.isArray(appointmentObj.media) && appointmentObj.media.length > 0) {
+          if (
+            Array.isArray(appointmentObj.media) &&
+            appointmentObj.media.length > 0
+          ) {
             const mediaPromises = appointmentObj.media
-              .filter((key: any) => key && typeof key === "string" && key.trim() !== "")
-              .map((mediaKey: string) => 
+              .filter(
+                (key: any) =>
+                  key && typeof key === "string" && key.trim() !== "",
+              )
+              .map((mediaKey: string) =>
                 GetSignedUrl(mediaKey).catch((err) => {
-                  console.warn("Failed to generate signed URL for media:", mediaKey, err);
+                  console.warn(
+                    "Failed to generate signed URL for media:",
+                    mediaKey,
+                    err,
+                  );
                   return mediaKey; // Return original key on failure
-                })
+                }),
               );
             appointmentObj.media = await Promise.all(mediaPromises);
           }
 
           // Generate presigned URL for patient's profile picture if it exists
-          if (appointmentObj.patientId?.userId?.profilePic && 
-              typeof appointmentObj.patientId.userId.profilePic === "string") {
+          if (
+            appointmentObj.patientId?.userId?.profilePic &&
+            typeof appointmentObj.patientId.userId.profilePic === "string"
+          ) {
             appointmentObj.patientId.userId.profilePic = await GetSignedUrl(
-              appointmentObj.patientId.userId.profilePic
+              appointmentObj.patientId.userId.profilePic,
             ).catch((err) => {
-              console.warn("Failed to generate signed URL for profile pic:", err);
+              console.warn(
+                "Failed to generate signed URL for profile pic:",
+                err,
+              );
               return appointmentObj.patientId.userId.profilePic; // Return original on failure
             });
           }
@@ -1163,7 +1236,7 @@ export const getDoctorDashboard = async (
         }
 
         return appointmentObj;
-      })
+      }),
     );
 
     // Prepare dashboard data
@@ -1171,7 +1244,9 @@ export const getDoctorDashboard = async (
       appointmentStats: totalStats,
       reviews: {
         total: ratingsData[0]?.total || 0,
-        average: ratingsData[0]?.average ? Number(ratingsData[0].average.toFixed(1)) : 0,
+        average: ratingsData[0]?.average
+          ? Number(ratingsData[0].average.toFixed(1))
+          : 0,
       },
       recentEmergencyAppointments: processedEmergencyAppointments,
     };
@@ -1194,7 +1269,7 @@ export const getDoctorDashboard = async (
 
 export const updateDoctorActiveStatus = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const doctorId = req.user.id; // Get doctor's user ID from auth middleware
@@ -1239,7 +1314,7 @@ export const updateDoctorActiveStatus = async (
       {
         new: true,
         runValidators: true,
-      }
+      },
     );
 
     if (!updatedDoctor) {
@@ -1253,21 +1328,24 @@ export const updateDoctorActiveStatus = async (
 
     // If setting to active, schedule auto-disable after 1 hour
     if (isActive === true) {
-      const timeoutId = setTimeout(async () => {
-        try {
-          await Doctor.findOneAndUpdate(
-            { userId: doctorId },
-            { $set: { isActive: false } },
-            { new: true }
-          );
-          console.log(
-            `Doctor ${doctorId} automatically set to inactive after 1 hour`
-          );
-          doctorTimeouts.delete(doctorId);
-        } catch (error) {
-          console.error(`Failed to auto-disable doctor ${doctorId}:`, error);
-        }
-      }, 2 * 60 * 1000); // 2 minutes in milliseconds
+      const timeoutId = setTimeout(
+        async () => {
+          try {
+            await Doctor.findOneAndUpdate(
+              { userId: doctorId },
+              { $set: { isActive: false } },
+              { new: true },
+            );
+            console.log(
+              `Doctor ${doctorId} automatically set to inactive after 1 hour`,
+            );
+            doctorTimeouts.delete(doctorId);
+          } catch (error) {
+            console.error(`Failed to auto-disable doctor ${doctorId}:`, error);
+          }
+        },
+        2 * 60 * 1000,
+      ); // 2 minutes in milliseconds
 
       // Store the timeout reference
       doctorTimeouts.set(doctorId, timeoutId);
