@@ -2,10 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const patient_subscription_1 = require("../../controller/subscription/patient-subscription");
 const auth_middleware_1 = require("../../middleware/auth-middleware");
-// import {
-//   subscribePatient,
-//   verifyPaymentSubscription,
-// } from "../../controller/patient/patient";
 const express_1 = require("express");
 const media_routes_1 = require("../media/media-routes");
 const patient_1 = require("../../controller/patient/patient");
@@ -19,6 +15,7 @@ router
 router
     .route("/subscription")
     .get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), patient_subscription_1.getSubscriptions);
+router.route("/subscription/validate-coupon").post(auth_middleware_1.verifyToken, patient_1.validateCoupon);
 router
     .route("/subscription/purchase/:patientId")
     .post(auth_middleware_1.verifyToken, media_routes_1.upload.single("paymentImage"), patient_1.subscribePatient);

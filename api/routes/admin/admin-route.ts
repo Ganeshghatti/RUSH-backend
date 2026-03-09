@@ -1,11 +1,11 @@
+import { Router } from "express";
+import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import {
   getAllDoctors,
+  getAllPatients,
   updateDoctorStatus,
   updateDocumentVerificationStatus,
-  getAllPatients,
-} from "./../../controller/admin/admin";
-import { verifyToken, checkRole } from "../../middleware/auth-middleware";
-import { Router } from "express";
+} from "../../controller/admin/admin";
 import {
   addUnregisteredPatient,
   getUnregisteredPatient,
@@ -29,67 +29,45 @@ import {
 } from "../../controller/admin/coupon-patient";
 
 const router = Router();
+const guard = [verifyToken, checkRole("admin")];
 
+// Doctors & patients
+router.route("/doctors").get(...guard, getAllDoctors);
+router.route("/patients").get(...guard, getAllPatients);
 router
-  .route("/admin/doctors")
-  .get(verifyToken, checkRole("admin"), getAllDoctors);
+  .route("/doctor/verification/:doctorId")
+  .put(...guard, updateDoctorStatus);
 router
-  .route("/admin/patients")
-  .get(verifyToken, checkRole("admin"), getAllPatients);
-router
-  .route("/admin/doctor/verification/:doctorId")
-  .put(verifyToken, checkRole("admin"), updateDoctorStatus);
-router
-  .route("/admin/user/verification/:userId")
-  .put(verifyToken, checkRole("admin"), updateDocumentVerificationStatus);
-router
-  .route("/admin/addpatient")
-  .post(verifyToken, checkRole("admin"), addUnregisteredPatient);
-/***router.post("/admin/addpatient", verifyToken, checkRole("admin"), addUnregisteredPatient)***/
-router
-  .route("/admin/getpatient")
-  .get(verifyToken, checkRole("admin"), getUnregisteredPatient);
+  .route("/user/verification/:userId")
+  .put(...guard, updateDocumentVerificationStatus);
 
-router
-  .route("/admin/debit/requests")
-  .get(verifyToken, checkRole("admin"), getPendingDebitRequests);
-router
-  .route("/admin/debit/process")
-  .put(verifyToken, checkRole("admin"), processDebitRequest);
-router
-  .route("/admin/transactions")
-  .get(verifyToken, checkRole("admin"), getTransactionsByDate);
+// Unregistered patients
+router.route("/addpatient").post(...guard, addUnregisteredPatient);
+router.route("/getpatient").get(...guard, getUnregisteredPatient);
 
-router
-  .route("/admin/coupons")
-  .get(verifyToken, checkRole("admin"), getCoupons)
-  .post(verifyToken, checkRole("admin"), createCoupon);
-router
-  .route("/admin/coupons/:id")
-  .put(verifyToken, checkRole("admin"), updateCoupon)
-  .delete(verifyToken, checkRole("admin"), deleteCoupon);
+// Debit & transactions
+router.route("/debit/requests").get(...guard, getPendingDebitRequests);
+router.route("/debit/process").put(...guard, processDebitRequest);
+router.route("/transactions").get(...guard, getTransactionsByDate);
 
-router.route("/doctors").get(verifyToken, checkRole("admin"), getAllDoctors);
-router.route("/patients").get(verifyToken, checkRole("admin"), getAllPatients);
-router.route("/doctor/verification/:doctorId").put(verifyToken, checkRole("admin"), updateDoctorStatus);
-router.route("/user/verification/:userId").put(verifyToken, checkRole("admin"), updateDocumentVerificationStatus);
-router.route("/addpatient").post(verifyToken, checkRole("admin"), addUnregisteredPatient);
-router.route("/getpatient").get(verifyToken, checkRole("admin"), getUnregisteredPatient);
-
-router.route("/debit/requests").get(verifyToken, checkRole("admin"), getPendingDebitRequests);
-router.route("/debit/process").put(verifyToken, checkRole("admin"), processDebitRequest);
-router.route("/transactions").get(verifyToken, checkRole("admin"), getTransactionsByDate);
-
-router.route("/coupons").get(verifyToken, checkRole("admin"), getCoupons).post(verifyToken, checkRole("admin"), createCoupon);
-router.route("/coupons/:id").put(verifyToken, checkRole("admin"), updateCoupon).delete(verifyToken, checkRole("admin"), deleteCoupon);
-
+// Doctor coupons
 router
-  .route("/admin/patient-coupons")
-  .get(verifyToken, checkRole("admin"), getPatientCoupons)
-  .post(verifyToken, checkRole("admin"), createPatientCoupon);
+  .route("/doctor-coupons")
+  .get(...guard, getCoupons)
+  .post(...guard, createCoupon);
 router
-  .route("/admin/patient-coupons/:id")
-  .put(verifyToken, checkRole("admin"), updatePatientCoupon)
-  .delete(verifyToken, checkRole("admin"), deletePatientCoupon);
+  .route("/doctor-coupons/:id")
+  .put(...guard, updateCoupon)
+  .delete(...guard, deleteCoupon);
+
+// Patient coupons
+router
+  .route("/patient-coupons")
+  .get(...guard, getPatientCoupons)
+  .post(...guard, createPatientCoupon);
+router
+  .route("/patient-coupons/:id")
+  .put(...guard, updatePatientCoupon)
+  .delete(...guard, deletePatientCoupon);
 
 export default router;

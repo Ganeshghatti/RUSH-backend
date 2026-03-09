@@ -49,20 +49,22 @@ const doctorOnboardV2 = (req, res) => __awaiter(void 0, void 0, void 0, function
         // Parse JSON strings if sent as strings (for nested objects)
         const parsedQualifications = typeof qualifications === "string"
             ? JSON.parse(qualifications)
-            : qualifications !== null && qualifications !== void 0 ? qualifications : [];
+            : (qualifications !== null && qualifications !== void 0 ? qualifications : []);
         const parsedRegistration = typeof registration === "string"
             ? JSON.parse(registration)
-            : registration !== null && registration !== void 0 ? registration : [];
-        const parsedExperience = typeof experience === "string" ? JSON.parse(experience) : experience !== null && experience !== void 0 ? experience : [];
+            : (registration !== null && registration !== void 0 ? registration : []);
+        const parsedExperience = typeof experience === "string"
+            ? JSON.parse(experience)
+            : (experience !== null && experience !== void 0 ? experience : []);
         const parsedPersonalIdProof = typeof personalIdProof === "string"
             ? JSON.parse(personalIdProof)
-            : personalIdProof !== null && personalIdProof !== void 0 ? personalIdProof : {};
+            : (personalIdProof !== null && personalIdProof !== void 0 ? personalIdProof : {});
         const parsedAddressProof = typeof addressProof === "string"
             ? JSON.parse(addressProof)
-            : addressProof !== null && addressProof !== void 0 ? addressProof : {};
+            : (addressProof !== null && addressProof !== void 0 ? addressProof : {});
         const parsedBankDetails = typeof bankDetails === "string"
             ? JSON.parse(bankDetails)
-            : bankDetails !== null && bankDetails !== void 0 ? bankDetails : {};
+            : (bankDetails !== null && bankDetails !== void 0 ? bankDetails : {});
         const parsedTaxProof = typeof taxProof === "string" ? JSON.parse(taxProof) : taxProof;
         // Validate userId
         if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
@@ -185,6 +187,7 @@ exports.doctorOnboardV2 = doctorOnboardV2;
 /** Validates coupon for a subscription; returns discount info or error message. */
 function validateCouponForSubscription(code, subscriptionId) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         const normalizedCode = String(code).trim().toUpperCase();
         if (!normalizedCode) {
             return { valid: false, message: "Coupon code is required." };
@@ -193,7 +196,9 @@ function validateCouponForSubscription(code, subscriptionId) {
         if (!subscription) {
             return { valid: false, message: "Subscription plan not found." };
         }
-        const coupon = yield doctor_subscription_coupon_1.default.findOne({ code: normalizedCode });
+        const coupon = yield doctor_subscription_coupon_1.default.findOne({
+            code: normalizedCode,
+        });
         if (!coupon) {
             return { valid: false, message: "Invalid coupon code." };
         }
@@ -208,15 +213,27 @@ function validateCouponForSubscription(code, subscriptionId) {
             return { valid: false, message: "This coupon has expired." };
         }
         if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
-            return { valid: false, message: "This coupon has reached its usage limit." };
+            return {
+                valid: false,
+                message: "This coupon has reached its usage limit.",
+            };
         }
         const applicableIds = coupon.applicableSubscriptionIds || [];
         const appliesToAll = applicableIds.length === 0;
         const appliesToThis = applicableIds.some((id) => id && id.toString() === subscriptionId);
         if (!appliesToAll && !appliesToThis) {
-            return { valid: false, message: "This coupon does not apply to the selected plan." };
+            return {
+                valid: false,
+                message: "This coupon does not apply to the selected plan.",
+            };
         }
-        return { valid: true, discountPercent: coupon.discountPercent };
+        return {
+            valid: true,
+            discountPercent: coupon.discountPercent,
+            maxUses: (_a = coupon.maxUses) !== null && _a !== void 0 ? _a : null,
+            usedCount: coupon.usedCount,
+            validUntil: (_b = coupon.validUntil) !== null && _b !== void 0 ? _b : null,
+        };
     });
 }
 const validateCoupon = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -244,7 +261,13 @@ const validateCoupon = (req, res) => __awaiter(void 0, void 0, void 0, function*
             success: true,
             valid: true,
             message: "Coupon applied.",
-            data: { valid: true, discountPercent: result.discountPercent },
+            data: {
+                valid: true,
+                discountPercent: result.discountPercent,
+                maxUses: result.maxUses,
+                usedCount: result.usedCount,
+                validUntil: result.validUntil,
+            },
         });
     }
     catch (error) {
@@ -349,7 +372,9 @@ const subscribeDoctor = (req, res) => __awaiter(void 0, void 0, void 0, function
                 originalAmount: subscription.price,
                 discountPercent,
                 finalAmount,
-                couponCode: discountPercent > 0 ? String(couponCode).trim().toUpperCase() : undefined,
+                couponCode: discountPercent > 0
+                    ? String(couponCode).trim().toUpperCase()
+                    : undefined,
             },
         });
     }
@@ -466,7 +491,9 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
                     });
                     return;
             }
-            const amountBefore = amountBeforeDiscount != null ? Number(amountBeforeDiscount) : subscription.price;
+            const amountBefore = amountBeforeDiscount != null
+                ? Number(amountBeforeDiscount)
+                : subscription.price;
             const newSubscription = {
                 startDate: new Date(),
                 endDate,
@@ -797,7 +824,7 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
     try {
         const doctorId = req.user.id;
         // Find the doctor document using userId
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId }).select('_id');
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId }).select("_id");
         if (!doctor) {
             res.status(404).json({
                 success: false,
@@ -878,7 +905,13 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
         ]);
         // Helper function to process aggregation results
         const processStats = (stats) => {
-            const result = { pending: 0, accepted: 0, completed: 0, inProgress: 0, total: 0 };
+            const result = {
+                pending: 0,
+                accepted: 0,
+                completed: 0,
+                inProgress: 0,
+                total: 0,
+            };
             stats.forEach((stat) => {
                 const status = stat._id;
                 const count = stat.count;
@@ -907,8 +940,14 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
         const totalStats = {
             total: online.total + emergency.total + clinic.total + homeVisit.total,
             pending: online.pending + emergency.pending + clinic.pending + homeVisit.pending,
-            active: online.accepted + emergency.inProgress + clinic.accepted + homeVisit.accepted,
-            completed: online.completed + emergency.completed + clinic.completed + homeVisit.completed,
+            active: online.accepted +
+                emergency.inProgress +
+                clinic.accepted +
+                homeVisit.accepted,
+            completed: online.completed +
+                emergency.completed +
+                clinic.completed +
+                homeVisit.completed,
         };
         // Process emergency appointments to add presigned URLs
         const processedEmergencyAppointments = yield Promise.all(recentEmergencies.map((appointment) => __awaiter(void 0, void 0, void 0, function* () {
@@ -916,7 +955,8 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
             const appointmentObj = Object.assign({}, appointment);
             try {
                 // Generate presigned URLs for media array if it exists
-                if (Array.isArray(appointmentObj.media) && appointmentObj.media.length > 0) {
+                if (Array.isArray(appointmentObj.media) &&
+                    appointmentObj.media.length > 0) {
                     const mediaPromises = appointmentObj.media
                         .filter((key) => key && typeof key === "string" && key.trim() !== "")
                         .map((mediaKey) => (0, upload_media_1.GetSignedUrl)(mediaKey).catch((err) => {
@@ -944,7 +984,9 @@ const getDoctorDashboard = (req, res) => __awaiter(void 0, void 0, void 0, funct
             appointmentStats: totalStats,
             reviews: {
                 total: ((_a = ratingsData[0]) === null || _a === void 0 ? void 0 : _a.total) || 0,
-                average: ((_b = ratingsData[0]) === null || _b === void 0 ? void 0 : _b.average) ? Number(ratingsData[0].average.toFixed(1)) : 0,
+                average: ((_b = ratingsData[0]) === null || _b === void 0 ? void 0 : _b.average)
+                    ? Number(ratingsData[0].average.toFixed(1))
+                    : 0,
             },
             recentEmergencyAppointments: processedEmergencyAppointments,
         };
