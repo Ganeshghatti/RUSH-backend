@@ -12,7 +12,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateHomeStatusCron = exports.getDoctorHomeVisitAppointmentByDate = exports.completeHomeVisitAppointment = exports.confirmHomeVisitAppointment = exports.acceptHomeVisitRequest = exports.bookHomeVisitAppointment = void 0;
+exports.updateHomeStatusCron = exports.completeHomeVisitAppointment = exports.confirmHomeVisitAppointment = exports.confirmHomeVisitRequest = exports.bookHomeVisitAppointment = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const homevisit_appointment_model_1 = __importDefault(require("../../models/appointment/homevisit-appointment-model"));
 const doctor_model_1 = __importDefault(require("../../models/user/doctor-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -165,6 +166,7 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
                     totalWallet: patientUserDetail.wallet,
                 },
             });
+            return;
         }
         yield patientUserDetail.save();
         // Create new appointment with only fixed cost
@@ -234,23 +236,85 @@ const bookHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0,
         console.error("Error booking home visit appointment:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't create the home visit request.",
-            action: error.message,
+            message: "We couldn't create the home visit request. Please try again.",
+            action: "bookHomeVisitAppointment:error",
         });
     }
 });
 exports.bookHomeVisitAppointment = bookHomeVisitAppointment;
 /* Step 2: Doctor accepts request and adds travel cost */
-const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+/** Doctor confirms (accept + travel cost) or cancels (reject) home visit request. Body: { travelCost } to accept, or { status: "doctor_rejected" } to cancel. */
+const confirmHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d, _e;
     try {
         const { appointmentId } = req.params;
+        const bodyStatus = (_a = req.body) === null || _a === void 0 ? void 0 : _a.status;
+        const doctorUserId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.id;
+        if (!doctorUserId) {
+            res.status(401).json({
+                success: false,
+                message: "You must be signed in to confirm requests.",
+                action: "confirmHomeVisitRequest:not-authenticated",
+            });
+            return;
+        }
+        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId }).populate("userId");
+        if (!doctor) {
+            res.status(404).json({
+                success: false,
+                message: "We couldn't find your doctor profile.",
+                action: "confirmHomeVisitRequest:doctor-not-found",
+            });
+            return;
+        }
+        const doctorId = doctor._id;
+        // Doctor reject (cancel): same route, body { status: "doctor_rejected" }
+        if (bodyStatus === "doctor_rejected") {
+            const appointment = yield homevisit_appointment_model_1.default.findOne({
+                _id: appointmentId,
+                doctorId,
+                status: "pending",
+            });
+            if (!appointment) {
+                res.status(404).json({
+                    success: false,
+                    message: "We couldn't find a pending appointment to reject.",
+                    action: "confirmHomeVisitRequest:appointment-not-found",
+                });
+                return;
+            }
+            const patient = yield patient_model_1.default.findById(appointment.patientId).select("userId").lean();
+            const patientUserId = (_c = patient === null || patient === void 0 ? void 0 : patient.userId) === null || _c === void 0 ? void 0 : _c.toString();
+            appointment.status = "doctor_rejected";
+            appointment.cancelledBy = new mongoose_1.default.Types.ObjectId(doctorUserId);
+            appointment.cancelledByRole = "doctor";
+            const frozen = (_e = (_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.patientWalletFrozen) !== null && _e !== void 0 ? _e : 0;
+            if (frozen > 0 && patientUserId) {
+                const patientUser = yield user_model_1.default.findById(patientUserId);
+                if (patientUser) {
+                    patientUser.unfreezeAmount(frozen);
+                    yield patientUser.save();
+                }
+                if (appointment.paymentDetails) {
+                    appointment.paymentDetails.patientWalletFrozen = 0;
+                }
+            }
+            yield appointment.save();
+            res.status(200).json({
+                success: true,
+                message: "Home visit request rejected.",
+                action: "confirmHomeVisitRequest:rejected",
+                data: yield populateAppointment(appointmentId),
+            });
+            return;
+        }
+        // Accept: require travelCost
         const parsed = validation_1.homeVisitAppointmentAcceptSchema.safeParse(req.body);
         if (!parsed.success) {
             res.status(400).json({
                 success: false,
                 message: "Please review the request details and try again.",
-                action: "acceptHomeVisitRequest:validation-error",
+                action: "confirmHomeVisitRequest:validation-error",
                 data: {
                     errors: parsed.error.errors,
                 },
@@ -258,26 +322,6 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             return;
         }
         const { travelCost } = parsed.data;
-        const doctorUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        if (!doctorUserId) {
-            res.status(401).json({
-                success: false,
-                message: "You must be signed in to accept requests.",
-                action: "acceptHomeVisitRequest:not-authenticated",
-            });
-            return;
-        }
-        // (travelCost validated by schema)
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorUserId }).populate("userId");
-        if (!doctor) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find your doctor profile.",
-                action: "acceptHomeVisitRequest:doctor-not-found",
-            });
-            return;
-        }
-        const doctorId = doctor._id;
         // Find the appointment
         const appointment = yield homevisit_appointment_model_1.default.findOne({
             _id: appointmentId,
@@ -291,7 +335,7 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             res.status(404).json({
                 success: false,
                 message: "We couldn't find a pending appointment to accept.",
-                action: "acceptHomeVisitRequest:appointment-not-found",
+                action: "confirmHomeVisitRequest:appointment-not-found",
             });
             return;
         }
@@ -300,7 +344,7 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
             res.status(500).json({
                 success: false,
                 message: "Appointment pricing or payment details are missing.",
-                action: "acceptHomeVisitRequest:pricing-missing",
+                action: "confirmHomeVisitRequest:pricing-missing",
             });
             return;
         }
@@ -333,7 +377,7 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
         res.status(200).json({
             success: true,
             message: "Home visit request accepted and travel cost added.",
-            action: "acceptHomeVisitRequest:success",
+            action: "confirmHomeVisitRequest:success",
             data: updatedAppointment,
         });
     }
@@ -341,19 +385,19 @@ const acceptHomeVisitRequest = (req, res) => __awaiter(void 0, void 0, void 0, f
         console.error("Error accepting home visit request:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't accept the home visit request.",
-            action: error.message,
+            message: "We couldn't confirm the home visit request. Please try again.",
+            action: "confirmHomeVisitRequest:error",
         });
     }
 });
-exports.acceptHomeVisitRequest = acceptHomeVisitRequest;
-/* Step 3: Patient confirms the appointment and totalCost=fixedCost+travelCost frozen in wallet */
+exports.confirmHomeVisitRequest = confirmHomeVisitRequest;
+/* Step 3: Patient confirms (or cancels) the appointment. Body: { status?: "patient_confirmed" | "patient_cancelled" } (default confirm). */
 const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     try {
         const { appointmentId } = req.params;
-        // No body fields to validate here besides param; schema for confirm not needed (retained symmetry)
-        const patientUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        const bodyStatus = (_b = (_a = req.body) === null || _a === void 0 ? void 0 : _a.status) !== null && _b !== void 0 ? _b : "patient_confirmed";
+        const patientUserId = (_c = req.user) === null || _c === void 0 ? void 0 : _c.id;
         if (!patientUserId) {
             res.status(401).json({
                 success: false,
@@ -373,7 +417,7 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
         }
         const patientId = patient._id;
         // Find the appointment
-        const appointment = yield homevisit_appointment_model_1.default.findOne({
+        let appointment = yield homevisit_appointment_model_1.default.findOne({
             _id: appointmentId,
             patientId,
             status: "doctor_accepted",
@@ -386,6 +430,32 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
             });
             return;
         }
+        // Patient cancel: same route, body { status: "patient_cancelled" }
+        if (bodyStatus === "patient_cancelled") {
+            appointment.status = "patient_cancelled";
+            appointment.cancelledBy = new mongoose_1.default.Types.ObjectId(patientUserId);
+            appointment.cancelledByRole = "patient";
+            const frozen = (_e = (_d = appointment.paymentDetails) === null || _d === void 0 ? void 0 : _d.patientWalletFrozen) !== null && _e !== void 0 ? _e : 0;
+            if (frozen > 0) {
+                const patientUser = yield user_model_1.default.findById(patientUserId);
+                if (patientUser) {
+                    patientUser.unfreezeAmount(frozen);
+                    yield patientUser.save();
+                }
+                if (appointment.paymentDetails) {
+                    appointment.paymentDetails.patientWalletFrozen = 0;
+                }
+            }
+            yield appointment.save();
+            res.status(200).json({
+                success: true,
+                message: "Appointment cancelled successfully.",
+                action: "confirmHomeVisitAppointment:cancelled",
+                data: yield populateAppointment(appointmentId),
+            });
+            return;
+        }
+        // Confirm: freeze total and set patient_confirmed
         // Check pricing and payment details exist
         if (!appointment.pricing || !appointment.paymentDetails) {
             res.status(500).json({
@@ -395,9 +465,9 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
             });
             return;
         }
-        const fixedCost = ((_b = appointment.pricing) === null || _b === void 0 ? void 0 : _b.fixedCost) || 0;
-        const travelCost = ((_c = appointment.pricing) === null || _c === void 0 ? void 0 : _c.travelCost) || 0;
-        const totalCost = ((_d = appointment.pricing) === null || _d === void 0 ? void 0 : _d.totalCost) || 0;
+        const fixedCost = ((_f = appointment.pricing) === null || _f === void 0 ? void 0 : _f.fixedCost) || 0;
+        const travelCost = ((_g = appointment.pricing) === null || _g === void 0 ? void 0 : _g.travelCost) || 0;
+        const totalCost = ((_h = appointment.pricing) === null || _h === void 0 ? void 0 : _h.totalCost) || 0;
         // find patient's user details
         const patientUserDetail = yield user_model_1.default.findById(patientUserId);
         if (!patientUserDetail) {
@@ -466,8 +536,8 @@ const confirmHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, void
         console.error("Error confirming home visit appointment:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't confirm the home visit appointment.",
-            action: error.message,
+            message: "We couldn't confirm the home visit appointment. Please try again.",
+            action: "confirmHomeVisitAppointment:error",
         });
     }
 });
@@ -652,8 +722,8 @@ const completeHomeVisitAppointment = (req, res) => __awaiter(void 0, void 0, voi
         console.error("Error completing home visit appointment:", error);
         res.status(500).json({
             success: false,
-            message: "We couldn't complete the home visit appointment.",
-            action: error.message,
+            message: "We couldn't complete the home visit appointment. Please try again.",
+            action: "completeHomeVisitAppointment:error",
         });
     }
 });
@@ -750,78 +820,6 @@ exports.completeHomeVisitAppointment = completeHomeVisitAppointment;
 //     });
 //   }
 // };
-// Get doctor appointments by date
-const getDoctorHomeVisitAppointmentByDate = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    try {
-        const { date } = req.body;
-        const doctorId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
-        if (!doctorId) {
-            res.status(401).json({
-                success: false,
-                message: "You must be signed in to view these appointments.",
-                action: "getDoctorHomeVisitAppointmentByDate:not-authenticated",
-            });
-            return;
-        }
-        if (!date) {
-            res.status(400).json({
-                success: false,
-                message: "Date is required.",
-                action: "getDoctorHomeVisitAppointmentByDate:missing-date",
-            });
-            return;
-        }
-        const doctor = yield doctor_model_1.default.findOne({ userId: doctorId });
-        if (!doctor) {
-            res.status(404).json({
-                success: false,
-                message: "We couldn't find your doctor profile.",
-                action: "getDoctorHomeVisitAppointmentByDate:doctor-not-found",
-            });
-            return;
-        }
-        const startDate = new Date(date);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(date);
-        endDate.setHours(23, 59, 59, 999);
-        const appointments = yield homevisit_appointment_model_1.default.find({
-            doctorId: doctor._id,
-            "slot.day": {
-                $gte: startDate,
-                $lte: endDate,
-            },
-        })
-            .populate({
-            path: "patientId",
-            select: "firstName lastName countryCode gender email profilePic",
-        })
-            .populate({
-            path: "doctorId",
-            select: "qualifications specialization userId homeVisit",
-            populate: {
-                path: "userId",
-                select: "firstName lastName countryCode gender email profilePic",
-            },
-        })
-            .sort({ "slot.time.start": 1 });
-        res.status(200).json({
-            success: true,
-            message: "Doctor home visit appointments for the date retrieved successfully.",
-            action: "getDoctorHomeVisitAppointmentByDate:success",
-            data: appointments,
-        });
-    }
-    catch (error) {
-        console.error("Error getting doctor home visit appointments by date:", error);
-        res.status(500).json({
-            success: false,
-            message: "We couldn't load home visit appointments for that date.",
-            action: error.message,
-        });
-    }
-});
-exports.getDoctorHomeVisitAppointmentByDate = getDoctorHomeVisitAppointmentByDate;
 //***** script for cron job
 const updateHomeStatusCron = () => __awaiter(void 0, void 0, void 0, function* () {
     try {

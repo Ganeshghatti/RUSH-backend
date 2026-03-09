@@ -3,33 +3,32 @@ import { verifyToken, checkRole } from "../../middleware/auth-middleware";
 import { RequestHandler } from "express";
 import {
   bookHomeVisitAppointment,
-  acceptHomeVisitRequest,
+  confirmHomeVisitRequest,
   confirmHomeVisitAppointment,
   completeHomeVisitAppointment,
-  getDoctorHomeVisitAppointmentByDate,
 } from "../../controller/appointment/homevisit-appointment";
 
 const router = Router();
 
 // Patient: book (Step 1)
 router.post(
-  "/appointment/homevisit/book",
+  "/book",
   verifyToken as RequestHandler,
   checkRole("patient") as RequestHandler,
   bookHomeVisitAppointment as RequestHandler
 );
 
-// Doctor: accept + add travel cost (Step 2)
+// Doctor: confirm (accept + travel cost) or cancel (reject) (Step 2)
 router.put(
-  "/appointment/homevisit/:appointmentId/accept",
+  "/:appointmentId/accept",
   verifyToken as RequestHandler,
   checkRole("doctor") as RequestHandler,
-  acceptHomeVisitRequest as RequestHandler
+  confirmHomeVisitRequest as RequestHandler
 );
 
 // Patient: confirm + freeze payment (Step 3)
 router.put(
-  "/appointment/homevisit/:appointmentId/confirm",
+  "/:appointmentId/confirm",
   verifyToken as RequestHandler,
   checkRole("patient") as RequestHandler,
   confirmHomeVisitAppointment as RequestHandler
@@ -37,25 +36,12 @@ router.put(
 
 // Doctor: complete with OTP (Step 4)
 router.put(
-  "/appointment/homevisit/:appointmentId/complete",
+  "/:appointmentId/complete",
   verifyToken as RequestHandler,
   checkRole("doctor") as RequestHandler,
   completeHomeVisitAppointment as RequestHandler
 );
 
-// Patient or Doctor: cancel
-// router.put(
-//   "/appointment/homevisit/:appointmentId/cancel",
-//   verifyToken as RequestHandler,
-//   cancelHomeVisitAppointment as RequestHandler
-// );
-
-// Doctor: appointments by date
-router.post(
-  "/appointment/homevisit/doctor/by-date",
-  verifyToken as RequestHandler,
-  checkRole("doctor") as RequestHandler,
-  getDoctorHomeVisitAppointmentByDate as RequestHandler
-);
+// Use generic POST /appointment/doctor/by-date for doctor's appointments by date (all types)
 
 export default router;

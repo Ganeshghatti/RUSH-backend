@@ -14,6 +14,7 @@ import symptomRoutes from "./routes/symptom/symptom-route";
 import cookieParser from "cookie-parser";
 import adminRoutes from "./routes/admin/admin-route";
 import walletRoutes from "./routes/users/wallet";
+import appointmentRoutes from "./routes/appointment/appointment";
 import onlineAppointmentRoutes from "./routes/appointment/online-appointment";
 import emergencyAppointmentRoutes from "./routes/appointment/emergency-appointment";
 import clinicAppointmentRoutes from "./routes/appointment/clinic-appointment";
@@ -102,21 +103,15 @@ app.use("/patient", patientSubscriptionRoutes);
 app.use("/api", doctorProfileRoutes);
 app.use("/user", walletRoutes);
 
-app.use(symptomRoutes);
-
-app.use(adminRoutes);
-
-app.use(onlineAppointmentRoutes);
-
-app.use(emergencyAppointmentRoutes);
-
-app.use(clinicAppointmentRoutes);
-
-app.use(homeVisitAppointmentRoutes);
-
-app.use(prescriptionRoutes);
-
-app.use(ratingRoute);
+app.use("/admin", adminRoutes);
+app.use("/symptom", symptomRoutes);
+app.use("/appointment", appointmentRoutes);
+app.use("/online-appointment", onlineAppointmentRoutes);
+app.use("/emergency-appointment", emergencyAppointmentRoutes);
+app.use("/clinic-appointment", clinicAppointmentRoutes);
+app.use("/home-visit-appointment", homeVisitAppointmentRoutes);
+app.use("/prescription", prescriptionRoutes);
+app.use("/rating", ratingRoute);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

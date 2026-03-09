@@ -553,6 +553,29 @@ export const clinicUpdateRequestSchema = z.object({
 });
 export const clinicPatchRequestSchema = clinicUpdateRequestSchema.partial();
 
+// online appointment book schema
+export const onlineAppointmentBookSchema = z.object({
+  doctorId: z.string().min(1, "Doctor ID is required"),
+  slot: z.object({
+    day: z.string().min(1, "Slot day is required"),
+    duration: z.union([
+      z.literal(15),
+      z.literal(30),
+      z.literal(45),
+      z.literal(60),
+    ]),
+    time: z.object({
+      start: z.string().min(1, "Slot start time is required"),
+      end: z.string().min(1, "Slot end time is required"),
+    }),
+    history: z
+      .object({
+        title: z.string().optional(),
+      })
+      .optional(),
+  }),
+});
+
 // clinic appointment book schema
 export const clinicAppointmentBookSchema = z.object({
   doctorId: z.string(),

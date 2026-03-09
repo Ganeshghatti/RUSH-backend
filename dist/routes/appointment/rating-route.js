@@ -8,10 +8,6 @@ const router = (0, express_1.Router)();
 router
     .route("/doctor/ratings/me")
     .get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), ratings_1.getMyRatings);
-// get all rating of doctor on patient side(exclude inactive ratings)
-router
-    .route("/doctor/ratings/:userId")
-    .get(auth_middleware_1.verifyToken, ratings_1.getRatingsByDoctorId);
 // patient can add rating to a particular appointment
 router
     .route("/patient/add-rating")
@@ -20,8 +16,4 @@ router
 router
     .route("/doctor/rating/toggle/:ratingId")
     .patch(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("doctor"), ratings_1.toggleRatingVisibility);
-// get a rating by rating id
-router
-    .route("/ratings/:ratingId")
-    .get(auth_middleware_1.verifyToken, ratings_1.getRatingById);
 exports.default = router;

@@ -8,6 +8,7 @@ const transaction_1 = require("../../controller/admin/transaction");
 const coupon_1 = require("../../controller/admin/coupon");
 const coupon_patient_1 = require("../../controller/admin/coupon-patient");
 const router = (0, express_1.Router)();
+<<<<<<< HEAD
 router
     .route("/admin/doctors")
     .get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), admin_1.getAllDoctors);
@@ -52,4 +53,17 @@ router
     .route("/admin/patient-coupons/:id")
     .put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_patient_1.updatePatientCoupon)
     .delete(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_patient_1.deletePatientCoupon);
+=======
+router.route("/doctors").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), admin_1.getAllDoctors);
+router.route("/patients").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), admin_1.getAllPatients);
+router.route("/doctor/verification/:doctorId").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), admin_1.updateDoctorStatus);
+router.route("/user/verification/:userId").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), admin_1.updateDocumentVerificationStatus);
+router.route("/addpatient").post(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), unregistered_patient_1.addUnregisteredPatient);
+router.route("/getpatient").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), unregistered_patient_1.getUnregisteredPatient);
+router.route("/debit/requests").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.getPendingDebitRequests);
+router.route("/debit/process").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.processDebitRequest);
+router.route("/transactions").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), transaction_1.getTransactionsByDate);
+router.route("/coupons").get(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.getCoupons).post(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.createCoupon);
+router.route("/coupons/:id").put(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.updateCoupon).delete(auth_middleware_1.verifyToken, (0, auth_middleware_1.checkRole)("admin"), coupon_1.deleteCoupon);
+>>>>>>> ed4eeb0604f0cb5420870d9cb260d531c4f18482
 exports.default = router;
