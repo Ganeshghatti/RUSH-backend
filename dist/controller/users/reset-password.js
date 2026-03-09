@@ -138,11 +138,11 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
             return;
         }
-        if (!newPassword || newPassword.length < 6) {
+        if (!newPassword) {
             res.status(400).json({
                 success: false,
-                message: "Password must be at least 6 characters long.",
-                action: "resetPassword:validate-password-length",
+                message: "Password is required.",
+                action: "resetPassword:validate-password-missing",
             });
             return;
         }

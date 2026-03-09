@@ -13,7 +13,6 @@ const userSchema = new Schema({
         doctor: { type: Schema.Types.ObjectId, ref: "Doctor" },
         patient: { type: Schema.Types.ObjectId, ref: "Patient" },
         admin: { type: Schema.Types.ObjectId, ref: "Admin" },
-        // in future: pharmacist, therapist, etc.
     },
     profilePic: {
         type: String,

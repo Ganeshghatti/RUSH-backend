@@ -218,14 +218,6 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
             return;
         }
-        if (password.length < 6) {
-            res.status(400).json({
-                success: false,
-                message: "Password must be at least 6 characters.",
-                action: "verifyOtp:validate-weak-password",
-            });
-            return;
-        }
         if (!["doctor", "patient", "admin"].includes(role)) {
             res.status(400).json({
                 success: false,
@@ -356,8 +348,8 @@ const verifyOtp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             role: role,
             phone: user.phone,
         };
-        if (role === 'doctor') {
-            mailData.status = 'pending';
+        if (role === "doctor") {
+            mailData.status = "pending";
             yield (0, user_notifications_1.sendNewUserMail)(mailData);
         }
         // Delete the OTP after successful verification
@@ -409,7 +401,8 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const { email, password, role } = req.body;
         const normalizedEmail = typeof email === "string" ? email.toLowerCase() : email;
         if (role === "admin") {
-            if (normalizedEmail === "urushdr@gmail.com" && password === "BulletBike$$$") {
+            if (normalizedEmail === "urushdr@gmail.com" &&
+                password === "BulletBike$$$") {
                 const user = yield user_model_1.default.findOne({ email: normalizedEmail });
                 if (!user) {
                     res.status(404).json({

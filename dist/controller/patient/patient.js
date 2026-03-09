@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = void 0;
+exports.getAppointmentsDoctorForPatient = exports.getPatientDashboard = exports.patientOnboard = exports.getPatientById = exports.verifyPaymentSubscription = exports.subscribePatient = exports.validateCoupon = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = __importDefault(require("../../models/user/user-model"));
 const patient_model_1 = __importDefault(require("../../models/user/patient-model"));
@@ -20,11 +20,108 @@ const doctor_model_1 = __importDefault(require("../../models/user/doctor-model")
 const online_appointment_model_1 = __importDefault(require("../../models/appointment/online-appointment-model"));
 const clinic_appointment_model_1 = __importDefault(require("../../models/appointment/clinic-appointment-model"));
 const patient_subscription_1 = __importDefault(require("../../models/patient-subscription"));
+const patient_subscription_coupon_1 = __importDefault(require("../../models/patient-subscription-coupon"));
 const razorpay_1 = require("../../config/razorpay");
 const signed_url_1 = require("../../utils/signed-url");
 const emergency_appointment_model_1 = __importDefault(require("../../models/appointment/emergency-appointment-model"));
 const emergency_appointment_1 = require("../appointment/emergency-appointment");
 const crypto_1 = __importDefault(require("crypto"));
+/** Validates a coupon for a patient subscription; returns discount info or error message. */
+function validateCouponForSubscription(code, subscriptionId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
+        const normalizedCode = String(code).trim().toUpperCase();
+        if (!normalizedCode) {
+            return { valid: false, message: "Coupon code is required." };
+        }
+        const subscription = yield patient_subscription_1.default.findById(subscriptionId);
+        if (!subscription) {
+            return { valid: false, message: "Subscription plan not found." };
+        }
+        const coupon = yield patient_subscription_coupon_1.default.findOne({
+            code: normalizedCode,
+        });
+        if (!coupon) {
+            return { valid: false, message: "Invalid coupon code." };
+        }
+        if (!coupon.isActive) {
+            return { valid: false, message: "This coupon is no longer active." };
+        }
+        const now = new Date();
+        if (coupon.validFrom && now < new Date(coupon.validFrom)) {
+            return { valid: false, message: "This coupon is not yet valid." };
+        }
+        if (coupon.validUntil && now > new Date(coupon.validUntil)) {
+            return { valid: false, message: "This coupon has expired." };
+        }
+        if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
+            return {
+                valid: false,
+                message: "This coupon has reached its usage limit.",
+            };
+        }
+        const applicableIds = coupon.applicableSubscriptionIds || [];
+        const appliesToAll = applicableIds.length === 0;
+        const appliesToThis = applicableIds.some((id) => id && id.toString() === subscriptionId);
+        if (!appliesToAll && !appliesToThis) {
+            return {
+                valid: false,
+                message: "This coupon does not apply to the selected plan.",
+            };
+        }
+        return {
+            valid: true,
+            discountPercent: coupon.discountPercent,
+            maxUses: (_a = coupon.maxUses) !== null && _a !== void 0 ? _a : null,
+            usedCount: coupon.usedCount,
+            validUntil: (_b = coupon.validUntil) !== null && _b !== void 0 ? _b : null,
+        };
+    });
+}
+const validateCoupon = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { code, subscriptionId } = req.body;
+        if (!code || !subscriptionId) {
+            res.status(400).json({
+                success: false,
+                message: "Code and subscriptionId are required.",
+                action: "validateCoupon:missing-fields",
+            });
+            return;
+        }
+        const result = yield validateCouponForSubscription(code, subscriptionId);
+        if (!result.valid) {
+            res.status(200).json({
+                success: true,
+                valid: false,
+                message: result.message,
+                data: { valid: false, message: result.message },
+            });
+            return;
+        }
+        res.status(200).json({
+            success: true,
+            valid: true,
+            message: "Coupon applied.",
+            data: {
+                valid: true,
+                discountPercent: result.discountPercent,
+                maxUses: result.maxUses,
+                usedCount: result.usedCount,
+                validUntil: result.validUntil,
+            },
+        });
+    }
+    catch (error) {
+        console.error("Error validating patient coupon:", error);
+        res.status(500).json({
+            success: false,
+            message: "We couldn't validate the coupon.",
+            action: error instanceof Error ? error.message : String(error),
+        });
+    }
+});
+exports.validateCoupon = validateCoupon;
 const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Check for required form data
@@ -49,7 +146,7 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
             return;
         }
-        const { subscriptionId } = formData;
+        const { subscriptionId, couponCode } = formData;
         const { patientId } = req.params;
         if (!patientId || !subscriptionId) {
             res.status(400).json({
@@ -92,9 +189,86 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
             return;
         }
         console.log("subscription active:", subscription);
+        let discountPercent = 0;
+        let finalAmount = subscription.price;
+        if (couponCode && String(couponCode).trim()) {
+            const couponResult = yield validateCouponForSubscription(String(couponCode).trim(), String(subscriptionId));
+            if (couponResult.valid) {
+                discountPercent = couponResult.discountPercent;
+                finalAmount = Math.max(0, subscription.price * (1 - discountPercent / 100));
+            }
+        }
+        // --- Free activation (100% coupon) — skip Razorpay entirely ---
+        if (finalAmount === 0) {
+            const startDate = new Date();
+            let endDate;
+            switch (subscription.duration) {
+                case "1 month":
+                    endDate = new Date(startDate);
+                    endDate.setMonth(startDate.getMonth() + 1);
+                    break;
+                case "3 months":
+                    endDate = new Date(startDate);
+                    endDate.setMonth(startDate.getMonth() + 3);
+                    break;
+                case "1 year":
+                    endDate = new Date(startDate);
+                    endDate.setFullYear(startDate.getFullYear() + 1);
+                    break;
+                case "2 years":
+                    endDate = new Date(startDate);
+                    endDate.setMonth(startDate.getMonth() + 24);
+                    break;
+                case "20 years":
+                    endDate = new Date(startDate);
+                    endDate.setFullYear(startDate.getFullYear() + 20);
+                    break;
+                case "15 years":
+                    endDate = new Date(startDate);
+                    endDate.setFullYear(startDate.getFullYear() + 15);
+                    break;
+                case "10 years":
+                    endDate = new Date(startDate);
+                    endDate.setFullYear(startDate.getFullYear() + 10);
+                    break;
+                case "5 years":
+                    endDate = new Date(startDate);
+                    endDate.setFullYear(startDate.getFullYear() + 5);
+                    break;
+                case "40 years":
+                    endDate = new Date(startDate);
+                    endDate.setFullYear(startDate.getFullYear() + 40);
+                    break;
+                case "lifetime":
+                    endDate = undefined;
+                    break;
+                default:
+                    break;
+            }
+            const freeRecord = {
+                startDate,
+                endDate,
+                SubscriptionId: subscription._id,
+                amount_paid: 0,
+                couponCode: String(couponCode).trim().toUpperCase(),
+                discountPercent,
+                amountBeforeDiscount: subscription.price,
+            };
+            patient.subscriptions.push(freeRecord);
+            yield patient.save();
+            yield patient_subscription_coupon_1.default.findOneAndUpdate({ code: freeRecord.couponCode }, { $inc: { usedCount: 1 } });
+            res.status(200).json({
+                success: true,
+                message: "Subscription activated for free with coupon.",
+                action: "subscribePatient:free-activation",
+                data: { freeActivation: true },
+            });
+            return;
+        }
         // convert to amount to integer
+        const amountPaise = Math.round(finalAmount * 100);
         const options = {
-            amount: Math.round(subscription.price * 100),
+            amount: amountPaise,
             currency: "INR",
             receipt: "receipt_" + Math.random().toString(36).substring(7),
         };
@@ -112,6 +286,12 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
                     contact: patient.userId.phone,
                     countryCode: patient.userId.countryCode || "+91",
                 },
+                originalAmount: subscription.price,
+                discountPercent,
+                finalAmount,
+                couponCode: discountPercent > 0
+                    ? String(couponCode).trim().toUpperCase()
+                    : undefined,
             },
         });
     }
@@ -127,7 +307,7 @@ const subscribePatient = (req, res) => __awaiter(void 0, void 0, void 0, functio
 exports.subscribePatient = subscribePatient;
 const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, } = req.body;
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, subscriptionId, couponCode, discountPercent, amountBeforeDiscount, } = req.body;
         const userId = req.user.id;
         if (!razorpay_order_id ||
             !razorpay_payment_id ||
@@ -224,6 +404,9 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
                     });
                     return;
             }
+            const amountBefore = amountBeforeDiscount != null
+                ? Number(amountBeforeDiscount)
+                : subscription.price;
             const newSubscription = {
                 startDate: new Date(),
                 endDate,
@@ -232,8 +415,17 @@ const verifyPaymentSubscription = (req, res) => __awaiter(void 0, void 0, void 0
                 SubscriptionId: subscription._id,
                 amount_paid: subscription.price,
             };
+            if (couponCode && discountPercent != null) {
+                newSubscription.couponCode = String(couponCode).trim().toUpperCase();
+                newSubscription.discountPercent = Number(discountPercent);
+                newSubscription.amountBeforeDiscount = amountBefore;
+                newSubscription.amount_paid = Math.max(0, amountBefore * (1 - Number(discountPercent) / 100));
+            }
             patient.subscriptions.push(newSubscription);
             yield patient.save();
+            if (newSubscription.couponCode) {
+                yield patient_subscription_coupon_1.default.findOneAndUpdate({ code: newSubscription.couponCode }, { $inc: { usedCount: 1 } });
+            }
             res.status(200).json({
                 success: true,
                 message: "Subscription payment verified successfully.",
@@ -497,8 +689,8 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
                 status: "approved",
                 subscriptions: {
                     $elemMatch: {
-                        endDate: { $gt: now }
-                    }
+                        endDate: { $gt: now },
+                    },
                 },
                 userId: { $ne: userId },
             })
@@ -508,7 +700,7 @@ const getPatientDashboard = (req, res) => __awaiter(void 0, void 0, void 0, func
             })
                 .select("userId specialization experience onlineAppointment homeVisit clinicVisit")
                 .limit(10);
-            recommendedDoctors = recommendedDoctors.filter(doctor => doctor.userId && doctor.userId.isDocumentVerified);
+            recommendedDoctors = recommendedDoctors.filter((doctor) => doctor.userId && doctor.userId.isDocumentVerified);
         }
         // Process recommended doctors to add signed URLs
         const processedDoctors = yield Promise.all(recommendedDoctors.map((doctor) => (0, signed_url_1.generateSignedUrlsForDoctor)(doctor)));
